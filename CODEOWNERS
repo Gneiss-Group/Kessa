@@ -1,0 +1,35 @@
+# SPDX-FileCopyrightText: 2026 Gneiss Group Inc.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Code owners — reviewers auto-requested for matching paths.
+#
+# The verifier and its dependency closure are the trust anchor; changes there
+# require owner review. NOTE: this file only *declares* owners. Enforcement needs
+# branch protection ("require review from code owners") enabled in this
+# repository's settings, which is a one-time setup step in the GitHub UI and is
+# not carried by anything in this tree.
+#
+# Usernames below must be GitHub handles for this file to resolve.
+
+# The independent verifier — the crown jewel
+/cmd/verify/              @raphaelGneiss
+
+# The verifier's Apache-tier dependency closure + the plug-point seam
+/pkg/types/              @raphaelGneiss
+/internal/did/           @raphaelGneiss
+/internal/signer/        @raphaelGneiss
+/internal/audit/         @raphaelGneiss
+/internal/macaroon/      @raphaelGneiss
+/internal/status/        @raphaelGneiss
+/internal/vc/            @raphaelGneiss
+/internal/credential/    @raphaelGneiss
+/internal/chain/         @raphaelGneiss
+/internal/policy/        @raphaelGneiss
+/internal/export/        @raphaelGneiss
+/auditsink/              @raphaelGneiss
+
+# Licensing + the boundary guardrail
+/LICENSES/               @raphaelGneiss
+/LICENSING.md            @raphaelGneiss
+/REUSE.toml              @raphaelGneiss
+/scripts/license-check.sh @raphaelGneiss

@@ -1,0 +1,35 @@
+{
+  "_comment": "Delegation chain for the reporting-agent user stories (see docs/stories.md). Dana, an FP&A analyst, delegates to Acme Finance, which issues a narrowed credential to her 'revenue-pack' agent. Each hop only narrows: hop 1 bounds the verbs, hop 2 bounds the exact resources the agent may touch. NON-SECRET demo value: rootKeyHex below is a fixed macaroon root key, committed for reproducibility, never a real credential. Enumerated in SECURITY.md 'Committed demo material'.",
+
+  "rootKeyHex": "d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0",
+  "identifier": "cred-story-1",
+  "location": "did:web:localhost:people:dana",
+
+  "status": {
+    "url": "https://localhost/orgs/acme-finance/status.json",
+    "issuer": "did:web:localhost:orgs:acme-finance",
+    "bits": 131072
+  },
+
+  "hops": [
+    {
+      "issuer": "did:web:localhost:people:dana",
+      "subject": "did:web:localhost:orgs:acme-finance",
+      "caveats": [
+        { "field": "action.type", "op": "in", "value": "data.read,file.write,file.share" }
+      ]
+    },
+    {
+      "issuer": "did:web:localhost:orgs:acme-finance",
+      "subject": "did:web:localhost:agents:revpack",
+      "caveats": [
+        { "field": "target", "op": "in", "value": "datalake:finance/revenue,o365:finance-reporting/weekly.xlsx" }
+      ],
+      "statusIndex": 7
+    }
+  ],
+
+  "extraPrincipals": [
+    "did:web:localhost:proxies:acme-dlp"
+  ]
+}

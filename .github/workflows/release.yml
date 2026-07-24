@@ -1,0 +1,175 @@
+# SPDX-FileCopyrightText: 2026 Gneiss Group Inc.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Release, phase 1 of 2 — PREPARE.
+#
+# A release lands on main the same way every other change does: through a pull
+# request. Nothing pushes to main directly, so the branch ruleset needs no bypass
+# for this workflow, and because the PR is squash-merged, the commit that lands is
+# created and SIGNED by GitHub itself — which is how a "require signed commits"
+# rule is satisfied without giving a runner a signing key.
+#
+# This phase is manual and owner-only. It runs the full gate again, derives the
+# next version, writes the version constant and the changelog, and pushes a
+# `release/vX.Y.Z` branch. It does NOT open the PR (repository policy disables
+# Actions-authored PRs) — it prints the one-click "create PR" link instead. You
+# open the PR, review it, and squash-merge it. Phase 2 (release-publish.yml) then
+# tags, builds, signs, and publishes off the merged commit.
+#
+# `dry_run` (the default) does everything except push the branch: it shows the
+# version it would cut and the notes it would write, and leaves the tree on the
+# runner untouched upstream.
+
+name: Release (prepare)
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: "Version bump: auto derives it from the commits since the last tag"
+        type: choice
+        options: [auto, patch, minor, major]
+        default: auto
+      fixtures_reviewed:
+        description: "I have reviewed the golden-fixture changes in this range (required only if a golden moved)"
+        type: boolean
+        default: false
+      dry_run:
+        description: "Dry run: compute the version and notes, but do not push the release branch"
+        type: boolean
+        default: true
+
+permissions:
+  contents: write  # push the release/* branch (never main)
+
+concurrency:
+  group: release-prepare
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    name: verify, version, open release branch
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Only the repository owner prepares a release, and only from main
+        env:
+          ACTOR: ${{ github.actor }}
+          OWNER: ${{ github.repository_owner }}
+          REF: ${{ github.ref }}
+        run: |
+          if [ "$ACTOR" != "$OWNER" ]; then
+            echo "::error::$ACTOR is not the repository owner ($OWNER); releases are owner-only."
+            exit 1
+          fi
+          if [ "$REF" != "refs/heads/main" ]; then
+            echo "::error::releases are cut from main, not $REF."
+            exit 1
+          fi
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Full history and tags: the version bump, the fixture drift check, and
+          # the notes are all derived from the range since the last tag.
+          fetch-depth: 0
+          fetch-tags: true
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: gate (fmt, SPDX, vet, licence boundary, race tests, demo)
+        run: scripts/ci/gate.sh
+
+      - name: golden-fixture guard
+        id: fixtures
+        env:
+          KESSA_FIXTURE_ACK: ${{ inputs.fixtures_reviewed }}
+        run: bash scripts/release/fixture-guard.sh
+
+      - name: derive the next version
+        id: version
+        env:
+          BUMP: ${{ inputs.bump }}
+        run: |
+          next="$(bash scripts/release/next-version.sh "$BUMP")"
+          current="$(bash scripts/release/version.sh)"
+          echo "current=$current" >>"$GITHUB_OUTPUT"
+          echo "next=$next"       >>"$GITHUB_OUTPUT"
+          echo "tag=v$next"       >>"$GITHUB_OUTPUT"
+          echo "branch=release/v$next" >>"$GITHUB_OUTPUT"
+          echo "### Preparing \`v$next\` (from \`$current\`)" >>"$GITHUB_STEP_SUMMARY"
+
+      - name: a moved golden is never a patch release
+        env:
+          CHANGED: ${{ steps.fixtures.outputs.fixtures_changed }}
+          CURRENT: ${{ steps.version.outputs.current }}
+          NEXT: ${{ steps.version.outputs.next }}
+        run: |
+          changed="$CHANGED"; current="$CURRENT"; next="$NEXT"
+          if [ "$changed" = "true" ] && [ "${current%.*}" = "${next%.*}" ]; then
+            echo "::error::a golden fixture changed, so $next cannot be a patch release. Re-run with bump=minor (or major, at >=1.0) and describe the format change in the notes."
+            exit 1
+          fi
+
+      - name: write the version and the changelog on a release branch
+        env:
+          NEXT: ${{ steps.version.outputs.next }}
+          TAG: ${{ steps.version.outputs.tag }}
+          BRANCH: ${{ steps.version.outputs.branch }}
+          DRY: ${{ inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          prev="$(git tag --list 'v[0-9]*' --sort=-v:refname | head -n1)"
+          bash scripts/release/notes.sh "$NEXT" "$prev" >/tmp/notes.md
+          cat /tmp/notes.md >>"$GITHUB_STEP_SUMMARY"
+
+          bash scripts/release/version.sh "$NEXT"
+          bash scripts/release/changelog.sh /tmp/notes.md
+
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git add internal/version/version.go CHANGELOG.md
+          if git diff --cached --quiet; then
+            echo "::error::nothing to commit — the source already carries $NEXT and CHANGELOG is up to date."
+            exit 1
+          fi
+          # The subject IS the marker phase 2 keys off (release-publish.yml). Keep
+          # it as the PR title so the squash-merge commit carries it onto main.
+          git commit -m "build(release): $TAG"
+
+          if [ "$DRY" = "true" ]; then
+            {
+              echo
+              echo "> **Dry run.** Computed \`$TAG\` and wrote the bump on a local branch, but pushed nothing."
+              echo "> Re-run with \`dry_run\` unchecked to push \`$BRANCH\` and get the PR link."
+            } >>"$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          # Force-with-lease so re-preparing the same version overwrites a stale
+          # attempt but never clobbers unrelated work.
+          git push --force-with-lease origin "HEAD:refs/heads/$BRANCH"
+
+      - name: the one-click PR link
+        if: ${{ !inputs.dry_run }}
+        env:
+          BRANCH: ${{ steps.version.outputs.branch }}
+          TAG: ${{ steps.version.outputs.tag }}
+          REPO: ${{ github.server_url }}/${{ github.repository }}
+        run: |
+          # Pre-fill the PR title with the marker subject so the squash-merge
+          # commit that lands on main carries it (phase 2 detects on it).
+          title="build(release): $TAG"
+          enc_title="$(printf '%s' "$title" | sed 's/ /%20/g; s/(/%28/g; s/)/%29/g; s/:/%3A/g')"
+          url="$REPO/compare/main...$BRANCH?expand=1&title=$enc_title"
+          {
+            echo "## Release $TAG is ready to open"
+            echo
+            echo "1. **[Open the release PR]($url)** (title is pre-filled with the marker subject — keep it)."
+            echo "2. Let CI pass, then **squash-merge** it. GitHub signs the squash commit, satisfying the signed-commits rule."
+            echo "3. Phase 2 (**Release (publish)**) fires on the merge: it tags \`$TAG\`, builds the signed artifacts, and publishes the release."
+          } >>"$GITHUB_STEP_SUMMARY"

@@ -1,0 +1,25 @@
+{
+  "@context": [
+    "https://www.w3.org/ns/did/v1",
+    "https://w3id.org/security/suites/jws-2020/v1"
+  ],
+  "assertionMethod": [
+    "did:web:localhost:agents:helper#key-1"
+  ],
+  "authentication": [
+    "did:web:localhost:agents:helper#key-1"
+  ],
+  "id": "did:web:localhost:agents:helper",
+  "verificationMethod": [
+    {
+      "controller": "did:web:localhost:agents:helper",
+      "id": "did:web:localhost:agents:helper#key-1",
+      "publicKeyJwk": {
+        "crv": "Ed25519",
+        "kty": "OKP",
+        "x": "6yzxO_euOl9hQWih-wknLTl3HsS4UjcngV5GbK-O4WM"
+      },
+      "type": "JsonWebKey2020"
+    }
+  ]
+}

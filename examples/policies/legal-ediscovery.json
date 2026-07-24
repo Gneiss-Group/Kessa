@@ -1,0 +1,36 @@
+{
+  "version": "legal-ediscovery-v1",
+  "rules": [
+    {
+      "name": "privileged-material",
+      "when": [
+        { "field": "privileged", "op": "==", "value": "true" }
+      ],
+      "consequential": true,
+      "reason": "accessing privileged material requires attorney review"
+    },
+    {
+      "name": "bulk-export",
+      "when": [
+        { "field": "action.type", "op": "==", "value": "document.export" },
+        { "field": "docCount", "op": ">=", "value": "1000" }
+      ],
+      "consequential": true,
+      "reason": "bulk document export (>= 1000 docs) requires supervising-partner approval"
+    },
+    {
+      "name": "external-production",
+      "when": [
+        { "field": "action.type", "op": "==", "value": "document.produce" },
+        { "field": "audience", "op": "==", "value": "opposing-counsel" }
+      ],
+      "consequential": true,
+      "reason": "producing documents to opposing counsel is consequential"
+    }
+  ],
+  "default": {
+    "allowed": true,
+    "consequential": false,
+    "reason": "routine review action; not consequential under this matter's protocol"
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "@context": [
+    "https://www.w3.org/ns/did/v1",
+    "https://w3id.org/security/suites/jws-2020/v1"
+  ],
+  "assertionMethod": [
+    "did:web:localhost#key-1"
+  ],
+  "authentication": [
+    "did:web:localhost#key-1"
+  ],
+  "id": "did:web:localhost",
+  "verificationMethod": [
+    {
+      "controller": "did:web:localhost",
+      "id": "did:web:localhost#key-1",
+      "publicKeyJwk": {
+        "crv": "Ed25519",
+        "kty": "OKP",
+        "x": "11l5O7wTooGagnx2rbb7qKSa7gB_SfLQmS2ZuCWtLEg"
+      },
+      "type": "JsonWebKey2020"
+    }
+  ]
+}

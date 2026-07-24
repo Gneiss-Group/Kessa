@@ -1,0 +1,44 @@
+{
+  "version": "commerce-security-v1",
+  "rules": [
+    {
+      "name": "forbidden-wire",
+      "when": [
+        { "field": "action.type", "op": "==", "value": "payment.wire" }
+      ],
+      "deny": true,
+      "reason": "wire transfers are not permitted for agents in this environment"
+    },
+    {
+      "name": "high-value-transfer",
+      "when": [
+        { "field": "action.type", "op": "==", "value": "payment.transfer" },
+        { "field": "amount", "op": ">=", "value": "100" }
+      ],
+      "consequential": true,
+      "reason": "transfers at or above $100 require a live status check and human approval"
+    },
+    {
+      "name": "production-deploy",
+      "when": [
+        { "field": "action.type", "op": "in", "value": "code.deploy,code.merge" },
+        { "field": "environment", "op": "==", "value": "production" }
+      ],
+      "consequential": true,
+      "reason": "changes to production are consequential"
+    },
+    {
+      "name": "external-audience",
+      "when": [
+        { "field": "audience", "op": "==", "value": "external" }
+      ],
+      "consequential": true,
+      "reason": "externally visible actions are consequential"
+    }
+  ],
+  "default": {
+    "allowed": true,
+    "consequential": false,
+    "reason": "routine action below all consequentiality thresholds"
+  }
+}

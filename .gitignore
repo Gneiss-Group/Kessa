@@ -1,0 +1,31 @@
+# Local, pre-public maintainer checklist (enumerates not-yet-set GitHub settings;
+# deliberately never committed). See its header.
+/GOING-PUBLIC-CHECKLIST.md
+
+# Build output
+/bin/
+
+# Release bundles (make release-artifacts); the published copies live on the
+# GitHub release, never in the tree.
+/dist/
+
+# Go
+*.test
+*.out
+
+# Default audit-sink output (kessa-proxy --audit-log)
+audit-log.jsonl
+
+# Captured story outcomes (regenerable via `make stories-capture`)
+/scripts/stories/out/
+
+# Output of the README's "Try it" walkthrough: /public is the issuer's static
+# publication root, /private holds MINTED CREDENTIALS and must never be committed.
+/public/
+/private/
+
+# Stray bare-build binaries (go build ./cmd/foo drops one named foo here)
+/proxy
+/agent
+/issuer
+/verify

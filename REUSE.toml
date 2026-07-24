@@ -1,0 +1,42 @@
+version = 1
+
+# Bulk license annotations for non-source files (REUSE spec). Go source files
+# carry their own SPDX headers.
+#
+# The root LICENSE file is the AGPL-3.0-only text governing everything not
+# otherwise marked; the per-tier texts live in LICENSES/ per the REUSE layout.
+
+[[annotations]]
+path = [
+  "README.md",
+  "LICENSING.md",
+  "PLUGIN_LICENSING.md",
+  "CLA.md",
+  "UPCOMING.md",
+  "Makefile",
+  ".gitignore",
+  "go.mod",
+  "REUSE.toml",
+  "docs/README.md",
+  "docs/*.md",
+  "docs/demo.tape",
+  "docs/assets/**",
+  "internal/policy/README.md",
+  "cmd/shadow/README.md",
+  "examples/**",
+  "testdata/**",
+  "scripts/demo.sh",
+  "scripts/license-check.sh",
+  "scripts/verify-scene.sh",
+  "scripts/demo/**",
+  "scripts/stories/**",
+]
+SPDX-FileCopyrightText = "2026 Gneiss Group Inc."
+SPDX-License-Identifier = "Apache-2.0"
+
+# perf/ is server-tier (its benchmarks import the AGPL enforcement engine), so its
+# docs are annotated to match.
+[[annotations]]
+path = ["perf/README.md"]
+SPDX-FileCopyrightText = "2026 Gneiss Group Inc."
+SPDX-License-Identifier = "AGPL-3.0-only"

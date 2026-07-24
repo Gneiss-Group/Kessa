@@ -1,0 +1,292 @@
+# SPDX-FileCopyrightText: 2026 Gneiss Group Inc.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Release, phase 2 of 2 — PUBLISH.
+#
+# Fires when a release PR (prepared by release.yml) is squash-merged to main. It
+# tags the merged commit, cross-compiles and signs the artifacts, and publishes
+# the GitHub release — all off the commit that is actually on main, so the commit
+# each binary stamps into its `--version` is the real released commit.
+#
+# How it knows a push is a release, without a bypass, a label, or a bot pushing a
+# tag: the release commit's subject is `build(release): vX.Y.Z` (release.yml sets
+# it, and pre-fills the PR title with it so the squash-merge carries it onto
+# main). Phase 2 reads that subject, confirms the version matches the source
+# constant, and confirms no such tag exists yet. An ordinary push to main — a
+# normal merge, a docs fix — has neither the subject nor a missing tag, so this
+# is a no-op on everything except an actual release merge. `workflow_dispatch`
+# with an explicit version is the manual recovery path if the marker was edited
+# off the squash commit.
+#
+# A release never trusts an earlier green run: the gate and the fixture guard run
+# again here, on the merged commit, before anything is tagged or uploaded.
+
+name: Release (publish)
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Publish this version (X.Y.Z) manually — recovery path if the release commit's marker was lost"
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-publish
+  cancel-in-progress: false
+
+jobs:
+  detect:
+    name: is this a release?
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      publish: ${{ steps.decide.outputs.publish }}
+      version: ${{ steps.decide.outputs.version }}
+      tag: ${{ steps.decide.outputs.tag }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: decide whether this push is a release
+        id: decide
+        env:
+          MANUAL_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          publish=false; version=""; reason=""
+
+          if [ -n "${MANUAL_VERSION:-}" ]; then
+            version="$MANUAL_VERSION"
+            reason="manual workflow_dispatch"
+          else
+            subject="$(git log -1 --format=%s)"
+            # Marker: build(release): vX.Y.Z
+            if printf '%s' "$subject" | grep -Eq '^build\(release\): v[0-9]+\.[0-9]+\.[0-9]+$'; then
+              version="$(printf '%s' "$subject" | sed -E 's/^build\(release\): v//')"
+              reason="release marker on the merged commit"
+            else
+              echo "not a release: head subject is '$subject'"
+              echo "publish=false" >>"$GITHUB_OUTPUT"
+              exit 0
+            fi
+          fi
+
+          # The marker/input is only a trigger; the source constant is the truth.
+          constant="$(bash scripts/release/version.sh)"
+          if [ "$version" != "$constant" ]; then
+            echo "::error::version mismatch — commit/input says $version but the source constant is $constant. Refusing to publish."
+            echo "publish=false" >>"$GITHUB_OUTPUT"
+            exit 1
+          fi
+
+          if git rev-parse -q --verify "refs/tags/v$version" >/dev/null; then
+            echo "tag v$version already exists — already published, nothing to do."
+            echo "publish=false" >>"$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "release detected ($reason): v$version"
+          echo "publish=true"        >>"$GITHUB_OUTPUT"
+          echo "version=$version"     >>"$GITHUB_OUTPUT"
+          echo "tag=v$version"        >>"$GITHUB_OUTPUT"
+
+  publish:
+    name: verify, tag, build, sign, publish
+    needs: detect
+    if: ${{ needs.detect.outputs.publish == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    permissions:
+      contents: write      # push the tag, create the GitHub release
+      id-token: write      # OIDC token for keyless build-provenance attestation
+      attestations: write  # record the provenance attestation on the repository
+    env:
+      NEXT: ${{ needs.detect.outputs.version }}
+      TAG: ${{ needs.detect.outputs.tag }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: gate (fmt, SPDX, vet, licence boundary, race tests, demo)
+        run: scripts/ci/gate.sh
+
+      - name: golden-fixture guard
+        run: bash scripts/release/fixture-guard.sh
+
+      - name: tag the merged commit
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$TAG" -m "Kessa $TAG"
+          git push origin "$TAG"
+
+      - name: cross-compile the release bundles
+        run: bash scripts/release/build-artifacts.sh "$NEXT" dist
+
+      - name: the built verifier identifies itself
+        run: |
+          tar -xzf "dist/kessa_${NEXT}_linux_amd64.tar.gz" -C /tmp
+          out="/tmp/kessa_${NEXT}_linux_amd64/kessa"
+          "$out" --version
+          "$out" --version | grep -q "^kessa ${NEXT} " \
+            || { echo "::error::the built verifier does not report $NEXT"; exit 1; }
+
+      - name: generate the release notes
+        run: |
+          prev="$(git tag --list 'v[0-9]*' --sort=-v:refname | grep -vFx "$TAG" | head -n1)"
+          bash scripts/release/notes.sh "$NEXT" "$prev" >/tmp/notes.md
+          cat /tmp/notes.md >>"$GITHUB_STEP_SUMMARY"
+
+      - name: attest build provenance for the release artifacts
+        # Keyless signing via GitHub's OIDC identity (Sigstore under the hood):
+        # each archive and the checksum file gets a signed SLSA provenance
+        # statement binding it to this repository's release pipeline. Verify with
+        # `gh attest verify <file> --repo ${{ github.repository }}`.
+        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
+        with:
+          subject-path: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/SHA256SUMS
+
+      - name: keep the artifacts on the workflow run
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: kessa-${{ needs.detect.outputs.tag }}
+          path: dist/
+          if-no-files-found: error
+
+      - name: publish the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$TAG" \
+            --title "Kessa $TAG" \
+            --notes-file /tmp/notes.md \
+            dist/*
+
+  images:
+    name: build, push, sign container images (GHCR)
+    needs: [detect, publish]
+    if: ${{ needs.detect.outputs.publish == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read       # build from source
+      packages: write      # push images to GHCR
+      id-token: write      # OIDC token for keyless provenance attestation
+      attestations: write  # record the attestation on the image
+    env:
+      VERSION: ${{ needs.detect.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Full checkout so the image build stamps the release commit into
+          # `--version`, matching the tarball binaries.
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: lowercase the owner for the image path
+        id: o
+        env:
+          OWNER: ${{ github.repository_owner }}
+        run: echo "owner=$(printf '%s' "$OWNER" | tr '[:upper:]' '[:lower:]')" >>"$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+
+      - uses: docker/login-action@abd2ef45e78c5afb21d64d4ca52ee8550d9572c7 # v4.5.1
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      # ---- verifier image (Apache-2.0 tier) --------------------------------
+
+      - name: build and push the verifier image
+        id: verifier
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: .
+          file: docker/verifier.Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          # SBOM via BuildKit; provenance comes from the GitHub attestation below,
+          # so BuildKit's own provenance is disabled to keep one provenance story.
+          sbom: true
+          provenance: false
+          tags: |
+            ghcr.io/${{ steps.o.outputs.owner }}/kessa:${{ env.VERSION }}
+            ghcr.io/${{ steps.o.outputs.owner }}/kessa:latest
+          labels: |
+            org.opencontainers.image.title=kessa
+            org.opencontainers.image.description=Kessa independent verifier (offline)
+            org.opencontainers.image.version=${{ env.VERSION }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.licenses=Apache-2.0
+
+      - name: attest the verifier image
+        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
+        with:
+          subject-name: ghcr.io/${{ steps.o.outputs.owner }}/kessa
+          subject-digest: ${{ steps.verifier.outputs.digest }}
+          push-to-registry: true
+
+      # ---- proxy image (AGPL-3.0-only tier) --------------------------------
+
+      - name: build and push the proxy image
+        id: proxy
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: .
+          file: docker/proxy.Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          sbom: true
+          provenance: false
+          tags: |
+            ghcr.io/${{ steps.o.outputs.owner }}/kessa-proxy:${{ env.VERSION }}
+            ghcr.io/${{ steps.o.outputs.owner }}/kessa-proxy:latest
+          labels: |
+            org.opencontainers.image.title=kessa-proxy
+            org.opencontainers.image.description=Kessa enforcement proxy (sidecar; eval/dev)
+            org.opencontainers.image.version=${{ env.VERSION }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.licenses=AGPL-3.0-only
+
+      - name: attest the proxy image
+        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
+        with:
+          subject-name: ghcr.io/${{ steps.o.outputs.owner }}/kessa-proxy
+          subject-digest: ${{ steps.proxy.outputs.digest }}
+          push-to-registry: true
+
+      - name: summary
+        env:
+          OWNER: ${{ steps.o.outputs.owner }}
+        run: |
+          {
+            echo "### Container images published"
+            echo
+            echo "- \`ghcr.io/$OWNER/kessa:$VERSION\` (verifier, Apache-2.0)"
+            echo "- \`ghcr.io/$OWNER/kessa-proxy:$VERSION\` (proxy, AGPL-3.0-only)"
+            echo
+            echo "Both linux/amd64 + linux/arm64, distroless/static nonroot, SBOM + signed provenance."
+            echo "Verify: \`gh attest verify oci://ghcr.io/$OWNER/kessa:$VERSION --repo ${{ github.repository }}\`"
+          } >>"$GITHUB_STEP_SUMMARY"

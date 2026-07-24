@@ -1,0 +1,95 @@
+{
+  "version": "kessa-audit-export/v1",
+  "signer": "did:web:localhost:proxies:gatekeeper",
+  "entries": [
+    {
+      "seq": 0,
+      "prevHash": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+      "action": {
+        "type": "post.publish",
+        "target": "blog/hello",
+        "attributes": {
+          "audience": "external"
+        },
+        "timestamp": "2026-07-09T12:00:00Z"
+      },
+      "resolvedChain": [
+        "did:web:localhost:people:alice",
+        "did:web:localhost:orgs:acme",
+        "did:web:localhost:agents:worker"
+      ],
+      "decision": {
+        "allowed": true,
+        "consequential": false,
+        "ruleFired": "default-allow",
+        "policyVersion": "legal-v1",
+        "statusCheckedHops": 0,
+        "reason": "below consequential threshold"
+      },
+      "popNonce": "bm9uY2UtMDAwMQ==",
+      "timestamp": "2026-07-09T12:00:00Z",
+      "entryHash": "PTtZMSQoczq4cGHUhP/6bNjnICkSjg0sk6EKejZcF2U=",
+      "signature": "KFv5J3WDO8sKFeIjw46Pki3sJ41n4YQVOgtyP9mE6p/dLRJcXWo0BOpmTUrj6SVi4FI0FYP28PnaIbw4Kv04Dw=="
+    },
+    {
+      "seq": 1,
+      "prevHash": "PTtZMSQoczq4cGHUhP/6bNjnICkSjg0sk6EKejZcF2U=",
+      "action": {
+        "type": "payment.transfer",
+        "target": "acct/999",
+        "attributes": {
+          "amount": "50",
+          "currency": "USD"
+        },
+        "timestamp": "2026-07-09T12:01:00Z"
+      },
+      "resolvedChain": [
+        "did:web:localhost:people:alice",
+        "did:web:localhost:orgs:acme",
+        "did:web:localhost:agents:worker"
+      ],
+      "decision": {
+        "allowed": true,
+        "consequential": true,
+        "ruleFired": "amount-threshold",
+        "policyVersion": "commerce-v1",
+        "statusCheckedHops": 1,
+        "reason": "status live-checked, not revoked"
+      },
+      "popNonce": "bm9uY2UtMDAwMg==",
+      "timestamp": "2026-07-09T12:01:00Z",
+      "entryHash": "mS1odgfWfOGRtnQRKvJIs/FCH4H5HNLhh6cPNbsRLXU=",
+      "signature": "xmd+Jp0N5jo/jtpzZsZmdtpxzAZSJxlnwoQAzKXYI0fThgaxHie64BVDxq4fsGvSL7SJ+iQfSXlnZ5gSNkKzDw=="
+    },
+    {
+      "seq": 2,
+      "prevHash": "mS1odgfWfOGRtnQRKvJIs/FCH4H5HNLhh6cPNbsRLXU=",
+      "action": {
+        "type": "payment.transfer",
+        "target": "acct/999",
+        "attributes": {
+          "amount": "5000",
+          "currency": "USD"
+        },
+        "timestamp": "2026-07-09T12:02:00Z"
+      },
+      "resolvedChain": [
+        "did:web:localhost:people:alice",
+        "did:web:localhost:orgs:acme",
+        "did:web:localhost:agents:worker"
+      ],
+      "decision": {
+        "allowed": false,
+        "consequential": true,
+        "ruleFired": "amount-threshold",
+        "policyVersion": "commerce-v1",
+        "statusCheckedHops": 1,
+        "reason": "exceeds attenuated ceiling"
+      },
+      "popNonce": "bm9uY2UtMDAwMw==",
+      "timestamp": "2026-07-09T12:02:00Z",
+      "entryHash": "jXIUuSLWIsVUEsRL3mriaylXhXkkv4AfD6KQ8FPEKCs=",
+      "signature": "vMcrurjO+Y3zosOtXPc1k8KUv95AbhM3VEo/Kkioc4MmaakoFixmd4gBRQuyYUmwhzf3ufhyhWocaqSGF8lwCw=="
+    }
+  ]
+}

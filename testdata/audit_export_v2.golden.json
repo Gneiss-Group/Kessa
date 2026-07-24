@@ -1,0 +1,345 @@
+{
+  "version": "kessa-audit-export/v2",
+  "signer": "did:web:localhost:proxies:gatekeeper",
+  "entries": [
+    {
+      "seq": 0,
+      "prevHash": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+      "action": {
+        "type": "payment.transfer",
+        "target": "acct/999",
+        "attributes": {
+          "amount": "10",
+          "currency": "USD"
+        },
+        "timestamp": "2026-07-09T12:00:00Z"
+      },
+      "resolvedChain": [
+        "did:web:localhost:people:alice",
+        "did:web:localhost:orgs:acme",
+        "did:web:localhost:agents:worker"
+      ],
+      "chainCredentialIDs": [
+        "_L6HwXbmiGHiKPLO_-kusCHhmZDiIldWiSkW5UJzi-M",
+        "fmn_Twfsi2sxnqPuDCYXoSUZXrJlQt5jxqx6XmZCExw"
+      ],
+      "decision": {
+        "allowed": true,
+        "consequential": false,
+        "ruleFired": "default",
+        "policyVersion": "commerce-security-v1",
+        "statusCheckedHops": 0,
+        "reason": "routine action below all consequentiality thresholds"
+      },
+      "policyID": "7MY_R_pAjMtsHmUtsi2RfbMekbi395eg3cseXCJ2tR0",
+      "popNonce": "bm9uY2UtMDAwMQ==",
+      "popSignature": "2Q3UxAMgl8ZkbolwyOy/Nnp27gi6vhE0zmtjQz+yDB2ycv6XKNPZZ9QOmAKlPo1i5jgKv1SBimNOtZNxcb0LBw==",
+      "timestamp": "2026-07-09T12:00:00Z",
+      "entryHash": "WmmnlSpKLkPBP8ycHndVtj3bhh0gIS3lOPDZRJ+G2JU=",
+      "signature": "uJIdXGEY3k7pH3d+3uF7wP4l+7aUG4/mq0AfZ/858UEgCPUPZUxbfmOG+jiGkQYPVpyqYjffQcauUI2ryu+PCg=="
+    },
+    {
+      "seq": 1,
+      "prevHash": "WmmnlSpKLkPBP8ycHndVtj3bhh0gIS3lOPDZRJ+G2JU=",
+      "action": {
+        "type": "payment.transfer",
+        "target": "acct/999",
+        "attributes": {
+          "amount": "100",
+          "currency": "USD"
+        },
+        "timestamp": "2026-07-09T12:01:00Z"
+      },
+      "resolvedChain": [
+        "did:web:localhost:people:alice",
+        "did:web:localhost:orgs:acme",
+        "did:web:localhost:agents:worker"
+      ],
+      "chainCredentialIDs": [
+        "_L6HwXbmiGHiKPLO_-kusCHhmZDiIldWiSkW5UJzi-M",
+        "fmn_Twfsi2sxnqPuDCYXoSUZXrJlQt5jxqx6XmZCExw"
+      ],
+      "decision": {
+        "allowed": true,
+        "consequential": true,
+        "ruleFired": "high-value-transfer",
+        "policyVersion": "commerce-security-v1",
+        "statusCheckedHops": 1,
+        "reason": "status live-checked; no hop revoked; human-approved"
+      },
+      "policyID": "7MY_R_pAjMtsHmUtsi2RfbMekbi395eg3cseXCJ2tR0",
+      "popNonce": "bm9uY2UtMDAwMg==",
+      "popSignature": "n88kXGv66HHUSHADqndzt4SkMrtNusd6g0eqzXOxs9ZaB0aDJ8d6cCSDBsA2c2TK10dm4AMGzmXuLFJvixv+BA==",
+      "approvedBy": "did:web:localhost:people:alice",
+      "approval": "/Iq4Sw8bOhcV1m4cBp90jWWShJ1MgAT1W8DZPgKTSTKcGZdGAlMBILhnQfGanYNFHb15rrUbFKOtTcgPmExcBg==",
+      "timestamp": "2026-07-09T12:01:00Z",
+      "entryHash": "5fdOtLMtuaRFsHIRzzuVQ3znVPoMn4A0KdUSn5ppDM4=",
+      "signature": "dfBNFHeHmPhVgc5Omn2JA/WT2l0Mq2jE2g3dXu6US73kPNsZQO9H7Ujv52mpSV/Yv7PKdxA6NxmNMxU6VIo6AA=="
+    },
+    {
+      "seq": 2,
+      "prevHash": "5fdOtLMtuaRFsHIRzzuVQ3znVPoMn4A0KdUSn5ppDM4=",
+      "action": {
+        "type": "payment.transfer",
+        "target": "acct/999",
+        "attributes": {
+          "amount": "5000",
+          "currency": "USD"
+        },
+        "timestamp": "2026-07-09T12:02:00Z"
+      },
+      "resolvedChain": [
+        "did:web:localhost:people:alice",
+        "did:web:localhost:orgs:acme",
+        "did:web:localhost:agents:worker"
+      ],
+      "chainCredentialIDs": [
+        "_L6HwXbmiGHiKPLO_-kusCHhmZDiIldWiSkW5UJzi-M",
+        "fmn_Twfsi2sxnqPuDCYXoSUZXrJlQt5jxqx6XmZCExw"
+      ],
+      "decision": {
+        "allowed": false,
+        "consequential": true,
+        "ruleFired": "high-value-transfer",
+        "policyVersion": "commerce-security-v1",
+        "statusCheckedHops": 1,
+        "reason": "exceeds attenuated ceiling (amount \u003c= 100)"
+      },
+      "policyID": "7MY_R_pAjMtsHmUtsi2RfbMekbi395eg3cseXCJ2tR0",
+      "popNonce": "bm9uY2UtMDAwMw==",
+      "popSignature": "8l7hEkZdOIfw730qZ0YrpAgpKPCC+Hm3gjvKnAgIBPXPEloESILfQqvYaeD5weDjQlMghc9/dfclUrBqc0/EAw==",
+      "timestamp": "2026-07-09T12:02:00Z",
+      "entryHash": "SVgw+t9EKJANQD6Ku+M8yU+R3QqxGLi3I7k2a4UCRgg=",
+      "signature": "XcBB5gQts/RvdhV/ro9gg+Fzh4/yXDkPqCSv+EPBDrHUXHCHXE6ZsPVwQ6XAh6CMbjHfHGBF7De05hZhur7nCg=="
+    },
+    {
+      "seq": 3,
+      "prevHash": "SVgw+t9EKJANQD6Ku+M8yU+R3QqxGLi3I7k2a4UCRgg=",
+      "action": {
+        "type": "payment.transfer",
+        "target": "acct/999",
+        "attributes": {
+          "amount": "150",
+          "currency": "USD"
+        },
+        "timestamp": "2026-07-09T12:03:00Z"
+      },
+      "resolvedChain": [
+        "did:web:localhost:people:alice",
+        "did:web:localhost:orgs:acme",
+        "did:web:localhost:agents:worker",
+        "did:web:localhost:agents:helper"
+      ],
+      "chainCredentialIDs": [
+        "_L6HwXbmiGHiKPLO_-kusCHhmZDiIldWiSkW5UJzi-M",
+        "HJBrXaZQQ2KbASAtBM-KPRAgfKAH1xmQvv9CJs7tg20",
+        "7ibbVICsSGbXeSzDbsO_KHW4qkBfof1KD30bMkspYtY"
+      ],
+      "decision": {
+        "allowed": false,
+        "consequential": true,
+        "ruleFired": "high-value-transfer",
+        "policyVersion": "commerce-security-v1",
+        "statusCheckedHops": 1,
+        "reason": "delegation credential revoked mid-chain (acme -\u003e worker)"
+      },
+      "policyID": "7MY_R_pAjMtsHmUtsi2RfbMekbi395eg3cseXCJ2tR0",
+      "popNonce": "bm9uY2UtMDAwNA==",
+      "popSignature": "ifPnYttf6pwYPEjtSwTZ4mkm112LZmA4oU1tHmakzT2ywVxEO4OVOTBu6jGwxwC2OlI1cas+sU5K8e+EFUsACQ==",
+      "timestamp": "2026-07-09T12:03:00Z",
+      "entryHash": "rdojgu1ggJXId1domwFjfi0UzGUaBBwdwm4phbOPqnc=",
+      "signature": "U2wnMDlSF/PMcMScGqAUOTtsywiBj7D47HyBqnYt9FDe6Ue1j8DyZ2C6XIIxbspCCDX1XaQHkGA9pem5d5UyBg=="
+    }
+  ],
+  "credentials": {
+    "7ibbVICsSGbXeSzDbsO_KHW4qkBfof1KD30bMkspYtY": {
+      "credentialID": "7ibbVICsSGbXeSzDbsO_KHW4qkBfof1KD30bMkspYtY",
+      "credential": {
+        "subject": "did:web:localhost:agents:helper",
+        "issuer": "did:web:localhost:agents:worker",
+        "macaroon": {
+          "Location": "did:web:localhost:people:alice",
+          "Identifier": "cred-chain-1",
+          "Caveats": [
+            {
+              "Field": "action.type",
+              "Op": "==",
+              "Value": "payment.transfer"
+            },
+            {
+              "Field": "amount",
+              "Op": "\u003c=",
+              "Value": "200"
+            },
+            {
+              "Field": "target",
+              "Op": "==",
+              "Value": "acct/999"
+            }
+          ],
+          "Signature": "mQPEzuDa5gqyHHy/Bw6E3DEoIf6eb/1Lulp568bv9Us="
+        },
+        "statusRef": {
+          "listURL": "",
+          "index": 0
+        },
+        "holderKey": "6yzxO/euOl9hQWih+wknLTl3HsS4UjcngV5GbK+O4WM="
+      },
+      "issuerProof": "rFW/R2ogZW1jpRXcfNoRY4mzMSJxhnbyhEzEwNze6CKw+gdGul0mcvSS8yz6VVcTcB5rlftjW+m/9rk3DaSgBw=="
+    },
+    "HJBrXaZQQ2KbASAtBM-KPRAgfKAH1xmQvv9CJs7tg20": {
+      "credentialID": "HJBrXaZQQ2KbASAtBM-KPRAgfKAH1xmQvv9CJs7tg20",
+      "credential": {
+        "subject": "did:web:localhost:agents:worker",
+        "issuer": "did:web:localhost:orgs:acme",
+        "macaroon": {
+          "Location": "did:web:localhost:people:alice",
+          "Identifier": "cred-chain-1",
+          "Caveats": [
+            {
+              "Field": "action.type",
+              "Op": "==",
+              "Value": "payment.transfer"
+            },
+            {
+              "Field": "amount",
+              "Op": "\u003c=",
+              "Value": "200"
+            }
+          ],
+          "Signature": "19ztzcTDHzg46boPm3CEC2rotXJ2iFq0yLj3bWYCXFw="
+        },
+        "statusRef": {
+          "listURL": "https://localhost/orgs/acme/status.json",
+          "index": 43
+        },
+        "holderKey": "F8t5+ytBIPKx7GXkGY1uCLKOgT/rAeSkAIObheGAgM4="
+      },
+      "issuerProof": "GDSe+1nLRUdd/hhrUlSSyzExUd5eM0jimn/QQc7n4tl8sURxLhkOaoEO9SdtV7M2oo6fdZLwqHQLvw3IBmIFCg=="
+    },
+    "_L6HwXbmiGHiKPLO_-kusCHhmZDiIldWiSkW5UJzi-M": {
+      "credentialID": "_L6HwXbmiGHiKPLO_-kusCHhmZDiIldWiSkW5UJzi-M",
+      "credential": {
+        "subject": "did:web:localhost:orgs:acme",
+        "issuer": "did:web:localhost:people:alice",
+        "macaroon": {
+          "Location": "did:web:localhost:people:alice",
+          "Identifier": "cred-chain-1",
+          "Caveats": [
+            {
+              "Field": "action.type",
+              "Op": "==",
+              "Value": "payment.transfer"
+            }
+          ],
+          "Signature": "hMyYoA8RvwHfToTDBn9NZPF2MOVbL/NmXLeK9IzXHXw="
+        },
+        "statusRef": {
+          "listURL": "",
+          "index": 0
+        },
+        "holderKey": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc="
+      },
+      "issuerProof": "T8vQwU8/PS/G7j7nIJPPLqcZ2UND4PsHwC07/noIU4e9wmUdjGXV1KyZssLMxLMSGzvYppO0Q9+kD9XWIx3+Ag=="
+    },
+    "fmn_Twfsi2sxnqPuDCYXoSUZXrJlQt5jxqx6XmZCExw": {
+      "credentialID": "fmn_Twfsi2sxnqPuDCYXoSUZXrJlQt5jxqx6XmZCExw",
+      "credential": {
+        "subject": "did:web:localhost:agents:worker",
+        "issuer": "did:web:localhost:orgs:acme",
+        "macaroon": {
+          "Location": "did:web:localhost:people:alice",
+          "Identifier": "cred-chain-1",
+          "Caveats": [
+            {
+              "Field": "action.type",
+              "Op": "==",
+              "Value": "payment.transfer"
+            },
+            {
+              "Field": "amount",
+              "Op": "\u003c=",
+              "Value": "100"
+            }
+          ],
+          "Signature": "ohJ3fjE3E5kr2uv6sVuYdO8C6iUZwg7ZHGDW1Ex4+n4="
+        },
+        "statusRef": {
+          "listURL": "https://localhost/orgs/acme/status.json",
+          "index": 42
+        },
+        "holderKey": "F8t5+ytBIPKx7GXkGY1uCLKOgT/rAeSkAIObheGAgM4="
+      },
+      "issuerProof": "Y0HL3E1D3zuHU7yRG1tP0V86u9gRbMRzJLY/hCpFbukEaV49EWqwSPo+gEOzy8ptoudbeRawXMuUAaQogkz2Cg=="
+    }
+  },
+  "policy": {
+    "version": "commerce-security-v1",
+    "rules": [
+      {
+        "name": "forbidden-wire",
+        "when": [
+          {
+            "field": "action.type",
+            "op": "==",
+            "value": "payment.wire"
+          }
+        ],
+        "deny": true,
+        "reason": "wire transfers are not permitted for agents in this environment"
+      },
+      {
+        "name": "high-value-transfer",
+        "when": [
+          {
+            "field": "action.type",
+            "op": "==",
+            "value": "payment.transfer"
+          },
+          {
+            "field": "amount",
+            "op": "\u003e=",
+            "value": "100"
+          }
+        ],
+        "consequential": true,
+        "reason": "transfers at or above $100 require a live status check and human approval"
+      },
+      {
+        "name": "production-deploy",
+        "when": [
+          {
+            "field": "action.type",
+            "op": "in",
+            "value": "code.deploy,code.merge"
+          },
+          {
+            "field": "environment",
+            "op": "==",
+            "value": "production"
+          }
+        ],
+        "consequential": true,
+        "reason": "changes to production are consequential"
+      },
+      {
+        "name": "external-audience",
+        "when": [
+          {
+            "field": "audience",
+            "op": "==",
+            "value": "external"
+          }
+        ],
+        "consequential": true,
+        "reason": "externally visible actions are consequential"
+      }
+    ],
+    "default": {
+      "allowed": true,
+      "consequential": false,
+      "reason": "routine action below all consequentiality thresholds"
+    }
+  },
+  "envelopeSignature": "G/8Ugh/Gkq4ndUBU4TWOTEcLo6JNj23PMh6TGtS12gn6hwgfud/AILXJlAfRdnAAsNYS58Du7+7Ti5xX+UInAw=="
+}

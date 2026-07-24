@@ -1,0 +1,25 @@
+{
+  "@context": [
+    "https://www.w3.org/ns/did/v1",
+    "https://w3id.org/security/suites/jws-2020/v1"
+  ],
+  "assertionMethod": [
+    "did:web:localhost:orgs:acme#key-1"
+  ],
+  "authentication": [
+    "did:web:localhost:orgs:acme#key-1"
+  ],
+  "id": "did:web:localhost:orgs:acme",
+  "verificationMethod": [
+    {
+      "controller": "did:web:localhost:orgs:acme",
+      "id": "did:web:localhost:orgs:acme#key-1",
+      "publicKeyJwk": {
+        "crv": "Ed25519",
+        "kty": "OKP",
+        "x": "0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc"
+      },
+      "type": "JsonWebKey2020"
+    }
+  ]
+}

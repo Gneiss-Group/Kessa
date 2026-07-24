@@ -1,0 +1,44 @@
+{
+  "version": "commerce-security-allowlist-v1",
+  "rules": [
+    {
+      "name": "forbidden-wire",
+      "when": [
+        { "field": "action.type", "op": "==", "value": "payment.wire" }
+      ],
+      "deny": true,
+      "reason": "wire transfers are not permitted for agents in this environment"
+    },
+    {
+      "name": "read-only-lookup",
+      "when": [
+        { "field": "action.type", "op": "in", "value": "account.read,payment.status,invoice.view" }
+      ],
+      "consequential": false,
+      "reason": "read-only lookups change nothing and are routine"
+    },
+    {
+      "name": "micro-transfer",
+      "when": [
+        { "field": "action.type", "op": "==", "value": "payment.transfer" },
+        { "field": "amount", "op": "<=", "value": "25" }
+      ],
+      "consequential": false,
+      "reason": "transfers at or below $25 are routine under this deployment's risk appetite"
+    },
+    {
+      "name": "internal-post",
+      "when": [
+        { "field": "action.type", "op": "==", "value": "post.publish" },
+        { "field": "audience", "op": "==", "value": "internal" }
+      ],
+      "consequential": false,
+      "reason": "internally visible posts are routine"
+    }
+  ],
+  "default": {
+    "allowed": true,
+    "consequential": true,
+    "reason": "no routine rule matched; default-consequential (allow-list posture)"
+  }
+}

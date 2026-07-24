@@ -1,0 +1,56 @@
+# SPDX-FileCopyrightText: 2026 Gneiss Group Inc.
+# SPDX-License-Identifier: Apache-2.0
+#
+# OpenSSF Scorecard — an automated, external read on this repository's security
+# posture: branch protection, pinned dependencies, token permissions, dangerous
+# workflow patterns, release signing, and more. For a project asking people to
+# trust what it produces, a public Scorecard is exactly the kind of independent
+# signal that fits the thesis: it does not take our word for it.
+#
+# Results upload to the Code scanning tab, and (with publish_results: true) to
+# the public OpenSSF API that backs the README badge. Scorecard needs to read
+# repository settings a normal token cannot, so it runs on a schedule and on
+# pushes to the default branch — never on pull_request, where it would neither
+# have the permissions nor make sense.
+
+name: Scorecard
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "23 7 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  analysis:
+    name: Scorecard analysis
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      security-events: write  # upload findings to the Code scanning tab
+      id-token: write         # OIDC token to publish results to the OpenSSF API
+      contents: read
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: run Scorecard
+        uses: ossf/scorecard-action@2d1146689b8cda280b9bc96326124645441f03bc # v2.4.4
+        with:
+          results_file: scorecard-results.sarif
+          results_format: sarif
+          # Publishing is what makes the badge live and the score public. It is
+          # a deliberate disclosure — appropriate here, since the whole point is
+          # an outside-verifiable posture — but flip to false to keep it private.
+          publish_results: true
+
+      - name: upload the SARIF result
+        uses: github/codeql-action/upload-sarif@e4fba868fa4b1b91e1fdab776edc8cfbe6e9fb81 # v4.37.3
+        with:
+          sarif_file: scorecard-results.sarif

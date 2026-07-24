@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1040 560" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif">
+<rect x="0" y="0" width="1040" height="560" rx="18" fill="#12241c"/>
+<text x="40" y="56" fill="#eef4f0" font-size="27" font-weight="700">An agent reads only the data it was granted</text>
+<rect x="40" y="72" width="170" height="22" rx="11" fill="none" stroke="#40916c"/><text x="51" y="87" fill="#52b788" font-size="11" font-weight="700" letter-spacing="1.2">LEAST AUTHORITY</text>
+<text x="1000" y="52" fill="#9db8ab" font-size="15" font-weight="700" text-anchor="end" letter-spacing="0.5">kessa</text><text x="1000" y="88" fill="#9db8ab" font-size="11" text-anchor="end">enforcement point</text>
+<text x="40" y="127" fill="#9db8ab" font-size="13">Dana&#39;s revenue-pack agent · granted: READ finance/revenue · READ/WRITE finance-reporting workbook</text>
+<line x1="40" y1="146" x2="1000" y2="146" stroke="#2d6a4f" stroke-opacity="0.5"/>
+<rect x="24" y="168" width="992" height="176" rx="12" fill="#ffffff" fill-opacity="0.02" stroke="#40916c" stroke-opacity="0.25"/><rect x="24" y="168" width="6" height="176" rx="3" fill="#52b788"/>
+<text x="40" y="196" fill="#eef4f0" font-size="14" font-weight="600">Pulls the revenue figures it was asked for</text>
+<rect x="40" y="210" width="250" height="118" rx="10" fill="#1a3a2e" stroke="#ffffff" stroke-opacity="0.06"/>
+<text x="54" y="230" fill="#9db8ab" font-size="10" font-weight="700" letter-spacing="1.5">REQUEST</text>
+<text x="54" y="262" fill="#eef4f0" font-size="17" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-weight="600">data.read</text><text x="54" y="286" fill="#9db8ab" font-size="12.5" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">datalake:finance/revenue</text><line x1="294" y1="269" x2="318" y2="269" stroke="#2d6a4f" stroke-width="2"/><path d="M 326 269 l -9 -5 l 0 10 z" fill="#2d6a4f"/>
+<rect x="330" y="210" width="150" height="118" rx="10" fill="#0d1a14" stroke="#40916c" stroke-opacity="1.00"/>
+<path d="M 405 250 l 13 5 l 0 10 q 0 11 -13 17 q -13 -6 -13 -17 l 0 -10 z" fill="none" stroke="#52b788" stroke-width="2"/>
+<text x="405" y="288" fill="#eef4f0" font-size="12.5" font-weight="600" text-anchor="middle">kessa-proxy</text><text x="405" y="306" fill="#9db8ab" font-size="10.5" text-anchor="middle">verifies the grant</text><line x1="484" y1="269" x2="508" y2="269" stroke="#2d6a4f" stroke-width="2"/><path d="M 516 269 l -9 -5 l 0 10 z" fill="#2d6a4f"/>
+<rect x="520" y="212" width="92" height="30" rx="15" fill="#2d6a4f" stroke="#40916c"/><text x="566" y="233" fill="#ffffff" font-size="15" font-weight="700" text-anchor="middle" letter-spacing="0.5">✓ ALLOW</text>
+<text x="520" y="266" fill="#eef4f0" font-size="12" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">routine reporting action within policy</text>
+<rect x="24" y="352" width="992" height="176" rx="12" fill="#ffffff" fill-opacity="0.02" stroke="#8a5a2d" stroke-opacity="0.25"/><rect x="24" y="352" width="6" height="176" rx="3" fill="#c98a4b"/>
+<text x="40" y="380" fill="#eef4f0" font-size="14" font-weight="600">Reaches for another team&#39;s data</text>
+<rect x="40" y="394" width="250" height="118" rx="10" fill="#1a3a2e" stroke="#ffffff" stroke-opacity="0.06"/>
+<text x="54" y="414" fill="#9db8ab" font-size="10" font-weight="700" letter-spacing="1.5">REQUEST</text>
+<text x="54" y="446" fill="#eef4f0" font-size="17" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-weight="600">data.read</text><text x="54" y="470" fill="#9db8ab" font-size="12.5" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">datalake:hr/payroll</text><line x1="294" y1="453" x2="318" y2="453" stroke="#2d6a4f" stroke-width="2"/><path d="M 326 453 l -9 -5 l 0 10 z" fill="#2d6a4f"/>
+<rect x="330" y="394" width="150" height="118" rx="10" fill="#0d1a14" stroke="#8a5a2d" stroke-opacity="1.00"/>
+<path d="M 405 434 l 13 5 l 0 10 q 0 11 -13 17 q -13 -6 -13 -17 l 0 -10 z" fill="none" stroke="#c98a4b" stroke-width="2"/>
+<text x="405" y="472" fill="#eef4f0" font-size="12.5" font-weight="600" text-anchor="middle">kessa-proxy</text><text x="405" y="490" fill="#9db8ab" font-size="10.5" text-anchor="middle">verifies the grant</text><line x1="484" y1="453" x2="508" y2="453" stroke="#2d6a4f" stroke-width="2"/><path d="M 516 453 l -9 -5 l 0 10 z" fill="#2d6a4f"/>
+<rect x="520" y="396" width="92" height="30" rx="15" fill="#3a2a1a" stroke="#8a5a2d"/><text x="566" y="417" fill="#ffffff" font-size="15" font-weight="700" text-anchor="middle" letter-spacing="0.5">✗ DENY</text>
+<text x="520" y="450" fill="#eef4f0" font-size="12" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">action exceeds delegated authority: macaroon: caveat &quot;target in</text><text x="520" y="467" fill="#eef4f0" font-size="12" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">datalake:finance/revenue,o365:finance-reporting/weekly.xlsx&quot;</text><text x="520" y="484" fill="#eef4f0" font-size="12" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">unsatisfied: target=&quot;datalake:hr/payroll&quot;</text>
+</svg>

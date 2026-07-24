@@ -1,0 +1,25 @@
+{
+  "@context": [
+    "https://www.w3.org/ns/did/v1",
+    "https://w3id.org/security/suites/jws-2020/v1"
+  ],
+  "assertionMethod": [
+    "did:web:localhost:orgs:bravo#key-1"
+  ],
+  "authentication": [
+    "did:web:localhost:orgs:bravo#key-1"
+  ],
+  "id": "did:web:localhost:orgs:bravo",
+  "verificationMethod": [
+    {
+      "controller": "did:web:localhost:orgs:bravo",
+      "id": "did:web:localhost:orgs:bravo#key-1",
+      "publicKeyJwk": {
+        "crv": "Ed25519",
+        "kty": "OKP",
+        "x": "oJql9HpnWYAv-VX43C0qFKXJnSO-l_hkEn_5ODRVpPA"
+      },
+      "type": "JsonWebKey2020"
+    }
+  ]
+}

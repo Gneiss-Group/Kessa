@@ -1,0 +1,25 @@
+{
+  "@context": [
+    "https://www.w3.org/ns/did/v1",
+    "https://w3id.org/security/suites/jws-2020/v1"
+  ],
+  "assertionMethod": [
+    "did:web:localhost:people:alice#key-1"
+  ],
+  "authentication": [
+    "did:web:localhost:people:alice#key-1"
+  ],
+  "id": "did:web:localhost:people:alice",
+  "verificationMethod": [
+    {
+      "controller": "did:web:localhost:people:alice",
+      "id": "did:web:localhost:people:alice#key-1",
+      "publicKeyJwk": {
+        "crv": "Ed25519",
+        "kty": "OKP",
+        "x": "SAdaWX5yGhVuLgeZ3lzAxTJNxufq8c3UYlCGjsUyFd0"
+      },
+      "type": "JsonWebKey2020"
+    }
+  ]
+}

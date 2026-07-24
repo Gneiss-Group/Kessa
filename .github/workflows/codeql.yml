@@ -1,0 +1,69 @@
+# SPDX-FileCopyrightText: 2026 Gneiss Group Inc.
+# SPDX-License-Identifier: Apache-2.0
+#
+# CodeQL — static security analysis of the Go code.
+#
+# `go vet` catches correctness mistakes; CodeQL is the security-focused layer a
+# project that IS security infrastructure is expected to run. It scans the whole
+# module (verifier tier and server tier alike) for the vulnerability classes
+# CodeQL models — injection, path traversal, unsafe crypto usage, tainted flow —
+# and reports into the repository's Code scanning tab.
+#
+# Actions are pinned to commit SHAs (see .github/dependabot.yml, which keeps them
+# current). The default CodeQL query suite is used; extend it with `queries:
+# security-extended` if the signal-to-noise proves worth it.
+
+name: CodeQL
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Weekly, so a newly published CodeQL query finds an old latent issue even
+    # when the code has not changed. Monday 07:17 UTC (off the hour, to avoid the
+    # scheduler's top-of-hour stampede).
+    - cron: "17 7 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    name: analyze (go)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      # security-events: write is what lets the analysis upload its results to
+      # the Code scanning tab; everything else stays read-only.
+      security-events: write
+      contents: read
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: initialize CodeQL
+        uses: github/codeql-action/init@e4fba868fa4b1b91e1fdab776edc8cfbe6e9fb81 # v4.37.3
+        with:
+          languages: go
+
+      - name: build
+        # Kessa builds with the stdlib only, so CodeQL's autobuild would work,
+        # but building explicitly keeps the analyzed artifact identical to what
+        # CI and the release pipeline build.
+        run: make build
+
+      - name: analyze
+        uses: github/codeql-action/analyze@e4fba868fa4b1b91e1fdab776edc8cfbe6e9fb81 # v4.37.3
+        with:
+          category: "/language:go"

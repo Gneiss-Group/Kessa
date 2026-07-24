@@ -1,0 +1,9 @@
+{"type":"payment.transfer","target":"acct/999","attributes":{"amount":"500"},"timestamp":"2026-07-09T12:00:00Z"}
+{"type":"payment.transfer","target":"acct/999","attributes":{"amount":"10"},"timestamp":"2026-07-09T12:01:00Z"}
+
+{"type":"code.deploy","target":"svc/api","attributes":{"environment":"production"},"timestamp":"2026-07-09T12:02:00Z"}
+{"type":"payment.wire","target":"acct/111","timestamp":"2026-07-09T12:03:00Z"}
+this line is not json at all
+{"type":"post.publish","target":"blog/x","attributes":{"audience":"internal"},"timestamp":"2026-07-09T12:04:00Z"}
+{"typo":"post.publish","target":"blog/y"}
+{"target":"acct/000","timestamp":"2026-07-09T12:05:00Z"}

@@ -1,0 +1,43 @@
+{
+  "_comment": "Delegation chain for `make demo` (see docs/demo.md). NON-SECRET demo value: rootKeyHex below is a fixed, patterned macaroon root key, committed deliberately so the demo is deterministic and reproducible. It is not a real credential and is used nowhere outside the demo. Enumerated in SECURITY.md 'Committed demo material'.",
+
+  "rootKeyHex": "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff",
+  "identifier": "cred-demo-1",
+  "location": "did:web:localhost:people:alice",
+
+  "status": {
+    "url": "https://localhost/orgs/acme/status.json",
+    "issuer": "did:web:localhost:orgs:acme",
+    "bits": 131072
+  },
+
+  "hops": [
+    {
+      "issuer": "did:web:localhost:people:alice",
+      "subject": "did:web:localhost:orgs:acme",
+      "caveats": [
+        { "field": "action.type", "op": "==", "value": "payment.transfer" }
+      ]
+    },
+    {
+      "issuer": "did:web:localhost:orgs:acme",
+      "subject": "did:web:localhost:agents:worker",
+      "caveats": [
+        { "field": "amount", "op": "<=", "value": "100" }
+      ],
+      "statusIndex": 42
+    },
+    {
+      "issuer": "did:web:localhost:agents:worker",
+      "subject": "did:web:localhost:agents:helper",
+      "caveats": [
+        { "field": "target", "op": "==", "value": "acct/999" }
+      ]
+    }
+  ],
+
+  "extraPrincipals": [
+    "did:web:localhost:proxies:gatekeeper",
+    "did:web:localhost:orgs:bravo"
+  ]
+}

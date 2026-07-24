@@ -1,0 +1,76 @@
+{
+  "version": "kessa-audit-export/v2",
+  "signer": "did:web:localhost:proxies:gatekeeper",
+  "entries": [
+    {
+      "seq": 0,
+      "action": {
+        "type": "payment.transfer",
+        "target": "acct/999",
+        "attributes": { "amount": "500", "currency": "USD" },
+        "timestamp": "2026-07-09T12:00:00Z"
+      },
+      "decision": {
+        "allowed": true, "consequential": true, "ruleFired": "high-value-transfer",
+        "policyVersion": "commerce-security-v1", "statusCheckedHops": 1,
+        "reason": "transfers at or above $100 require a live status check and human approval"
+      }
+    },
+    {
+      "seq": 1,
+      "action": {
+        "type": "code.deploy",
+        "target": "svc/api",
+        "attributes": { "environment": "production" },
+        "timestamp": "2026-07-09T12:01:00Z"
+      },
+      "decision": {
+        "allowed": true, "consequential": true, "ruleFired": "production-deploy",
+        "policyVersion": "commerce-security-v1", "statusCheckedHops": 1,
+        "reason": "changes to production are consequential"
+      }
+    },
+    {
+      "seq": 2,
+      "action": {
+        "type": "post.publish",
+        "target": "blog/launch",
+        "attributes": { "audience": "external" },
+        "timestamp": "2026-07-09T12:02:00Z"
+      },
+      "decision": {
+        "allowed": true, "consequential": true, "ruleFired": "external-audience",
+        "policyVersion": "commerce-security-v1", "statusCheckedHops": 1,
+        "reason": "externally visible actions are consequential"
+      }
+    },
+    {
+      "seq": 3,
+      "action": {
+        "type": "payment.wire",
+        "target": "acct/111",
+        "attributes": { "amount": "20" },
+        "timestamp": "2026-07-09T12:03:00Z"
+      },
+      "decision": {
+        "allowed": false, "consequential": false, "ruleFired": "forbidden-wire",
+        "policyVersion": "commerce-security-v1", "statusCheckedHops": 0,
+        "reason": "wire transfers are not permitted for agents in this environment"
+      }
+    },
+    {
+      "seq": 4,
+      "action": {
+        "type": "payment.transfer",
+        "target": "acct/999",
+        "attributes": { "amount": "10", "currency": "USD" },
+        "timestamp": "2026-07-09T12:04:00Z"
+      },
+      "decision": {
+        "allowed": true, "consequential": false, "ruleFired": "default",
+        "policyVersion": "commerce-security-v1", "statusCheckedHops": 0,
+        "reason": "routine action below all consequentiality thresholds"
+      }
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "version": "data-governance-v1",
+  "rules": [
+    {
+      "name": "no-source-deletion",
+      "when": [
+        { "field": "action.type", "op": "in", "value": "data.delete,file.delete" }
+      ],
+      "deny": true,
+      "reason": "deleting source data or reports is never permitted for reporting agents"
+    }
+  ],
+  "default": {
+    "allowed": true,
+    "consequential": false,
+    "reason": "routine reporting action within policy"
+  }
+}

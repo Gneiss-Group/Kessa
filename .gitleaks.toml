@@ -1,0 +1,59 @@
+# SPDX-FileCopyrightText: 2026 Gneiss Group Inc.
+# SPDX-License-Identifier: Apache-2.0
+#
+# gitleaks configuration for Kessa.
+#
+# This file is the credential-scan policy, and it is version-controlled on
+# purpose: it is read identically by our CI on GitHub and on the Codeberg mirror,
+# whereas a forge's built-in scanner config (GitHub's .github/secret_scanning.yml)
+# only travels to that one forge. gitleaks plus this file is the portable source
+# of truth; the forge-native scanners are belt-and-suspenders on top.
+#
+# Everything allowlisted below is DELIBERATE, DETERMINISTIC, NON-SECRET demo or
+# fixture material — fixed Ed25519 seeds, a patterned macaroon root key, and
+# published public keys — enumerated in SECURITY.md under "Committed demo
+# material". None of it is a real credential, and none of it is referenced by any
+# non-test path. A real deployment generates fresh keys behind the signer.Signer
+# seam; see internal/keystore and the README's Known limits.
+#
+# The allowlisting is deliberately narrow (see the two blocks below). We do NOT
+# blanket-exclude test files: a real secret pasted into a *_test.go must still be
+# caught. Scope is the fixture data directories, plus exactly the one known demo
+# constant that appears in test code.
+
+title = "Kessa gitleaks config"
+
+[extend]
+# Keep every default gitleaks rule; we only add allowlists, never subtract rules.
+useDefault = true
+
+# 1. Fixture and demo data directories.
+#
+# These trees are, by definition, deterministic POC data: the issuer example, the
+# demo and story keystores/specs, and the testdata (DID documents, golden audit
+# exports, signed status lists). The golden exports carry base64 *public* keys
+# (the credential holderKey — the same value published in each DID document), and
+# gitleaks' generic-api-key rule flags them as high-entropy strings next to a
+# "Key" field. They are public by design.
+[[allowlists]]
+description = "Deliberate demo/fixture data — deterministic POC values and published public keys, never real credentials (see SECURITY.md)"
+targetRules = ["generic-api-key"]
+paths = [
+  '''^examples/''',
+  '''^scripts/demo/''',
+  '''^scripts/stories/''',
+  '''^testdata/''',
+]
+
+# 2. The one demo macaroon root key that appears in TEST CODE.
+#
+# `00112233445566778899aabbccddeeff` is the fixed root key the enforcement tests
+# mint macaroons from. It is allowlisted only where it actually is — a *_test.go
+# file AND exactly this constant (condition = AND). Any other high-entropy value
+# in any test file, including a real secret pasted by mistake, still fires.
+[[allowlists]]
+description = "Known demo macaroon root key, in test code only"
+condition = "AND"
+targetRules = ["generic-api-key"]
+paths = ['''_test\.go$''']
+regexes = ['''00112233445566778899aabbccddeeff''']
