@@ -65,7 +65,7 @@ hr "Start the enforcement proxy (Acme data-loss-prevention gateway)"
 "$BIN/kessa-proxy" serve --policy examples/policies/data-governance.json \
   --dids "$PUBLIC" --enforcement-point "$DLP" --keystore "$KS" \
   --status "$ST" --now "$NOW" --audit-log "$WORK/audit.jsonl" \
-  --addr 127.0.0.1:8195 >"$WORK/proxy.log" 2>&1 &
+  --http-addr 127.0.0.1:8195 --mcp-addr "" >"$WORK/proxy.log" 2>&1 &
 PX_PID=$!
 disown "$PX_PID" 2>/dev/null || true
 

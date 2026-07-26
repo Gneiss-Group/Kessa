@@ -117,8 +117,10 @@ distroless/static as a nonroot user, and signed with build provenance.
 docker run --rm -v "$PWD:/data:ro" ghcr.io/gneiss-group/kessa:latest \
   verify --export /data/export.json --dids /data/public
 
-# The enforcement proxy (AGPL-3.0-only) — the sidecar. Serves on 0.0.0.0:8181.
-docker run --rm -p 8181:8181 ghcr.io/gneiss-group/kessa-proxy:latest serve --help
+# The enforcement proxy (AGPL-3.0-only) — the sidecar. By default it serves two
+# listeners into one enforcement engine: generic HTTP (8181) and MCP-native
+# Streamable HTTP (8182). Close either with an empty address (e.g. --mcp-addr "").
+docker run --rm -p 8181:8181 -p 8182:8182 ghcr.io/gneiss-group/kessa-proxy:latest serve --help
 ```
 
 Verify an image's provenance before trusting it:
