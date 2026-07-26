@@ -84,7 +84,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 // buildProxy assembles the shared enforcement engine from CLI flags. now, if
 // non-nil, fixes the audit entry timestamp for deterministic runs. sink, if
 // non-nil, forwards each audit entry to an external destination (see buildSink).
-func buildProxy(policyPath, didsDir, epDID, ksPath string, statuses statusFlag, now func() time.Time, sink auditsink.AuditSink, stderr io.Writer) (*enforce.Proxy, keystore.Keystore, bool) {
+func buildProxy(policyPath, didsDir, epDID, ksPath string, statuses statusFlag, now func() time.Time, sink auditsink.AuditSink, wal *enforce.WAL, stderr io.Writer) (*enforce.Proxy, keystore.Keystore, bool) {
 	for name, v := range map[string]string{"policy": policyPath, "dids": didsDir, "enforcement-point": epDID, "keystore": ksPath} {
 		if v == "" {
 			fmt.Fprintf(stderr, "kessa-proxy: --%s is required\n", name)
@@ -118,6 +118,7 @@ func buildProxy(policyPath, didsDir, epDID, ksPath string, statuses statusFlag, 
 		Status:           statusResolver,
 		Now:              now,
 		Sink:             sink,
+		WAL:              wal,
 	})
 	if err != nil {
 		fmt.Fprintf(stderr, "kessa-proxy: %v\n", err)
@@ -149,6 +150,22 @@ func buildSink(auditLog string) (auditsink.AuditSink, func() error, error) {
 	}
 }
 
+// buildWAL opens the durable write-ahead audit log at path, or returns a nil WAL
+// (durability disabled) when path is empty. Unlike the sink, this log is the
+// system of record: each entry is fsynced before its decision is returned, and the
+// log is recovered from this file at startup. The returned close func is nil when
+// there is nothing to close.
+func buildWAL(path string) (*enforce.WAL, func() error, error) {
+	if path == "" {
+		return nil, nil, nil
+	}
+	w, err := enforce.OpenWAL(path)
+	if err != nil {
+		return nil, nil, err
+	}
+	return w, w.Close, nil
+}
+
 // parseNow turns an optional RFC3339 string into a fixed clock; empty means wall
 // clock (nil, which the engine reads as time.Now).
 func parseNow(s string) (func() time.Time, error) {
@@ -175,6 +192,7 @@ func cmdRun(args []string, stdout, stderr io.Writer) int {
 	out := fs.String("out", "export.json", "where to write the signed audit export")
 	nowStr := fs.String("now", "", "fixed entry timestamp (RFC3339) for deterministic runs; default wall clock")
 	auditLog := fs.String("audit-log", "audit-log.jsonl", "forward each audit entry to this local JSON-Lines file; \"-\" for stdout, \"\" to disable. Best-effort and lossy: a hung/slow sink drops records rather than stalling enforcement (bound sinkMaxInFlight=64; finding R2-03)")
+	walPath := fs.String("audit-wal", "", "durable write-ahead audit log path; when set, every entry is fsynced before its decision returns (log-before-act, fail-closed) and the log is recovered from it on restart. \"\" disables durability")
 	var statuses statusFlag
 	fs.Var(&statuses, "status", "signed status list as url=file (repeatable)")
 	if err := fs.Parse(args); err != nil {
@@ -197,7 +215,15 @@ func cmdRun(args []string, stdout, stderr io.Writer) int {
 	if closeSink != nil {
 		defer func() { _ = closeSink() }()
 	}
-	px, ks, ok := buildProxy(*policyPath, *didsDir, *epDID, *ksPath, statuses, now, sink, stderr)
+	wal, closeWAL, err := buildWAL(*walPath)
+	if err != nil {
+		fmt.Fprintf(stderr, "kessa-proxy: %v\n", err)
+		return exitUsage
+	}
+	if closeWAL != nil {
+		defer func() { _ = closeWAL() }()
+	}
+	px, ks, ok := buildProxy(*policyPath, *didsDir, *epDID, *ksPath, statuses, now, sink, wal, stderr)
 	if !ok {
 		return exitUsage
 	}
@@ -251,6 +277,7 @@ func cmdServe(args []string, stdout, stderr io.Writer) int {
 	exportOut := fs.String("export", "", "if set, write the accumulated export here on shutdown")
 	nowStr := fs.String("now", "", "fixed entry timestamp (RFC3339) for deterministic runs; default wall clock")
 	auditLog := fs.String("audit-log", "audit-log.jsonl", "forward each audit entry to this local JSON-Lines file; \"-\" for stdout, \"\" to disable. Best-effort and lossy: a hung/slow sink drops records rather than stalling enforcement (bound sinkMaxInFlight=64; finding R2-03)")
+	walPath := fs.String("audit-wal", "", "durable write-ahead audit log path; when set, every entry is fsynced before its decision returns (log-before-act, fail-closed) and the log is recovered from it on restart. \"\" disables durability")
 	var statuses statusFlag
 	fs.Var(&statuses, "status", "signed status list as url=file (repeatable)")
 	if err := fs.Parse(args); err != nil {
@@ -269,7 +296,15 @@ func cmdServe(args []string, stdout, stderr io.Writer) int {
 	if closeSink != nil {
 		defer func() { _ = closeSink() }()
 	}
-	px, _, ok := buildProxy(*policyPath, *didsDir, *epDID, *ksPath, statuses, now, sink, stderr)
+	wal, closeWAL, err := buildWAL(*walPath)
+	if err != nil {
+		fmt.Fprintf(stderr, "kessa-proxy: %v\n", err)
+		return exitUsage
+	}
+	if closeWAL != nil {
+		defer func() { _ = closeWAL() }()
+	}
+	px, _, ok := buildProxy(*policyPath, *didsDir, *epDID, *ksPath, statuses, now, sink, wal, stderr)
 	if !ok {
 		return exitUsage
 	}

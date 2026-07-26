@@ -132,6 +132,55 @@ func TestRun_BatchProducesExport(t *testing.T) {
 	}
 }
 
+// A durable batch run followed by a second run against the same WAL: the second
+// recovers the first's entries and appends its own, so the export grows rather
+// than restarting.
+func TestRun_WALRecoversAcrossRuns(t *testing.T) {
+	dir := t.TempDir()
+	chainFile := filepath.Join(dir, "chain.json")
+	buildChainFile(t, chainFile)
+	reqFile := filepath.Join(dir, "requests.json")
+	writeJSON(t, reqFile, []map[string]any{
+		{"chainFile": chainFile, "nonce": "r1", "action": action("10")},
+		{"chainFile": chainFile, "nonce": "r2", "action": action("20")},
+	})
+	wal := filepath.Join(dir, "audit.wal")
+
+	do := func(out string) {
+		code, o, e := invoke(t, "run",
+			"--requests", reqFile, "--policy", commercePol, "--dids", didsRoot,
+			"--enforcement-point", epDID, "--keystore", ksExample,
+			"--status", acmeListURL+"="+acmeStatus, "--out", out, "--audit-wal", wal, "--audit-log", "")
+		if code != exitOK {
+			t.Fatalf("run exit=%d\n%s\n%s", code, o, e)
+		}
+	}
+
+	do(filepath.Join(dir, "export1.json"))
+	exp2 := filepath.Join(dir, "export2.json")
+	do(exp2)
+
+	if n := readExportEntries(t, exp2); n != 4 {
+		t.Fatalf("second run should recover 2 and append 2 = 4 entries, got %d", n)
+	}
+}
+
+// readExportEntries counts the entries in a written export envelope.
+func readExportEntries(t *testing.T, path string) int {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var env struct {
+		Entries []json.RawMessage `json:"entries"`
+	}
+	if err := json.Unmarshal(data, &env); err != nil {
+		t.Fatal(err)
+	}
+	return len(env.Entries)
+}
+
 // readJSONL decodes a JSON-Lines audit-sink file into records.
 func readJSONL(t *testing.T, path string) []auditsink.AuditRecord {
 	t.Helper()
@@ -157,7 +206,7 @@ func readJSONL(t *testing.T, path string) []auditsink.AuditRecord {
 // wires up and the handler answers /export with a v2 envelope.
 func TestServe_Wiring(t *testing.T) {
 	px, _, ok := buildProxy(commercePol, didsRoot, epDID, ksExample,
-		statusFlag{acmeListURL + "=" + acmeStatus}, nil, nil, io.Discard)
+		statusFlag{acmeListURL + "=" + acmeStatus}, nil, nil, nil, io.Discard)
 	if !ok {
 		t.Fatal("buildProxy failed")
 	}

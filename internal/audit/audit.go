@@ -122,16 +122,35 @@ func NewLog(s signer.Signer) *Log {
 	return &Log{signer: s}
 }
 
-// Append seals r into a new entry: it links to the previous entry's hash,
-// computes this entry's hash, signs it, and appends. The stored entry is
-// returned by value (a copy) so callers cannot mutate the log's internals.
+// Append seals r into a new entry and commits it: it links to the previous
+// entry's hash, computes this entry's hash, signs it, and appends. The stored
+// entry is returned by value (a copy) so callers cannot mutate the log's
+// internals. It is exactly Seal followed by Commit.
 func (l *Log) Append(r Record) (Entry, error) {
-	prev := GenesisHash
-	if n := len(l.entries); n > 0 {
-		prev = l.entries[n-1].EntryHash
+	e, err := l.Seal(r)
+	if err != nil {
+		return Entry{}, err
 	}
+	if err := l.Commit(e); err != nil {
+		return Entry{}, err
+	}
+	return e, nil
+}
+
+// Seal produces the next entry from r WITHOUT appending it: it fixes the entry's
+// position (Seq + PrevHash) against the current tip, computes its hash, and signs
+// it. The returned entry is not yet part of the log.
+//
+// Seal exists so a caller can interpose a step between producing an entry and
+// admitting it, specifically, making the entry durable before it is committed
+// (log-before-act). Sealing does not advance the tip, so a sealed entry that is
+// never Committed simply never happened; the same slot is produced again next
+// time. Under a single writer (the proxy holds its lock across Seal+Commit) this
+// is exact; Commit re-checks the slot regardless.
+func (l *Log) Seal(r Record) (Entry, error) {
+	seq, prev := l.Tip()
 	e := Entry{
-		Seq:                uint64(len(l.entries)),
+		Seq:                seq,
 		PrevHash:           prev,
 		Action:             r.Action,
 		ResolvedChain:      r.ResolvedChain,
@@ -154,8 +173,38 @@ func (l *Log) Append(r Record) (Entry, error) {
 		return Entry{}, fmt.Errorf("audit: sign entry %d: %w", e.Seq, err)
 	}
 	e.Signature = sig
-	l.entries = append(l.entries, e)
 	return e, nil
+}
+
+// Commit appends a previously Sealed entry, after re-checking that it still lands
+// in exactly the slot it was sealed for: its Seq and PrevHash must match the
+// current tip. This is what makes the Seal -> (durably persist) -> Commit sequence
+// safe, a stale or foreign entry, or one produced against a tip that has since
+// moved, is refused rather than creating a gap or an out-of-order link.
+func (l *Log) Commit(e Entry) error {
+	seq, prev := l.Tip()
+	if e.Seq != seq || !bytes.Equal(e.PrevHash, prev) {
+		return fmt.Errorf("audit: commit entry seq %d does not match current tip seq %d (concurrent append or stale seal)", e.Seq, seq)
+	}
+	l.entries = append(l.entries, e)
+	return nil
+}
+
+// LoadLog reconstructs a log from previously sealed entries, e.g. read from a
+// durable write-ahead log on restart, so appending resumes from where it left off
+// with the hash chain, seq, and approval-position binding all intact across the
+// restart (closing the replay gap ApprovalInput documents).
+//
+// It VERIFIES the whole chain against s's public key before accepting it: a
+// truncated, reordered, or tampered WAL is rejected here rather than silently
+// resumed, because resuming onto a broken prefix would sign new entries over a
+// history that does not verify. s must be the same enforcement point that sealed
+// the entries.
+func LoadLog(s signer.Signer, entries []Entry) (*Log, error) {
+	if fi, err := VerifyEntries(entries, s.Public()); err != nil {
+		return nil, fmt.Errorf("audit: recover: entry %d failed verification: %w", fi, err)
+	}
+	return &Log{signer: s, entries: append([]Entry(nil), entries...)}, nil
 }
 
 // Tip reports the position the NEXT appended entry will occupy: its Seq and the

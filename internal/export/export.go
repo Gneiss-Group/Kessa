@@ -229,6 +229,11 @@ func (s *CredentialSet) Add(c credential.Credential, issuerProof []byte) (string
 	return id, nil
 }
 
+// Has reports whether a credential with this content ID is already stored. It
+// lets a caller decide what is NEW in a chain (e.g. to persist only the newly
+// seen credentials to a durable log) without mutating the set.
+func (s *CredentialSet) Has(id string) bool { _, ok := s.records[id]; return ok }
+
 // Len reports how many distinct credentials are stored.
 func (s *CredentialSet) Len() int { return len(s.records) }
 
