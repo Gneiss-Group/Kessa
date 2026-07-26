@@ -85,6 +85,11 @@ type Proxy struct {
 	// limit (R2-03). Non-nil exactly when sink is.
 	sink      auditsink.AuditSink
 	sinkSlots chan struct{}
+	// wal, if non-nil, is the durable write-ahead audit log. Unlike sink, it is on
+	// the enforcement path and load-bearing: an entry is written here and fsynced
+	// BEFORE it is committed and the decision returned (log-before-act), and a write
+	// failure fails the decision closed. nil disables durability.
+	wal *WAL
 }
 
 // Config assembles a Proxy.
@@ -99,6 +104,10 @@ type Config struct {
 	// Sink, if set, forwards each appended audit entry to an external destination
 	// (local file, stdout, ...). Optional; nil disables forwarding.
 	Sink auditsink.AuditSink
+	// WAL, if set, makes the audit log durable: every entry (with its new evidence)
+	// is written and fsynced before Handle returns, and the log is recovered from it
+	// at startup. A write failure fails closed. Optional; nil disables durability.
+	WAL *WAL
 }
 
 // NewProxy builds a proxy with an empty audit log and evidence set.
@@ -125,6 +134,7 @@ func NewProxy(c Config) (*Proxy, error) {
 		set:              export.NewCredentialSet(),
 		now:              now,
 		sink:             c.Sink,
+		wal:              c.WAL,
 	}
 	if c.Sink != nil {
 		p.sinkSlots = make(chan struct{}, sinkMaxInFlight)
@@ -142,7 +152,70 @@ func NewProxy(c Config) (*Proxy, error) {
 		p.carriedPolicy = pol
 		p.policyID = id
 	}
+	// Recover any durable log at startup, AFTER policyID is known so the guard below
+	// can run. This resumes the hash chain (and its seq/approval-position binding)
+	// across a restart instead of starting a fresh, colliding log.
+	if c.WAL != nil {
+		if err := p.recoverFrom(c.WAL); err != nil {
+			return nil, err
+		}
+	}
 	return p, nil
+}
+
+// recoverFrom rebuilds the proxy's log and evidence set from a durable WAL. It is
+// fail-closed: LoadLog cryptographically verifies the recovered chain first (a
+// tampered or truncated WAL is refused, not resumed), and then a continuity guard
+// refuses to resume a log under a policy whose content-address differs from the one
+// it was written under.
+//
+// On that guard's status, stated so it is not mistaken for more than it is: the
+// signed-policy invariant is NOT enforced here. It is enforced, unbypassably, by the
+// verifier, which re-derives the carried policy's content-address and rejects any
+// allowed entry whose hash-covered PolicyID does not equal it ("policy substituted",
+// export/verify.go). Recovery cannot steer that check. This guard is therefore
+// defense-in-depth and an operator convenience, turning "resume, then emit an export
+// the verifier rejects" into "refuse to start now, with a clear message".
+//
+// It is NOT a building block for hot-reloadable policy (§7 of the deployment note),
+// and must not be extended into one. Its semantics are the opposite of what a reload
+// needs (it REFUSES a differing policy rather than accepting a newly authorized one),
+// and it encodes the current single-policy-per-export assumption, which is exactly
+// the assumption a reload has to dismantle: because one export carries one policy and
+// every entry must pin it, a log that spans two policies needs the export format and
+// the verifier to carry multiple content-addressed policies and pin per entry. That
+// is a format-and-verifier change, not a loader tweak, and it is where §7 must
+// actually be designed. This guard's refusal to resume under a changed policy is that
+// constraint surfacing, not a solution to it.
+func (p *Proxy) recoverFrom(w *WAL) error {
+	recs := w.Recovered()
+	if len(recs) == 0 {
+		return nil
+	}
+	entries := make([]audit.Entry, 0, len(recs))
+	for _, r := range recs {
+		entries = append(entries, r.Entry)
+	}
+	// Verify the chain BEFORE reading anything off the entries: the PolicyID the
+	// continuity guard compares must be EP-signed material, not raw bytes off disk.
+	log, err := audit.LoadLog(p.enforcementPoint, entries)
+	if err != nil {
+		return fmt.Errorf("proxy: recover audit log: %w", err)
+	}
+	for i, e := range entries {
+		if e.PolicyID != "" && e.PolicyID != p.policyID {
+			return fmt.Errorf("proxy: WAL entry %d was written under policy %s but this proxy loaded %s; refusing to resume (would produce an inconsistent export)", i, e.PolicyID, p.policyID)
+		}
+	}
+	p.log = log
+	for _, r := range recs {
+		for _, cr := range r.Credentials {
+			if _, err := p.set.Add(cr.Credential, cr.IssuerProof); err != nil {
+				return fmt.Errorf("proxy: recover evidence: %w", err)
+			}
+		}
+	}
+	return nil
 }
 
 // Request is one action attempt arriving at the chokepoint. Its JSON form is the
@@ -212,7 +285,10 @@ func (p *Proxy) decideAndAppend(req Request) (audit.Entry, types.Decision, error
 	defer p.mu.Unlock()
 
 	principals := req.Chain.Principals()
-	credIDs, err := p.recordEvidence(req.Chain)
+	// Compute the chain's credential IDs and which of them are NEW, without yet
+	// committing them to the evidence set: nothing about this decision, evidence
+	// included, is admitted until the entry is durable.
+	newCreds, credIDs, err := p.evidenceFor(req.Chain)
 	if err != nil {
 		return audit.Entry{}, types.Decision{}, err
 	}
@@ -221,11 +297,11 @@ func (p *Proxy) decideAndAppend(req Request) (audit.Entry, types.Decision, error
 	// The proof-of-possession and approval this request carries are bound to the
 	// position the resulting entry will occupy, its Seq and PrevHash (F4, R2-04).
 	// Read the tip before deciding, so the same position the caller signed over is
-	// the one we verify against and the one Append seals.
+	// the one we verify against and the one the entry seals.
 	seq, prevHash := p.log.Tip()
 
 	// From here every path produces an entry. deny() and allow() below fill in
-	// the Decision; the entry is appended once, at the end.
+	// the Decision; the entry is sealed, made durable, then committed, once.
 	dec, popRecorded := p.decide(req, terminal, seq, prevHash)
 
 	rec := audit.Record{
@@ -249,9 +325,31 @@ func (p *Proxy) decideAndAppend(req Request) (audit.Entry, types.Decision, error
 		rec.Approval = req.Approval
 	}
 
-	entry, err := p.log.Append(rec)
+	// Log-before-act, in three steps under the lock:
+	//   1. Seal the entry (hash + sign) WITHOUT committing it.
+	//   2. If durability is enabled, write it and its new evidence to the WAL and
+	//      fsync. Fail-closed: a durable-write failure refuses the decision here,
+	//      before anything is committed, so nothing is admitted, no in-memory entry,
+	//      no evidence, and above all no ALLOW returned, against a record that would
+	//      vanish on the next crash.
+	//   3. Only once the record is durable (or durability is off) commit the entry
+	//      to the chain and its evidence to the set.
+	entry, err := p.log.Seal(rec)
 	if err != nil {
-		return audit.Entry{}, types.Decision{}, fmt.Errorf("proxy: append audit entry: %w", err)
+		return audit.Entry{}, types.Decision{}, fmt.Errorf("proxy: seal audit entry: %w", err)
+	}
+	if p.wal != nil {
+		if err := p.wal.Append(entry, newCreds); err != nil {
+			return audit.Entry{}, types.Decision{}, fmt.Errorf("proxy: durable audit write failed, refusing action (fail-closed): %w", err)
+		}
+	}
+	if err := p.log.Commit(entry); err != nil {
+		return audit.Entry{}, types.Decision{}, fmt.Errorf("proxy: commit audit entry: %w", err)
+	}
+	for _, cr := range newCreds {
+		if _, err := p.set.Add(cr.Credential, cr.IssuerProof); err != nil {
+			return audit.Entry{}, types.Decision{}, fmt.Errorf("proxy: record evidence: %w", err)
+		}
 	}
 	return entry, dec, nil
 }
@@ -484,19 +582,28 @@ func (p *Proxy) anyHopRevoked(ch *chain.Chain) (revoked bool, where string, chec
 	return false, "", checked, nil
 }
 
-// recordEvidence adds the chain's credentials to the dedup set and returns their
-// per-hop IDs, in ResolvedChain order.
-func (p *Proxy) recordEvidence(ch *chain.Chain) ([]string, error) {
-	ids := make([]string, 0, len(ch.Links))
+// evidenceFor computes a chain's per-hop credential IDs (in ResolvedChain order)
+// and the subset of credentials NOT already in the evidence set, WITHOUT mutating
+// the set. The caller commits the new credentials only after the entry is durable,
+// so evidence and the entry it belongs to are admitted together or not at all.
+// Credentials already recorded by an earlier entry are omitted from newCreds, so
+// the durable log does not re-store a chain's credentials on every request.
+func (p *Proxy) evidenceFor(ch *chain.Chain) (newCreds []export.CredentialRecord, ids []string, err error) {
+	ids = make([]string, 0, len(ch.Links))
+	seen := make(map[string]bool)
 	for i := range ch.Links {
 		l := ch.Links[i]
-		id, err := p.set.Add(l.Credential, l.IssuerProof)
+		id, err := export.CredentialID(&l.Credential)
 		if err != nil {
-			return nil, fmt.Errorf("proxy: record hop %d evidence: %w", i, err)
+			return nil, nil, fmt.Errorf("proxy: record hop %d evidence: %w", i, err)
 		}
 		ids = append(ids, id)
+		if !p.set.Has(id) && !seen[id] {
+			seen[id] = true
+			newCreds = append(newCreds, export.CredentialRecord{CredentialID: id, Credential: l.Credential, IssuerProof: l.IssuerProof})
+		}
 	}
-	return ids, nil
+	return newCreds, ids, nil
 }
 
 // Export builds the audit export from everything the proxy has enforced,
