@@ -246,7 +246,8 @@ func cmdServe(args []string, stdout, stderr io.Writer) int {
 	didsDir := fs.String("dids", "", "directory of published did:web documents (required)")
 	epDID := fs.String("enforcement-point", "", "DID of this enforcement point (required)")
 	ksPath := fs.String("keystore", "", "MOCK keystore JSON (required)")
-	addr := fs.String("addr", "127.0.0.1:8181", "listen address")
+	httpAddr := fs.String("http-addr", "127.0.0.1:8181", "address for the generic HTTP listener; empty to disable it")
+	mcpAddr := fs.String("mcp-addr", "127.0.0.1:8182", "address for the MCP-native (Streamable HTTP JSON-RPC) listener; empty to disable it")
 	exportOut := fs.String("export", "", "if set, write the accumulated export here on shutdown")
 	nowStr := fs.String("now", "", "fixed entry timestamp (RFC3339) for deterministic runs; default wall clock")
 	auditLog := fs.String("audit-log", "audit-log.jsonl", "forward each audit entry to this local JSON-Lines file; \"-\" for stdout, \"\" to disable. Best-effort and lossy: a hung/slow sink drops records rather than stalling enforcement (bound sinkMaxInFlight=64; finding R2-03)")
@@ -274,10 +275,37 @@ func cmdServe(args []string, stdout, stderr io.Writer) int {
 	}
 	defer func() { _ = px.FlushSink(sinkFlushTimeout) }()
 
-	fmt.Fprintf(stdout, "kessa-proxy serving at http://%s\n", *addr)
-	fmt.Fprintf(stdout, "  POST /enforce   an enforce.Request; returns the decision\n")
-	fmt.Fprintf(stdout, "  GET  /export    the signed audit export so far\n")
-	if err := http.ListenAndServe(*addr, enforce.Handler(px)); err != nil {
+	// Two independently configurable front-end listeners, both funneling into the
+	// SAME enforcement engine (design note §3). The MCP-native listener is a thin
+	// protocol adapter (enforce.MCPHandler calls the same px.Handle/px.Tip the HTTP
+	// handler does), so an MCP host can point its server address straight at Kessa.
+	// Each listener is enabled by having an address and disabled by clearing it: a
+	// security-conscious operator closes a port they don't want rather than being
+	// forced to commit to a protocol. Both enabled is the default (lowest deployment
+	// bar: a chokepoint exists); both disabled is legitimate, if inert.
+	listeners := enabledListeners([]listener{
+		{name: "HTTP", addr: *httpAddr, handler: enforce.Handler(px), hints: []string{
+			"POST /enforce   an enforce.Request; returns the decision",
+			"GET  /tip       the next entry's slot, for binding PoP/approval",
+			"GET  /export    the signed audit export so far",
+		}},
+		{name: "MCP-native (Streamable HTTP)", addr: *mcpAddr, handler: enforce.MCPHandler(px), hints: []string{
+			"POST /          an MCP JSON-RPC message (initialize, tools/list, tools/call)",
+			"tools           kessa/tip, kessa/enforce",
+		}},
+	})
+	if len(listeners) == 0 {
+		fmt.Fprintln(stdout, "kessa-proxy: no listeners enabled (both --http-addr and --mcp-addr are empty); nothing to serve")
+		return exitOK
+	}
+	for _, l := range listeners {
+		fmt.Fprintf(stdout, "kessa-proxy %s listener at http://%s\n", l.name, l.addr)
+		for _, h := range l.hints {
+			fmt.Fprintf(stdout, "  %s\n", h)
+		}
+	}
+
+	if err := serveAll(listeners); err != nil {
 		fmt.Fprintf(stderr, "kessa-proxy: %v\n", err)
 		if *exportOut != "" {
 			_ = writeExport(px, *exportOut)
@@ -285,6 +313,52 @@ func cmdServe(args []string, stdout, stderr io.Writer) int {
 		return exitUsage
 	}
 	return exitOK
+}
+
+// ---- serve: dual-listener orchestration ------------------------------------
+
+// listener is one configured front-end. addr is the bind address; an empty addr
+// means the listener is disabled (see enabledListeners). handler turns that
+// listener's wire format into the same Proxy calls the others make; hints are the
+// endpoint lines printed under it at startup.
+type listener struct {
+	name    string
+	addr    string
+	handler http.Handler
+	hints   []string
+}
+
+// enabledListeners keeps only the listeners with a non-empty address, preserving
+// order. Clearing an address is how a listener is turned off: attack-surface
+// minimization for an operator who wants a port closed, not a forced up-front
+// protocol commitment (design note §3). Returning zero listeners is legal and
+// inert, deliberately, so the config does not hardcode "at least one protocol"
+// as an assumption a future third listener shape could break.
+func enabledListeners(ls []listener) []listener {
+	out := make([]listener, 0, len(ls))
+	for _, l := range ls {
+		if strings.TrimSpace(l.addr) != "" {
+			out = append(out, l)
+		}
+	}
+	return out
+}
+
+// serveAll starts every listener and blocks until the FIRST one returns. Each
+// shares the one Proxy, which guards its own invariants, so serving several is
+// safe. Fail-fast is deliberate: a chokepoint that was asked for two ports but
+// silently got one is a misconfiguration the operator must see, so the first
+// listener error (a bind failure, most often) stops the process rather than being
+// logged and swallowed. Crash/redundancy hardening ACROSS listeners once they are
+// up is separately scoped and explicitly deferred (design note §5).
+func serveAll(ls []listener) error {
+	errc := make(chan error, len(ls))
+	for _, l := range ls {
+		go func(l listener) {
+			errc <- fmt.Errorf("%s listener: %w", l.name, http.ListenAndServe(l.addr, l.handler))
+		}(l)
+	}
+	return <-errc
 }
 
 // ---- shared helpers --------------------------------------------------------

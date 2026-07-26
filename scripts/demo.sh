@@ -59,15 +59,18 @@ ACME="did:web:localhost:orgs:acme"
 hr "Start two enforcement proxies (no shared config)"
 # Each proxy forwards its audit entries to the default local-file sink (JSON
 # Lines), pointed at the temp workdir so the demo leaves no files behind.
+# Two proxies on one host, so the MCP-native listener is disabled (--mcp-addr "")
+# on both: this demo exercises the HTTP path, and leaving MCP on its default port
+# would collide between the two processes.
 "$BIN/kessa-proxy" serve --policy examples/policies/commerce-security.json \
   --dids "$PUBLIC" --enforcement-point "$GATEKEEPER" --keystore "$KS" \
   --status "$ST" --now "$NOW" --audit-log "$WORK/audit-A.jsonl" \
-  --addr 127.0.0.1:8191 >"$WORK/proxyA.log" 2>&1 &
+  --http-addr 127.0.0.1:8191 --mcp-addr "" >"$WORK/proxyA.log" 2>&1 &
 A_PID=$!
 "$BIN/kessa-proxy" serve --policy examples/policies/legal-ediscovery.json \
   --dids "$PUBLIC" --enforcement-point "$BRAVO" --keystore "$KS" \
   --status "$ST" --now "$NOW" --audit-log "$WORK/audit-B.jsonl" \
-  --addr 127.0.0.1:8192 >"$WORK/proxyB.log" 2>&1 &
+  --http-addr 127.0.0.1:8192 --mcp-addr "" >"$WORK/proxyB.log" 2>&1 &
 B_PID=$!
 disown "$A_PID" 2>/dev/null || true  # keep cleanup's kill quiet (no job-control notice)
 disown "$B_PID" 2>/dev/null || true

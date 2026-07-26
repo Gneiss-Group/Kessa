@@ -186,6 +186,51 @@ func TestServe_Wiring(t *testing.T) {
 	}
 }
 
+// TestEnabledListeners is the §3 config decision in isolation: a listener is on
+// when it has an address and off when its address is cleared, and both-off is a
+// legal (empty) result.
+func TestEnabledListeners(t *testing.T) {
+	both := []listener{{name: "HTTP", addr: "127.0.0.1:8181"}, {name: "MCP", addr: "127.0.0.1:8182"}}
+	cases := []struct {
+		name string
+		in   []listener
+		want []string
+	}{
+		{"both on", both, []string{"HTTP", "MCP"}},
+		{"http only", []listener{{name: "HTTP", addr: "127.0.0.1:8181"}, {name: "MCP", addr: ""}}, []string{"HTTP"}},
+		{"mcp only", []listener{{name: "HTTP", addr: "  "}, {name: "MCP", addr: "127.0.0.1:8182"}}, []string{"MCP"}},
+		{"both off", []listener{{name: "HTTP", addr: ""}, {name: "MCP", addr: ""}}, nil},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := enabledListeners(tc.in)
+			if len(got) != len(tc.want) {
+				t.Fatalf("enabled = %d listeners, want %d", len(got), len(tc.want))
+			}
+			for i, l := range got {
+				if l.name != tc.want[i] {
+					t.Fatalf("enabled[%d] = %q, want %q", i, l.name, tc.want[i])
+				}
+			}
+		})
+	}
+}
+
+// TestServe_BothListenersDisabled confirms clearing both addresses is a legal,
+// inert configuration: serve reports it and exits 0 without binding anything.
+func TestServe_BothListenersDisabled(t *testing.T) {
+	code, out, errb := invoke(t, "serve",
+		"--policy", commercePol, "--dids", didsRoot,
+		"--enforcement-point", epDID, "--keystore", ksExample,
+		"--http-addr", "", "--mcp-addr", "", "--audit-log", "")
+	if code != exitOK {
+		t.Fatalf("both-off serve exit=%d, want %d\n%s\n%s", code, exitOK, out, errb)
+	}
+	if !strings.Contains(out, "no listeners enabled") {
+		t.Fatalf("expected a 'no listeners enabled' note, got:\n%s", out)
+	}
+}
+
 func TestUsageErrors(t *testing.T) {
 	for _, args := range [][]string{
 		{},

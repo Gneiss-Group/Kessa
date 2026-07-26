@@ -46,7 +46,7 @@ STATUS="https://localhost/orgs/acme/status.json=$STATUS_FILE"
 "$BIN/kessa-proxy" serve --policy examples/policies/commerce-security.json \
   --dids "$PUBLIC" --enforcement-point "$GATEKEEPER" --keystore "$KS" \
   --status "$STATUS" --now "$NOW" --audit-log "$OUT/audit.jsonl" \
-  --addr 127.0.0.1:8191 >"$OUT/proxy.log" 2>&1 &
+  --http-addr 127.0.0.1:8191 --mcp-addr "" >"$OUT/proxy.log" 2>&1 &
 PID=$!
 disown "$PID" 2>/dev/null || true
 trap 'kill "$PID" 2>/dev/null || true' EXIT

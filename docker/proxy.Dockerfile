@@ -38,10 +38,13 @@ FROM gcr.io/distroless/static:nonroot@sha256:f7f8f729987ad0fdf6b05eeeae94b26e6a0
 COPY --from=build /out/kessa-proxy /usr/local/bin/kessa-proxy
 
 USER nonroot:nonroot
-EXPOSE 8181
+# Both listeners are on by default: the generic HTTP listener (8181) and the
+# MCP-native Streamable-HTTP listener (8182). Close either by passing an empty
+# address (e.g. `serve --mcp-addr ""`).
+EXPOSE 8181 8182
 ENTRYPOINT ["/usr/local/bin/kessa-proxy"]
 # Default to serving on all interfaces: the binary's own default is 127.0.0.1,
 # which is unreachable from outside a container. 0.0.0.0 inside a container is
 # scoped by the pod/host network, and this CMD is overridable (e.g.
 # `docker run … run --requests …` for batch mode).
-CMD ["serve", "--addr", "0.0.0.0:8181"]
+CMD ["serve", "--http-addr", "0.0.0.0:8181", "--mcp-addr", "0.0.0.0:8182"]
