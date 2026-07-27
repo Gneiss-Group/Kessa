@@ -6,10 +6,14 @@ package credential
 
 import (
 	"bytes"
+	"crypto/ecdsa"
 	"crypto/ed25519"
+	"crypto/elliptic"
+	"crypto/rand"
 	"crypto/sha256"
 	"testing"
 
+	"github.com/Gneiss-Group/Kessa/internal/did"
 	"github.com/Gneiss-Group/Kessa/internal/macaroon"
 	"github.com/Gneiss-Group/Kessa/internal/signer"
 	"github.com/Gneiss-Group/Kessa/internal/status"
@@ -95,6 +99,42 @@ func TestNew_ValidatesFields(t *testing.T) {
 
 	if _, err := New(Options{Subject: "worker", Issuer: "acme", Macaroon: good, HolderKey: holder.Public()}); err != nil {
 		t.Fatalf("valid options should construct: %v", err)
+	}
+}
+
+// TestNew_RejectsMalformedHolderKeyAtConstruction pins the CONSTRUCTION-TIME
+// boundary check (R3-01). These keys would all be rejected eventually at verify
+// time regardless; the point of this test is that New must reject them NOW, at
+// the boundary, so the early gate cannot be silently removed again (as it was
+// when HolderKey became a JWK) without turning this test red. Asserting only
+// "the verifier rejects it" would not distinguish "gated early" from "gated
+// late" and so could not catch that regression.
+func TestNew_RejectsMalformedHolderKeyAtConstruction(t *testing.T) {
+	good := macaroon.Mint([]byte("test-root-key-000000000000000000"), "cred-1", "acme")
+	base := Options{Subject: "worker", Issuer: "acme", Macaroon: good}
+
+	// A wrong-length Ed25519 key: the exact class the pre-JWK New checked with
+	// len(HolderKey) != ed25519.PublicKeySize.
+	shortEd := Options{Subject: base.Subject, Issuer: base.Issuer, Macaroon: base.Macaroon, HolderKey: ed25519.PublicKey(make([]byte, 16))}
+	if _, err := New(shortEd); err == nil {
+		t.Fatal("New must reject a wrong-length Ed25519 holder key at construction")
+	}
+
+	// A non-P-256 ECDSA key: matches the *ecdsa.PublicKey Go type but is the wrong
+	// curve; must be refused at construction, not mislabeled or deferred.
+	p384, err := ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
+	if err != nil {
+		t.Fatalf("generate P-384: %v", err)
+	}
+	wrongCurve := Options{Subject: base.Subject, Issuer: base.Issuer, Macaroon: base.Macaroon, HolderKey: &p384.PublicKey}
+	if _, err := New(wrongCurve); err == nil {
+		t.Fatal("New must reject a non-P-256 ECDSA holder key at construction")
+	}
+
+	// A completely unsupported key type.
+	unsupported := Options{Subject: base.Subject, Issuer: base.Issuer, Macaroon: base.Macaroon, HolderKey: "not a key"}
+	if _, err := New(unsupported); err == nil {
+		t.Fatal("New must reject an unsupported holder key type at construction")
 	}
 }
 
@@ -205,7 +245,7 @@ func TestHolderCaveat_CommittedInMacaroon(t *testing.T) {
 	// Swapping HolderKey in the blob does not change the committed caveat: the
 	// attacker's HolderContext no longer matches the caveat value.
 	thief := newSigner(t, "did:web:localhost:agents:thief", 0x44)
-	c.HolderKey = thief.Public()
+	c.HolderKey = did.PublicKeyToJWK(thief.Public())
 	tampered := macaroon.Context{"action.type": "post.publish"}
 	for k, v := range c.HolderContext() {
 		tampered[k] = v
@@ -242,7 +282,7 @@ func TestMarshalParse_RoundTrip(t *testing.T) {
 	if got.StatusRef != c.StatusRef {
 		t.Fatalf("status ref not preserved: %+v", got.StatusRef)
 	}
-	if !bytes.Equal(got.HolderKey, c.HolderKey) {
+	if got.HolderKey == nil || c.HolderKey == nil || *got.HolderKey != *c.HolderKey {
 		t.Fatal("holder key not preserved")
 	}
 	// Macaroon still verifies after round trip.

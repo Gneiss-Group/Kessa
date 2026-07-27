@@ -58,7 +58,7 @@ func TestSoftwareSigner_SeedIsDeterministic(t *testing.T) {
 	if err != nil {
 		t.Fatalf("signer b: %v", err)
 	}
-	if !a.Public().Equal(b.Public()) {
+	if !KeysEqual(a.Public(), b.Public()) {
 		t.Fatal("same seed produced different public keys")
 	}
 
@@ -67,7 +67,7 @@ func TestSoftwareSigner_SeedIsDeterministic(t *testing.T) {
 	if err != nil {
 		t.Fatalf("signer c: %v", err)
 	}
-	if a.Public().Equal(c.Public()) {
+	if KeysEqual(a.Public(), c.Public()) {
 		t.Fatal("different seeds produced the same public key")
 	}
 

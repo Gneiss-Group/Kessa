@@ -375,7 +375,7 @@ func TestTrustBoundary_DIDRootIsTheAnchor(t *testing.T) {
 	// enforcement point's, it verifies clean. Expected and documented.
 	forgedRoot := t.TempDir()
 	copyDIDTree(t, didsRoot, forgedRoot)
-	writeDIDDoc(t, filepath.Join(forgedRoot, "localhost/proxies/gatekeeper/did.json"), didProxy, attacker.Public())
+	writeDIDDoc(t, filepath.Join(forgedRoot, "localhost/proxies/gatekeeper/did.json"), didProxy, attacker.Public().(ed25519.PublicKey))
 
 	forgedInputs := f.inputs()
 	forgedInputs.DIDs = did.FileResolver{Root: forgedRoot}

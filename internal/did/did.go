@@ -13,15 +13,25 @@
 //     here requires a hosted Kessa service, the whole point is that a verifier
 //     trusts nothing of ours beyond public DID documents.
 //   - did:web only for the POC. No blockchain-anchored methods.
-//   - Keys are published as publicKeyJwk (OKP / Ed25519), which keeps encoding
-//     to stdlib base64url and avoids pulling in a base58/multibase dependency.
+//   - Keys are published as publicKeyJwk, which keeps encoding to stdlib
+//     base64url and avoids a base58/multibase dependency. Two key types are
+//     supported: OKP/Ed25519 (the default for org, proxy, and status-issuer
+//     keys) and EC/P-256 (the employee/device key, which a Secure Enclave or TPM
+//     generates in hardware; those devices cannot produce Ed25519). Resolution
+//     is algorithm-agile: a resolved key is a crypto.PublicKey and callers verify
+//     through signer.Verify, which dispatches on its concrete type.
 package did
 
 import (
+	"crypto"
+	"crypto/ecdh"
+	"crypto/ecdsa"
 	"crypto/ed25519"
+	"crypto/elliptic"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"math/big"
 	"net/http"
 	"net/url"
 	"os"
@@ -50,39 +60,119 @@ type VerificationMethod struct {
 	PublicKeyJwk *JWK      `json:"publicKeyJwk,omitempty"`
 }
 
-// JWK is a JSON Web Key. We only support Ed25519 public keys (kty=OKP,
-// crv=Ed25519), where x is the base64url-encoded 32-byte public key.
+// JWK is a JSON Web Key. Two key types are supported:
+//
+//   - OKP / Ed25519: x is the base64url-encoded 32-byte public key. Y is empty.
+//   - EC / P-256:    x and y are the base64url-encoded 32-byte affine
+//     coordinates of the curve point.
+//
+// This is the single canonical JSON encoding for a public key everywhere in
+// Kessa, both in DID documents and as a credential's bound holder key, so one
+// parser covers both and a key is always self-describing about its algorithm.
 type JWK struct {
 	Kty string `json:"kty"`
 	Crv string `json:"crv"`
 	X   string `json:"x"`
+	Y   string `json:"y,omitempty"` // EC only; the point's y-coordinate
 }
 
-// PublicKeyToJWK encodes an Ed25519 public key as an OKP JWK.
-func PublicKeyToJWK(pub ed25519.PublicKey) *JWK {
-	return &JWK{
-		Kty: "OKP",
-		Crv: "Ed25519",
-		X:   base64.RawURLEncoding.EncodeToString(pub),
+// p256CoordSize is the byte length of a P-256 affine coordinate (256 bits).
+const p256CoordSize = 32
+
+// PublicKeyToJWK encodes a supported public key as a JWK. It panics on an
+// unsupported key type OR an unsupported EC curve, which is a programming error
+// (the caller controls what it generates) and is never attacker-reachable: the
+// verifier only ever PARSES JWKs (JWK.PublicKey), it never encodes. Panicking
+// rather than returning an error is deliberate here — the alternative that this
+// function must never do is what it used to: silently stamp a non-P-256 key as
+// crv:"P-256" and emit a JWK that lies about what it carries (R3-02). A loud
+// refusal to encode an unrepresentable key is strictly safer than a false label.
+func PublicKeyToJWK(pub crypto.PublicKey) *JWK {
+	switch k := pub.(type) {
+	case ed25519.PublicKey:
+		return &JWK{
+			Kty: "OKP",
+			Crv: "Ed25519",
+			X:   base64.RawURLEncoding.EncodeToString(k),
+		}
+	case *ecdsa.PublicKey:
+		if k.Curve != elliptic.P256() {
+			// Do not mislabel: the only EC curve this JWK form represents is P-256.
+			panic("did: cannot encode ECDSA public key on a non-P-256 curve")
+		}
+		return &JWK{
+			Kty: "EC",
+			Crv: "P-256",
+			X:   base64.RawURLEncoding.EncodeToString(leftPad(k.X.Bytes(), p256CoordSize)),
+			Y:   base64.RawURLEncoding.EncodeToString(leftPad(k.Y.Bytes(), p256CoordSize)),
+		}
+	default:
+		panic(fmt.Sprintf("did: cannot encode unsupported public key type %T", pub))
 	}
 }
 
-// PublicKey decodes the JWK back into an Ed25519 public key.
-func (j *JWK) PublicKey() (ed25519.PublicKey, error) {
+// PublicKey decodes the JWK back into a crypto.PublicKey (ed25519.PublicKey or
+// *ecdsa.PublicKey). Callers verify signatures through signer.Verify, which
+// dispatches on this concrete type.
+func (j *JWK) PublicKey() (crypto.PublicKey, error) {
 	if j == nil {
 		return nil, fmt.Errorf("did: nil JWK")
 	}
-	if j.Kty != "OKP" || j.Crv != "Ed25519" {
-		return nil, fmt.Errorf("did: unsupported JWK kty=%q crv=%q (want OKP/Ed25519)", j.Kty, j.Crv)
+	switch {
+	case j.Kty == "OKP" && j.Crv == "Ed25519":
+		b, err := decodeBase64URL(j.X)
+		if err != nil {
+			return nil, fmt.Errorf("did: decode JWK x: %w", err)
+		}
+		if len(b) != ed25519.PublicKeySize {
+			return nil, fmt.Errorf("did: JWK x is %d bytes, want %d", len(b), ed25519.PublicKeySize)
+		}
+		return ed25519.PublicKey(b), nil
+	case j.Kty == "EC" && j.Crv == "P-256":
+		xb, err := decodeBase64URL(j.X)
+		if err != nil {
+			return nil, fmt.Errorf("did: decode JWK x: %w", err)
+		}
+		yb, err := decodeBase64URL(j.Y)
+		if err != nil {
+			return nil, fmt.Errorf("did: decode JWK y: %w", err)
+		}
+		if len(xb) != p256CoordSize || len(yb) != p256CoordSize {
+			return nil, fmt.Errorf("did: P-256 JWK coordinates are %d/%d bytes, want %d each", len(xb), len(yb), p256CoordSize)
+		}
+		// Validate the point is a legitimate P-256 public key (on the curve, not the
+		// identity) via crypto/ecdh, the current replacement for the deprecated
+		// elliptic.IsOnCurve. The SEC1 uncompressed encoding is 0x04 || X || Y.
+		sec1 := make([]byte, 1+2*p256CoordSize)
+		sec1[0] = 0x04
+		copy(sec1[1:1+p256CoordSize], xb)
+		copy(sec1[1+p256CoordSize:], yb)
+		if _, err := ecdh.P256().NewPublicKey(sec1); err != nil {
+			return nil, fmt.Errorf("did: invalid P-256 public key: %w", err)
+		}
+		// Return an *ecdsa.PublicKey because verification uses ecdsa.VerifyASN1;
+		// ecdh keys cannot verify signatures. elliptic.P256() here is just the curve
+		// identity, not a deprecated operation.
+		return &ecdsa.PublicKey{
+			Curve: elliptic.P256(),
+			X:     new(big.Int).SetBytes(xb),
+			Y:     new(big.Int).SetBytes(yb),
+		}, nil
+	default:
+		return nil, fmt.Errorf("did: unsupported JWK kty=%q crv=%q (want OKP/Ed25519 or EC/P-256)", j.Kty, j.Crv)
 	}
-	b, err := decodeBase64URL(j.X)
-	if err != nil {
-		return nil, fmt.Errorf("did: decode JWK x: %w", err)
+}
+
+// leftPad returns b left-padded with zero bytes to exactly size bytes. A P-256
+// coordinate can be shorter than 32 bytes when its high bytes are zero;
+// big.Int.Bytes() drops them, but the JWK encoding is fixed-width.
+func leftPad(b []byte, size int) []byte {
+	if len(b) >= size {
+		return b
 	}
-	if len(b) != ed25519.PublicKeySize {
-		return nil, fmt.Errorf("did: JWK x is %d bytes, want %d", len(b), ed25519.PublicKeySize)
-	}
-	return ed25519.PublicKey(b), nil
+	out := make([]byte, size)
+	copy(out[size-len(b):], b)
+	return out
 }
 
 // decodeBase64URL accepts both padded and unpadded base64url, since we cannot
@@ -94,9 +184,10 @@ func decodeBase64URL(s string) ([]byte, error) {
 	return base64.URLEncoding.DecodeString(s)
 }
 
-// NewDocument builds a DID document for did that publishes a single Ed25519
-// verification method (#key-1) usable for both authentication and assertion.
-func NewDocument(did types.DID, pub ed25519.PublicKey) *Document {
+// NewDocument builds a DID document for did that publishes a single
+// verification method (#key-1) usable for both authentication and assertion. The
+// key may be Ed25519 or P-256; PublicKeyToJWK records which.
+func NewDocument(did types.DID, pub crypto.PublicKey) *Document {
 	vmID := string(did) + "#key-1"
 	return &Document{
 		Context: []string{
@@ -117,7 +208,7 @@ func NewDocument(did types.DID, pub ed25519.PublicKey) *Document {
 
 // FirstKey returns the public key of the first verification method. Most Kessa
 // DID documents publish exactly one key, so this is the common accessor.
-func (d *Document) FirstKey() (ed25519.PublicKey, error) {
+func (d *Document) FirstKey() (crypto.PublicKey, error) {
 	if d == nil || len(d.VerificationMethod) == 0 {
 		return nil, fmt.Errorf("did: document %q has no verification methods", d.id())
 	}
@@ -126,7 +217,7 @@ func (d *Document) FirstKey() (ed25519.PublicKey, error) {
 
 // Key returns the public key for a specific verification method id. The id may
 // be given fully (did#frag) or as just the fragment (#frag or frag).
-func (d *Document) Key(vmID string) (ed25519.PublicKey, error) {
+func (d *Document) Key(vmID string) (crypto.PublicKey, error) {
 	if d == nil {
 		return nil, fmt.Errorf("did: nil document")
 	}
@@ -156,8 +247,10 @@ type Resolver interface {
 	Resolve(did types.DID) (*Document, error)
 }
 
-// ResolveKey is a convenience: resolve did and return its first public key.
-func ResolveKey(r Resolver, did types.DID) (ed25519.PublicKey, error) {
+// ResolveKey is a convenience: resolve did and return its first public key
+// (ed25519.PublicKey or *ecdsa.PublicKey; the caller verifies through
+// signer.Verify, which dispatches on the concrete type).
+func ResolveKey(r Resolver, did types.DID) (crypto.PublicKey, error) {
 	doc, err := r.Resolve(did)
 	if err != nil {
 		return nil, err

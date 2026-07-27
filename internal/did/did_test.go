@@ -57,7 +57,7 @@ func TestFileResolver_ResolvesFixtureToKey(t *testing.T) {
 			if err != nil {
 				t.Fatalf("FirstKey: %v", err)
 			}
-			if want := keyForSeed(t, tc.seed); !got.Equal(want) {
+			if want := keyForSeed(t, tc.seed); !want.Equal(got) {
 				t.Fatalf("resolved key does not match the seed-derived key")
 			}
 			// Key() by fragment must find the same key.
@@ -65,7 +65,7 @@ func TestFileResolver_ResolvesFixtureToKey(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Key(#key-1): %v", err)
 			}
-			if !byFrag.Equal(got) {
+			if !byFrag.(ed25519.PublicKey).Equal(got) {
 				t.Fatal("Key(#key-1) disagrees with FirstKey()")
 			}
 		})
@@ -108,7 +108,7 @@ func TestHTTPResolver_ResolvesOverNetwork(t *testing.T) {
 	if err != nil {
 		t.Fatalf("FirstKey: %v", err)
 	}
-	if !got.Equal(pub) {
+	if !pub.Equal(got) {
 		t.Fatal("http-resolved key does not match the served document")
 	}
 
@@ -203,7 +203,7 @@ func TestNewDocument_RoundTripsThroughFirstKey(t *testing.T) {
 	if err != nil {
 		t.Fatalf("FirstKey: %v", err)
 	}
-	if !got.Equal(pub) {
+	if !pub.Equal(got) {
 		t.Fatal("NewDocument did not preserve the key")
 	}
 	if doc.VerificationMethod[0].ID != string(did)+"#key-1" {

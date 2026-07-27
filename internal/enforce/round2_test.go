@@ -18,6 +18,7 @@ import (
 	"github.com/Gneiss-Group/Kessa/internal/audit"
 	"github.com/Gneiss-Group/Kessa/internal/chain"
 	"github.com/Gneiss-Group/Kessa/internal/credential"
+	"github.com/Gneiss-Group/Kessa/internal/did"
 	"github.com/Gneiss-Group/Kessa/internal/export"
 	"github.com/Gneiss-Group/Kessa/internal/policy"
 	"github.com/Gneiss-Group/Kessa/internal/status"
@@ -64,7 +65,7 @@ func TestR2_01_HolderCannotEditAnyCredentialField(t *testing.T) {
 		// The rest are the class, not the instance.
 		"subject swapped":         func(c *credential.Credential) { c.Subject = didHelper },
 		"issuer swapped":          func(c *credential.Credential) { c.Issuer = didAlice },
-		"holder key swapped":      func(c *credential.Credential) { c.HolderKey = sign(t, didHelper).Public() },
+		"holder key swapped":      func(c *credential.Credential) { c.HolderKey = did.PublicKeyToJWK(sign(t, didHelper).Public()) },
 		"macaroon caveat dropped": func(c *credential.Credential) { c.Macaroon.Caveats = c.Macaroon.Caveats[:len(c.Macaroon.Caveats)-1] },
 		"macaroon caveat widened": func(c *credential.Credential) { c.Macaroon.Caveats[len(c.Macaroon.Caveats)-1].Value = "999999" },
 		"macaroon identifier":     func(c *credential.Credential) { c.Macaroon.Identifier = "cred-proxy-2" },

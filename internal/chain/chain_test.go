@@ -5,6 +5,7 @@
 package chain
 
 import (
+	"crypto"
 	"crypto/ed25519"
 	"fmt"
 	"strings"
@@ -96,7 +97,7 @@ func mustAtt(t *testing.T, m macaroon.Macaroon, c macaroon.Caveat) macaroon.Maca
 	return out
 }
 
-func mustLink(t *testing.T, issuer signer.Signer, issuerDID, subjectDID string, m macaroon.Macaroon, holderKey ed25519.PublicKey) Link {
+func mustLink(t *testing.T, issuer signer.Signer, issuerDID, subjectDID string, m macaroon.Macaroon, holderKey crypto.PublicKey) Link {
 	t.Helper()
 	c, err := credential.New(credential.Options{
 		Subject:   types.DID(subjectDID),
@@ -237,7 +238,7 @@ func TestVerify_SwappedHolderKeyFails(t *testing.T) {
 	// still matches the (tampered) credential, the DID-key mismatch must catch it.
 	stranger, _ := signer.NewSoftwareSignerFromSeed("did:web:localhost:agents:stranger", seed32(0x77))
 	c := sc.chain.Links[1].Credential
-	c.HolderKey = stranger.Public()
+	c.HolderKey = did.PublicKeyToJWK(stranger.Public())
 	proof, err := SignIssuance(sc.acme.signer, &c)
 	if err != nil {
 		t.Fatal(err)

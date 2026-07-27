@@ -6,6 +6,7 @@ package export
 
 import (
 	"bytes"
+	"crypto"
 	"crypto/ed25519"
 	"encoding/json"
 	"flag"
@@ -139,7 +140,7 @@ func newFixture(t *testing.T) *fixture {
 	mWorker2 := mustAtt(t, mAcme, macaroon.Caveat{Field: "amount", Op: macaroon.OpLe, Value: "200"})
 	mHelper := mustAtt(t, mWorker2, macaroon.Caveat{Field: "target", Op: macaroon.OpEq, Value: "acct/999"})
 
-	mk := func(subject, issuer types.DID, m macaroon.Macaroon, ref status.Reference, holder ed25519.PublicKey) credential.Credential {
+	mk := func(subject, issuer types.DID, m macaroon.Macaroon, ref status.Reference, holder crypto.PublicKey) credential.Credential {
 		c, err := credential.New(credential.Options{
 			Subject: subject, Issuer: issuer, Macaroon: m, StatusRef: ref, HolderKey: holder,
 		})
