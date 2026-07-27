@@ -5,7 +5,7 @@
 package export
 
 import (
-	"crypto/ed25519"
+	"crypto"
 	"fmt"
 
 	"github.com/Gneiss-Group/Kessa/internal/audit"
@@ -13,6 +13,7 @@ import (
 	"github.com/Gneiss-Group/Kessa/internal/credential"
 	"github.com/Gneiss-Group/Kessa/internal/did"
 	"github.com/Gneiss-Group/Kessa/internal/macaroon"
+	"github.com/Gneiss-Group/Kessa/internal/signer"
 	"github.com/Gneiss-Group/Kessa/internal/status"
 	"github.com/Gneiss-Group/Kessa/pkg/types"
 )
@@ -443,7 +444,7 @@ func verifyEntry(exp *Export, e *audit.Entry, in Inputs) EntryResult {
 // The count and tip are recomputed here from the entries actually present, so the
 // check is a re-derivation and not a comparison against a number the file states
 // about itself.
-func verifyEnvelope(exp *Export, pub ed25519.PublicKey) error {
+func verifyEnvelope(exp *Export, pub crypto.PublicKey) error {
 	pid := ""
 	if exp.Policy != nil {
 		var err error
@@ -455,7 +456,7 @@ func verifyEnvelope(exp *Export, pub ed25519.PublicKey) error {
 		return fmt.Errorf("export carries no envelope signature over its version/signer/policy/length")
 	}
 	input := envelopeSigningInput(exp.Version, exp.Signer, pid, uint64(len(exp.Entries)), logTip(exp.Entries))
-	if !ed25519.Verify(pub, input, exp.EnvelopeSignature) {
+	if !signer.Verify(pub, input, exp.EnvelopeSignature) {
 		return fmt.Errorf("envelope signature invalid (version, signer, policy, or the log's length/tip tampered — entries may have been removed)")
 	}
 	return nil
@@ -481,7 +482,7 @@ func hopRevoked(c *credential.Credential, in Inputs) (bool, error) {
 	return list.Lookup(c.StatusRef.Index)
 }
 
-func verifyList(l *status.StatusList, pub ed25519.PublicKey) error {
+func verifyList(l *status.StatusList, pub crypto.PublicKey) error {
 	if err := l.Verify(pub); err != nil {
 		return fmt.Errorf("status list does not verify: %w", err)
 	}

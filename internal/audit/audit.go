@@ -25,7 +25,7 @@ package audit
 
 import (
 	"bytes"
-	"crypto/ed25519"
+	"crypto"
 	"crypto/sha256"
 	"encoding/binary"
 	"encoding/json"
@@ -247,7 +247,7 @@ func ParseExport(data []byte) (*Export, error) {
 // VerifyChain verifies a v1 export envelope. It is strict: any version other
 // than v1 is rejected here, so a future format can never be silently accepted
 // through this door. The v2 envelope has its own dispatcher in internal/export.
-func VerifyChain(exp *Export, pub ed25519.PublicKey) (failIndex int, err error) {
+func VerifyChain(exp *Export, pub crypto.PublicKey) (failIndex int, err error) {
 	if exp.Version != ExportVersion {
 		return 0, fmt.Errorf("audit: unsupported export version %q", exp.Version)
 	}
@@ -264,7 +264,7 @@ func VerifyChain(exp *Export, pub ed25519.PublicKey) (failIndex int, err error) 
 // reuse it for v2. CONTRACT: callers MUST have validated the envelope version
 // before calling. Every caller is a version-checking parser (audit.VerifyChain
 // for v1, export.Parse for v1/v2); do not add a caller that skips that check.
-func VerifyEntries(entries []Entry, pub ed25519.PublicKey) (failIndex int, err error) {
+func VerifyEntries(entries []Entry, pub crypto.PublicKey) (failIndex int, err error) {
 	prev := GenesisHash
 	for i := range entries {
 		e := entries[i]
@@ -281,7 +281,7 @@ func VerifyEntries(entries []Entry, pub ed25519.PublicKey) (failIndex int, err e
 		if !bytes.Equal(want, e.EntryHash) {
 			return i, fmt.Errorf("audit: entry %d hash mismatch (tampered content)", i)
 		}
-		if !ed25519.Verify(pub, sigInput(e.EntryHash), e.Signature) {
+		if !signer.Verify(pub, sigInput(e.EntryHash), e.Signature) {
 			return i, fmt.Errorf("audit: entry %d signature invalid", i)
 		}
 		prev = e.EntryHash
@@ -366,12 +366,15 @@ func SignApproval(human signer.Signer, actor types.DID, a types.Action, seq uint
 // the caller resolves from the approver's DID document. seq and prevHash are the
 // recorded entry's own position, so an approval minted for a different slot, or
 // for the same slot number in a different log, fails.
-func VerifyApproval(pub ed25519.PublicKey, actor types.DID, a types.Action, seq uint64, prevHash []byte, sig []byte) error {
+func VerifyApproval(pub crypto.PublicKey, actor types.DID, a types.Action, seq uint64, prevHash []byte, sig []byte) error {
 	input, err := ApprovalInput(actor, a, seq, prevHash)
 	if err != nil {
 		return err
 	}
-	if !ed25519.Verify(pub, input, sig) {
+	// signer.Verify dispatches on the approver key's algorithm. A human approver's
+	// key is exactly the kind that may be a hardware-minted P-256 key, so this path
+	// must be algorithm-agile too, not Ed25519-only.
+	if !signer.Verify(pub, input, sig) {
 		return fmt.Errorf("audit: approval signature is invalid for actor %q", actor)
 	}
 	return nil

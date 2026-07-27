@@ -30,7 +30,7 @@
 package status
 
 import (
-	"crypto/ed25519"
+	"crypto"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -135,14 +135,14 @@ func (l *StatusList) Sign(s signer.Signer) error {
 
 // Verify confirms the list meets the herd-privacy floor and that its signature
 // is valid under pub (which the caller resolves from l.Issuer's DID document).
-func (l *StatusList) Verify(pub ed25519.PublicKey) error {
+func (l *StatusList) Verify(pub crypto.PublicKey) error {
 	if l.Len() < MinBits {
 		return fmt.Errorf("status: list has %d bits, below herd-privacy minimum %d", l.Len(), MinBits)
 	}
 	if len(l.Signature) == 0 {
 		return errors.New("status: list is unsigned")
 	}
-	if !ed25519.Verify(pub, l.signingInput(), l.Signature) {
+	if !signer.Verify(pub, l.signingInput(), l.Signature) {
 		return errors.New("status: signature verification failed (tampered or wrong issuer key)")
 	}
 	return nil

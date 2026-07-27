@@ -22,6 +22,7 @@ import (
 	"github.com/Gneiss-Group/Kessa/internal/did"
 	"github.com/Gneiss-Group/Kessa/internal/export"
 	"github.com/Gneiss-Group/Kessa/internal/policy"
+	"github.com/Gneiss-Group/Kessa/internal/signer"
 	"github.com/Gneiss-Group/Kessa/internal/status"
 	"github.com/Gneiss-Group/Kessa/pkg/types"
 )
@@ -95,7 +96,7 @@ func TestIssuedChainVerifiesAgainstPublishedDIDDocs(t *testing.T) {
 		if err != nil {
 			t.Fatalf("resolve %s: %v", d, err)
 		}
-		if !pub.Equal(s.Public()) {
+		if !signer.KeysEqual(pub, s.Public()) {
 			t.Fatalf("published DID doc for %s carries the wrong key", d)
 		}
 	}
@@ -403,7 +404,11 @@ func TestPathTraversalRefused(t *testing.T) {
 	_, ks := loadExample(t)
 	evil := types.DID("did:web:localhost:..:..:etc:pwned")
 	ks[evil] = ks[didAcme]
-	if _, err := did.WriteDocument(t.TempDir(), did.NewDocument(evil, nil)); err == nil {
+	s, err := ks.Signer(didAcme)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := did.WriteDocument(t.TempDir(), did.NewDocument(evil, s.Public())); err == nil {
 		t.Fatal("a did:web with a '..' segment must be refused, not written")
 	}
 	if _, err := status.PublishPath(t.TempDir(), "https://localhost/../../etc/pwned.json"); err == nil {

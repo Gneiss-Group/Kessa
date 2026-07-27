@@ -40,7 +40,10 @@
 package credential
 
 import (
+	"crypto"
+	"crypto/ecdsa"
 	"crypto/ed25519"
+	"crypto/elliptic"
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/binary"
@@ -48,6 +51,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/Gneiss-Group/Kessa/internal/did"
 	"github.com/Gneiss-Group/Kessa/internal/macaroon"
 	"github.com/Gneiss-Group/Kessa/internal/signer"
 	"github.com/Gneiss-Group/Kessa/internal/status"
@@ -78,17 +82,22 @@ type Credential struct {
 	Issuer    types.DID                `json:"issuer"`    // parent principal / org that issued it
 	Macaroon  macaroon.Macaroon        `json:"macaroon"`  // attenuated authority
 	StatusRef status.Reference         `json:"statusRef"` // position in the issuer's status list
-	HolderKey ed25519.PublicKey        `json:"holderKey"` // bound holder key (proof-of-possession)
+	HolderKey *did.JWK                 `json:"holderKey"` // bound holder key (Ed25519 OKP or P-256 EC); proof-of-possession
 	VCWrapper *vc.VerifiableCredential `json:"vcWrapper,omitempty"`
 }
 
 // Options are the inputs to New.
 type Options struct {
-	Subject   types.DID
-	Issuer    types.DID
-	Macaroon  macaroon.Macaroon
+	Subject  types.DID
+	Issuer   types.DID
+	Macaroon macaroon.Macaroon
+	// HolderKey is the public half of the holder's key, either an
+	// ed25519.PublicKey or a *ecdsa.PublicKey (P-256). It is stored as a
+	// self-describing JWK so the credential records which algorithm proof-of-
+	// possession must be verified under (the employee/device key is P-256, minted
+	// in hardware; every other principal is Ed25519).
+	HolderKey crypto.PublicKey
 	StatusRef status.Reference
-	HolderKey ed25519.PublicKey
 	VCWrapper *vc.VerifiableCredential
 }
 
@@ -102,8 +111,9 @@ func New(o Options) (*Credential, error) {
 	if o.Issuer == "" {
 		return nil, errors.New("credential: empty issuer")
 	}
-	if len(o.HolderKey) != ed25519.PublicKeySize {
-		return nil, fmt.Errorf("credential: holder key must be %d bytes, got %d", ed25519.PublicKeySize, len(o.HolderKey))
+	jwk, err := holderJWK(o.HolderKey)
+	if err != nil {
+		return nil, err
 	}
 	if o.Macaroon.Identifier == "" || len(o.Macaroon.Signature) == 0 {
 		return nil, errors.New("credential: macaroon is empty or unsigned")
@@ -113,35 +123,100 @@ func New(o Options) (*Credential, error) {
 		Issuer:    o.Issuer,
 		Macaroon:  o.Macaroon,
 		StatusRef: o.StatusRef,
-		HolderKey: o.HolderKey,
+		HolderKey: jwk,
 		VCWrapper: o.VCWrapper,
 	}, nil
 }
 
+// holderJWK validates that pub is a structurally valid, supported holder key and
+// encodes it as a JWK. It is the CONSTRUCTION-TIME boundary check: a credential
+// returned by New always carries a well-formed holder key, so a malformed one is
+// refused here rather than travelling on to be rejected only at verify time
+// (R3-01 — the "validation moved from construction to deferred verify" regression
+// this restores; see also R2-01, the same shape).
+//
+// It pre-validates the concrete type and curve so it can return an ERROR for bad
+// input (the holder key may come from parsed/external material) instead of
+// tripping PublicKeyToJWK's panic, and then round-trips through JWK.PublicKey as
+// the total check: whatever survives here is guaranteed parseable and on-curve.
+func holderJWK(pub crypto.PublicKey) (*did.JWK, error) {
+	switch k := pub.(type) {
+	case ed25519.PublicKey:
+		if len(k) != ed25519.PublicKeySize {
+			return nil, fmt.Errorf("credential: Ed25519 holder key is %d bytes, want %d", len(k), ed25519.PublicKeySize)
+		}
+	case *ecdsa.PublicKey:
+		if k.Curve != elliptic.P256() {
+			return nil, errors.New("credential: ECDSA holder key must be on the P-256 curve")
+		}
+	case nil:
+		return nil, errors.New("credential: holder key is required")
+	default:
+		return nil, fmt.Errorf("credential: unsupported holder key type %T (want Ed25519 or P-256)", pub)
+	}
+	jwk := did.PublicKeyToJWK(pub)
+	// Total check: the encoded key must parse back to a valid public key. This
+	// catches anything the type/curve switch above could not (e.g. an ECDSA key
+	// whose point is off-curve), so New cannot mint a structurally invalid holder.
+	if _, err := jwk.PublicKey(); err != nil {
+		return nil, fmt.Errorf("credential: invalid holder key: %w", err)
+	}
+	return jwk, nil
+}
+
 // ---- holder binding in the macaroon --------------------------------------
 
-// HolderValue encodes a holder public key for use as a caveat value.
-func HolderValue(holder ed25519.PublicKey) string {
-	return base64.RawURLEncoding.EncodeToString(holder)
+// HolderValue encodes a holder public key for use as a caveat value. It is the
+// canonical JWK JSON, base64url-encoded, so the value is algorithm-agnostic (an
+// Ed25519 and a P-256 key produce distinct, self-describing values) and
+// reproducible identically at issuance and at verification.
+func HolderValue(holder crypto.PublicKey) (string, error) {
+	jwk, err := holderJWK(holder)
+	if err != nil {
+		return "", err
+	}
+	return jwkValue(jwk), nil
+}
+
+// jwkValue is the deterministic caveat encoding of a JWK: compact JSON (stable
+// field order, y omitted for Ed25519) base64url-encoded. Both BindHolder (from a
+// key) and HolderContext (from the stored JWK) route through it, so they always
+// agree.
+func jwkValue(j *did.JWK) string {
+	b, _ := json.Marshal(j) // a plain struct of strings never fails to marshal
+	return base64.RawURLEncoding.EncodeToString(b)
 }
 
 // HolderCaveat is the caveat that binds a credential to a holder key.
-func HolderCaveat(holder ed25519.PublicKey) macaroon.Caveat {
-	return macaroon.Caveat{Field: HolderField, Op: macaroon.OpEq, Value: HolderValue(holder)}
+func HolderCaveat(holder crypto.PublicKey) (macaroon.Caveat, error) {
+	v, err := HolderValue(holder)
+	if err != nil {
+		return macaroon.Caveat{}, err
+	}
+	return macaroon.Caveat{Field: HolderField, Op: macaroon.OpEq, Value: v}, nil
 }
 
 // BindHolder returns a new macaroon attenuated with the holder-binding caveat.
 // Because attenuation is append-only and HMAC-chained, the bound key is then
 // tamper-evident.
-func BindHolder(m macaroon.Macaroon, holder ed25519.PublicKey) (macaroon.Macaroon, error) {
-	return macaroon.Attenuate(m, HolderCaveat(holder))
+func BindHolder(m macaroon.Macaroon, holder crypto.PublicKey) (macaroon.Macaroon, error) {
+	cav, err := HolderCaveat(holder)
+	if err != nil {
+		return macaroon.Macaroon{}, err
+	}
+	return macaroon.Attenuate(m, cav)
 }
 
 // HolderContext returns the macaroon context fragment asserting this
 // credential's holder key. Merge it into the action context so a macaroon
 // carrying a holder caveat can be satisfied by the legitimately bound holder.
+// It derives the value from the stored JWK directly, so it cannot disagree with
+// the caveat BindHolder wrote at issuance.
 func (c *Credential) HolderContext() macaroon.Context {
-	return macaroon.Context{HolderField: HolderValue(c.HolderKey)}
+	if c.HolderKey == nil {
+		return macaroon.Context{}
+	}
+	return macaroon.Context{HolderField: jwkValue(c.HolderKey)}
 }
 
 // ---- proof of possession --------------------------------------------------
@@ -220,10 +295,16 @@ func (c *Credential) ProvePossession(holder signer.Signer, nonce []byte, action 
 
 // VerifyPossession checks a proof of possession against the bound holder key. The
 // action and entry position come from the recorded entry itself, so a proof minted
-// for a different action, a different slot, or a different log fails.
+// for a different action, a different slot, or a different log fails. The holder
+// key may be Ed25519 or P-256; signer.Verify dispatches on it, so PoP is verified
+// under whatever algorithm the credential was bound to.
 func (c *Credential) VerifyPossession(pop PoP, action types.Action, seq uint64, prevHash []byte) error {
-	if len(c.HolderKey) != ed25519.PublicKeySize {
-		return fmt.Errorf("credential: bound holder key is %d bytes, want %d", len(c.HolderKey), ed25519.PublicKeySize)
+	if c.HolderKey == nil {
+		return errors.New("credential: no bound holder key")
+	}
+	pub, err := c.HolderKey.PublicKey()
+	if err != nil {
+		return fmt.Errorf("credential: bound holder key: %w", err)
 	}
 	if len(pop.Nonce) == 0 {
 		return errors.New("credential: proof of possession has empty nonce")
@@ -232,7 +313,7 @@ func (c *Credential) VerifyPossession(pop PoP, action types.Action, seq uint64, 
 	if err != nil {
 		return err
 	}
-	if !ed25519.Verify(c.HolderKey, input, pop.Signature) {
+	if !signer.Verify(pub, input, pop.Signature) {
 		return errors.New("credential: proof of possession failed (holder key not controlled)")
 	}
 	return nil

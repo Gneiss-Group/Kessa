@@ -29,8 +29,6 @@
 package chain
 
 import (
-	"bytes"
-	"crypto/ed25519"
 	"encoding/json"
 	"fmt"
 
@@ -152,16 +150,28 @@ func (ch *Chain) Verify(r did.Resolver) error {
 		if err != nil {
 			return fmt.Errorf("chain: hop %d: %w", i, err)
 		}
-		if !ed25519.Verify(issuerKey, input, ch.Links[i].IssuerProof) {
+		// signer.Verify dispatches on the issuer key's algorithm (Ed25519 or
+		// P-256), so a chain rooted at a human whose device key is a hardware
+		// P-256 key verifies through the same loop as an all-Ed25519 chain.
+		if !signer.Verify(issuerKey, input, ch.Links[i].IssuerProof) {
 			return fmt.Errorf("chain: hop %d: issuance signature invalid for %q", i, c.Subject)
 		}
 
-		// 2. The bound holder key must be the subject's published DID key.
+		// 2. The bound holder key must be the subject's published DID key. Both are
+		// resolved/parsed as crypto.PublicKey and compared with KeysEqual, which
+		// also fails a cross-algorithm mismatch.
 		subjectKey, err := did.ResolveKey(r, c.Subject)
 		if err != nil {
 			return fmt.Errorf("chain: hop %d: resolve subject %q: %w", i, c.Subject, err)
 		}
-		if !bytes.Equal(subjectKey, c.HolderKey) {
+		if c.HolderKey == nil {
+			return fmt.Errorf("chain: hop %d: credential has no bound holder key", i)
+		}
+		holderKey, err := c.HolderKey.PublicKey()
+		if err != nil {
+			return fmt.Errorf("chain: hop %d: parse bound holder key: %w", i, err)
+		}
+		if !signer.KeysEqual(subjectKey, holderKey) {
 			return fmt.Errorf("chain: hop %d: holder key does not match subject %q DID key", i, c.Subject)
 		}
 

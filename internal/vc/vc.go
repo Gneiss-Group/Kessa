@@ -21,7 +21,7 @@
 package vc
 
 import (
-	"crypto/ed25519"
+	"crypto"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -120,7 +120,7 @@ func Issue(s signer.Signer, credentialSubject any, opts IssueOptions) (*Verifiab
 // the issuer's DID document). It authenticates the issuer and guarantees the
 // credential (including its subject and issuer fields) has not been altered.
 // It does NOT check the validity window; call Valid for that.
-func (c *VerifiableCredential) Verify(pub ed25519.PublicKey) error {
+func (c *VerifiableCredential) Verify(pub crypto.PublicKey) error {
 	if c.Proof == nil {
 		return errors.New("vc: credential has no proof")
 	}
@@ -135,7 +135,7 @@ func (c *VerifiableCredential) Verify(pub ed25519.PublicKey) error {
 	if err != nil {
 		return err
 	}
-	if !ed25519.Verify(pub, input, sig) {
+	if !signer.Verify(pub, input, sig) {
 		return errors.New("vc: proof verification failed (forged or tampered)")
 	}
 	return nil
