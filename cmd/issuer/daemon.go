@@ -18,7 +18,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/Gneiss-Group/Kessa/internal/signer"
+	"github.com/Gneiss-Group/Kessa/internal/enroll"
+	"github.com/Gneiss-Group/Kessa/internal/signer/enclave"
 	"github.com/Gneiss-Group/Kessa/internal/signerd"
 	"github.com/Gneiss-Group/Kessa/pkg/types"
 )
@@ -35,32 +36,47 @@ import (
 func cmdDaemon(args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("daemon", flag.ContinueOnError)
 	fs.SetOutput(stderr)
-	ksPath := fs.String("keystore", "", "keystore JSON (DID -> hex seed): the on-device key material to broker (required)")
+	ksPath := fs.String("keystore", "", "keystore JSON (DID -> hex seed): software keys brokered as ROUTINE (PoP) keys")
+	mapPath := fs.String("mapping", "", "enrollment mapping: load enrolled Secure Enclave keys by tag as APPROVAL-capable keys")
 	sock := fs.String("sock", defaultSockPath(), "Unix socket to listen on")
 	if err := fs.Parse(args); err != nil {
 		return exitUsage
 	}
-	if *ksPath == "" {
-		fmt.Fprintln(stderr, "kessa-issuer: --keystore is required")
+	if *ksPath == "" && *mapPath == "" {
+		fmt.Fprintln(stderr, "kessa-issuer: one of --keystore or --mapping is required")
 		return exitUsage
 	}
 
-	ks, err := loadJSON[Keystore](*ksPath)
-	if err != nil {
-		fmt.Fprintf(stderr, "kessa-issuer: %v\n", err)
-		return exitUsage
-	}
-	signers := map[types.DID]signer.Signer{}
-	for d := range ks {
-		sg, err := ks.Signer(d)
+	// Software keystore keys are ROUTINE-only (PoP). Enrolled keys from the mapping
+	// are APPROVAL-capable and must be hardware-backed; signerd.NewKeys refuses an
+	// approval key that is not (R4-02), and loadEnrolledKeys refuses to even offer a
+	// software-enrolled key for that role.
+	var keys []signerd.HeldKey
+	if *ksPath != "" {
+		ks, err := loadJSON[Keystore](*ksPath)
 		if err != nil {
 			fmt.Fprintf(stderr, "kessa-issuer: %v\n", err)
 			return exitUsage
 		}
-		signers[d] = sg
+		for d := range ks {
+			sg, err := ks.Signer(d)
+			if err != nil {
+				fmt.Fprintf(stderr, "kessa-issuer: %v\n", err)
+				return exitUsage
+			}
+			keys = append(keys, signerd.HeldKey{Signer: sg, Policy: signerd.Routine})
+		}
 	}
-	if len(signers) == 0 {
-		fmt.Fprintln(stderr, "kessa-issuer: keystore holds no keys to broker")
+	if *mapPath != "" {
+		hk, err := loadEnrolledKeys(*mapPath)
+		if err != nil {
+			fmt.Fprintf(stderr, "kessa-issuer: %v\n", err)
+			return exitUsage
+		}
+		keys = append(keys, hk...)
+	}
+	if len(keys) == 0 {
+		fmt.Fprintln(stderr, "kessa-issuer: no keys to broker")
 		return exitUsage
 	}
 
@@ -70,7 +86,12 @@ func cmdDaemon(args []string, stdout, stderr io.Writer) int {
 		return exitUsage
 	}
 
-	srv := signerd.New(signers)
+	srv, err := signerd.NewKeys(keys)
+	if err != nil {
+		_ = l.Close()
+		fmt.Fprintf(stderr, "kessa-issuer: %v\n", err)
+		return exitUsage
+	}
 	srv.Logf = func(format string, a ...any) { fmt.Fprintf(stderr, "kessa-issuer: "+format+"\n", a...) }
 
 	// Clean shutdown: close the listener (which unblocks Serve) and remove the
@@ -82,8 +103,8 @@ func cmdDaemon(args []string, stdout, stderr io.Writer) int {
 		_ = l.Close()
 	}()
 
-	fmt.Fprintf(stdout, "kessa-issuer daemon: brokering %d key(s) on %s\n", len(signers), *sock)
-	for _, d := range sortedDIDs(signers) {
+	fmt.Fprintf(stdout, "kessa-issuer daemon: brokering %d key(s) on %s\n", len(keys), *sock)
+	for _, d := range heldDIDs(keys) {
 		fmt.Fprintf(stdout, "  %s\n", d)
 	}
 
@@ -144,10 +165,46 @@ func defaultSockPath() string {
 	return filepath.Join(home, ".kessa", "issuer.sock")
 }
 
-func sortedDIDs(m map[types.DID]signer.Signer) []types.DID {
-	out := make([]types.DID, 0, len(m))
-	for d := range m {
-		out = append(out, d)
+// loadEnrolledKeys reads the enrollment mapping and loads each non-revoked
+// enrolled key as an APPROVAL-capable key. Enrolled keys are the employee/device
+// keys that issue and approve, so they must be hardware-backed: a Secure Enclave
+// key is loaded by tag, and a key recorded as software is REFUSED here (R4-02) —
+// the human-approval control cannot rest on a software key. Use --keystore for a
+// non-production routine-only daemon.
+func loadEnrolledKeys(mapPath string) ([]signerd.HeldKey, error) {
+	m, err := enroll.LoadMapping(mapPath)
+	if err != nil {
+		return nil, err
+	}
+	var out []signerd.HeldKey
+	for _, id := range m.Identities() {
+		for _, c := range m.Employees[id].Credentials {
+			if c.Revoked {
+				continue
+			}
+			switch c.KeyBackend {
+			case enroll.BackendSecureEnclave:
+				sg, err := enclave.Load(c.DID, []byte(c.KeyTag))
+				if err != nil {
+					return nil, fmt.Errorf("load enrolled key %q (tag %q): %w", c.DID, c.KeyTag, err)
+				}
+				out = append(out, signerd.HeldKey{Signer: sg, Policy: signerd.Approval})
+			case enroll.BackendSoftware:
+				return nil, fmt.Errorf("refusing to broker enrolled approval key %q: it was enrolled as a SOFTWARE key "+
+					"(--software-key), which cannot back the human approval/issuance control; re-enroll on hardware, "+
+					"or run a non-production daemon from --keystore instead", c.DID)
+			default:
+				return nil, fmt.Errorf("enrolled key %q has unknown backend %q", c.DID, c.KeyBackend)
+			}
+		}
+	}
+	return out, nil
+}
+
+func heldDIDs(keys []signerd.HeldKey) []types.DID {
+	out := make([]types.DID, 0, len(keys))
+	for _, k := range keys {
+		out = append(out, k.Signer.DID())
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
 	return out

@@ -120,9 +120,13 @@ deployment doc, not offered.
 
 When run from a **code-signed** binary with a `keychain-access-groups`
 entitlement, `enroll` generates a **persistent** Enclave key under a keychain tag
-(`--tag`, default derived from the DID). The [signing daemon](daemon.md) then
-`Load`s that key by tag across restarts — the generate-once / load-by-tag property
-that makes the device identity durable. The signing-identity setup and the signed
-persistence tests are covered in the [Secure Enclave runbook](enclave-runbook.md);
-`enroll` on a signed binary is the first flow that exercises persistence for real
-(as opposed to the unsigned interop path).
+(`--tag`, default derived from the DID) and records the tag + `keyBackend:
+"secure-enclave"` in the mapping. The [signing daemon](daemon.md) then loads that
+key by tag with `--mapping`, brokering it as an **approval-capable** key across
+restarts — the generate-once / load-by-tag property that makes the device identity
+durable. The daemon refuses to broker a software-enrolled key for that role, so
+the human-approval control is only ever backed by hardware (R4-02). The
+signing-identity setup and the signed persistence tests are covered in the
+[Secure Enclave runbook](enclave-runbook.md); `enroll` on a signed binary is the
+first flow that exercises persistence for real (as opposed to the unsigned
+interop path).

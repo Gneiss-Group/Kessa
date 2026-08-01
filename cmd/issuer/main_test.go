@@ -20,6 +20,7 @@ import (
 	"github.com/Gneiss-Group/Kessa/internal/audit"
 	"github.com/Gneiss-Group/Kessa/internal/chain"
 	"github.com/Gneiss-Group/Kessa/internal/did"
+	"github.com/Gneiss-Group/Kessa/internal/enroll"
 	"github.com/Gneiss-Group/Kessa/internal/export"
 	"github.com/Gneiss-Group/Kessa/internal/policy"
 	"github.com/Gneiss-Group/Kessa/internal/signer"
@@ -615,6 +616,30 @@ func TestCLI_Enroll(t *testing.T) {
 	}
 	if ch.Root() != didAcme || string(ch.Actor()) != deviceDID {
 		t.Fatalf("minted hop is not org->employee: root=%q actor=%q", ch.Root(), ch.Actor())
+	}
+}
+
+// TestDaemon_RefusesSoftwareEnrolledApprovalKey is the daemon-wiring half of
+// R4-02: an enrolled key recorded as software-backed is approval-capable, so the
+// daemon must refuse to broker it (it cannot back the human-approval control).
+// Exercises loadEnrolledKeys directly, which is where the refusal lives.
+func TestDaemon_RefusesSoftwareEnrolledApprovalKey(t *testing.T) {
+	mapPath := filepath.Join(t.TempDir(), "map.json")
+	m := enroll.NewMapping()
+	if err := m.AddCredential("alice@acme.example", enroll.Credential{
+		DID:        "did:web:localhost:employees:alice-laptop",
+		KeyBackend: enroll.BackendSoftware,
+		KeyTag:     "kessa-issuer:alice",
+		Algorithm:  "P-256",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.Save(mapPath); err != nil {
+		t.Fatal(err)
+	}
+	_, err := loadEnrolledKeys(mapPath)
+	if err == nil || !strings.Contains(err.Error(), "SOFTWARE") {
+		t.Fatalf("a software-enrolled approval key must be refused, got %v", err)
 	}
 }
 

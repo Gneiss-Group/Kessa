@@ -50,5 +50,9 @@ func (s *Signer) Public() crypto.PublicKey { return nil }
 // DID is unreachable on this build.
 func (s *Signer) DID() types.DID { return "" }
 
+// Hardware is unreachable on this build (no Signer is ever constructed here); it
+// exists so the enclave.Signer type satisfies the same shape on every build.
+func (s *Signer) Hardware() bool { return true }
+
 // Close is unreachable on this build.
 func (s *Signer) Close() error { return nil }

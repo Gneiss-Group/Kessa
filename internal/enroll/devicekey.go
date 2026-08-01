@@ -19,10 +19,15 @@ import (
 	"github.com/Gneiss-Group/Kessa/pkg/types"
 )
 
-// backend names recorded in the mapping and shown at enrollment.
+// backend names recorded in the mapping and shown at enrollment. Exported aliases
+// (BackendSecureEnclave/BackendSoftware) let external callers — the daemon — branch
+// on Credential.KeyBackend without hardcoding the string.
 const (
 	backendSecureEnclave = "secure-enclave"
 	backendSoftware      = "software"
+
+	BackendSecureEnclave = backendSecureEnclave
+	BackendSoftware      = backendSoftware
 )
 
 // DeviceKeyOptions controls how the device key is generated at enrollment.

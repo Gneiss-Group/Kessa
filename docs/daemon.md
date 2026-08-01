@@ -10,22 +10,48 @@ that needs to sign as an on-device principal — connects to the socket and gets
 `signer.Signer` whose private key **never leaves the daemon**.
 
 The daemon is backend-agnostic: it brokers whatever `signer.Signer` it holds. It
-runs today with software keys (a keystore) on macOS and Linux; the hardware path
-(a Secure Enclave-held key, `internal/signer/enclave`) is the same seam and slots
-in behind this command once enrollment (B4) mints one.
+can broker software keys (a keystore) on macOS and Linux, and enrolled Secure
+Enclave keys (`internal/signer/enclave`) loaded by keychain tag from the
+enrollment mapping. Both are the same `signer.Signer` seam.
 
 ## Running it
 
+Two key sources, which imply different **policies**:
+
 ```bash
+# Non-production / routine: software keys, brokered as ROUTINE (PoP) keys.
 kessa-issuer daemon --keystore ~/.kessa/keystore.json
+
+# Production: load enrolled Secure Enclave keys as APPROVAL-capable keys.
+kessa-issuer daemon --mapping ~/.kessa/enrollment-map.json
 ```
 
+- `--keystore` keys are brokered as **Routine** (proof-of-possession). A software
+  key is acceptable here: a PoP signature is bound by the proxy to one action at
+  one chain slot.
+- `--mapping` loads each non-revoked enrolled key by its keychain tag and brokers
+  it as an **Approval**-capable key (the employee key issues and approves). These
+  **must be hardware-backed**: the daemon refuses to start if a mapping entry is a
+  software key (`--software-key` enrollment), and `signerd.NewKeys` refuses any
+  approval key that is not Secure-Enclave-backed (R4-02). This keeps the
+  human-approval control an OS-enforced per-use gesture, never an unenforced
+  convention. `--mapping` requires a build with the Enclave backend
+  (`darwin && cgo`).
+- At least one of `--keystore` / `--mapping` is required; both may be combined.
 - `--sock <path>` overrides the socket location. Default:
   `$XDG_RUNTIME_DIR/kessa/issuer.sock` when set (systemd user services set it),
   otherwise `~/.kessa/issuer.sock`.
 - The daemon creates the socket's parent directory `0700` and the socket `0600`,
   refuses to start if a live daemon already owns the path, and clears a stale
   socket left by a previous run.
+
+> **Why the policy split (R4-02):** the daemon signs whatever bytes an authorized
+> (same-uid) client sends; it does not yet distinguish a PoP sign from an approval
+> sign at the operation level (that op-level policy is future work). Until then,
+> the integrity of "a human deliberately approved this" rests on the approval key
+> being an Enclave **Biometric** key, so the OS demands a gesture per signature.
+> The `--mapping` hardware requirement is what makes that a code-enforced floor
+> rather than an assumption.
 
 ## Using it from the agent
 

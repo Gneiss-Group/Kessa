@@ -322,6 +322,11 @@ func (s *Signer) Public() crypto.PublicKey { return s.pub }
 // DID returns the identifier this signer speaks for.
 func (s *Signer) DID() types.DID { return s.did }
 
+// Hardware reports that this signer's private-key use is enforced by a secure
+// element. The daemon uses this to refuse brokering an approval key as software
+// (signerd.NewKeys). Always true for an Enclave signer.
+func (s *Signer) Hardware() bool { return true }
+
 // Close releases the SecKeyRef. It is idempotent and safe to call more than once.
 // It does NOT delete the key from the keychain (use Delete for that); it only
 // drops this process's handle.
