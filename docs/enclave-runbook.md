@@ -19,8 +19,8 @@ ephemeral one does not.
 
 | Path | API | Needs code-signing? | Covered by |
 | --- | --- | --- | --- |
-| Crypto interop (sign/verify, public key, PoP) | `GenerateEphemeral` | **No** | `go test` on any Mac, unsigned |
-| Persistence (durable device identity) | `Generate` / `Load` / `Delete` | **Yes** | `make test-enclave-signed` (a signing identity) |
+| Crypto interop (sign/verify, public key, PoP) | `GenerateEphemeral` | **No** | `go test` on any Mac, unsigned — **validated** |
+| Persistence (durable device identity) | `Generate` / `Load` / `Delete` | **Yes — signature + provisioning profile** | **not yet validated**; needs a profile-carrying build, see §2 |
 
 The security-critical claim — *an Enclave signature verifies under the same
 `signer.Verify` path a software P-256 signature does, and the key flows through
@@ -46,11 +46,21 @@ a `keychain-access-groups` entitlement. Empirically, on a stock machine:
 - **ad-hoc** signature (`codesign -s -`) → still `-34018`
 - ad-hoc signature **+** the entitlement → the binary is **killed at launch**
   (AMFI rejects a restricted entitlement on an ad-hoc signature)
+- **real Apple Development signature + the entitlement, on a hand-`codesign`'d
+  standalone binary** → **also killed at launch** (2026-08-01, Apple-Silicon Mac,
+  free Personal Team). AMFI: `Restricted entitlements not validated, bailing out.
+  Error Code=-413 "No matching profile found"` / `-67671`.
 
-So persistence needs a **real Apple signing identity** — an *Apple Development*
-certificate is enough, and a free Apple ID provides one via Xcode ("Personal
-Team"). It does **not** need a paid Developer Program membership, and the key
-never leaves the device, so no distribution/notarization is involved.
+> **Correction (2026-08-01), superseding the earlier "a free Personal Team is
+> enough" claim.** A valid *Apple Development* identity is **necessary but not
+> sufficient.** `keychain-access-groups` is a *restricted* entitlement that macOS
+> validates against an embedded **provisioning profile**, not against the signature.
+> A binary produced by `go test -c` is a bare Mach-O with nowhere to carry a
+> profile, so AMFI SIGKILLs it at exec (`-413 "No matching profile found"`) even
+> with a perfectly valid Development cert. **The `make test-enclave-signed` recipe
+> below therefore does not work as-is** — the code-sign-a-test-binary approach can
+> never satisfy the profile requirement. See "Getting a profile" for what actually
+> validates persistence.
 
 ### One-time setup
 
@@ -60,19 +70,45 @@ never leaves the device, so no distribution/notarization is involved.
    ```bash
    security find-identity -v -p codesigning
    ```
+   (If this returns `0 valid identities` while `-p codesigning` without `-v` shows
+   one, the certificate chain is untrusted — install the current **Apple WWDR** and
+   **Apple Root** intermediates from <https://www.apple.com/certificateauthority/>.)
 3. Set the entitlement's access group to `<TeamID>.com.gneiss.kessa` in
    `build/enclave.entitlements` (the template ships with a `TEAMID` placeholder).
+   **Do not commit your Team ID** — restore the placeholder before committing
+   (`git checkout build/enclave.entitlements`).
 
-### Run the signed persistence tests
+### Getting a profile (the actual requirement)
 
-```bash
-make test-enclave-signed SIGN_IDENTITY="Apple Development: you@example.com (XXXXXXXXXX)"
-```
+A free Personal Team **cannot mint a provisioning profile by hand** (no developer
+portal access). The only free way to obtain one is **Xcode automatic signing**
+generating it during a build of a real app/tool **target** — which a raw `go test`
+binary is not. Options, in order of effort:
 
-The target compiles the test binary (`go test -c`), code-signs it with the given
-identity and `build/enclave.entitlements`, and runs it — including the
-persistence tests, which now generate/load/delete real keychain-backed Enclave
-keys.
+1. **Xcode app/tool target (free path, one unverified assumption).** Create a tiny
+   macOS command-line-tool or app target with bundle id `com.gneiss.kessa`,
+   automatic signing under your Personal Team, and the **Keychain Sharing**
+   capability (this is what adds `keychain-access-groups`). Building it makes Xcode
+   generate + embed a development provisioning profile that authorizes the
+   entitlement on this device. Exercise `Generate`/`Load`/`Delete` there — either
+   reimplement the ~30 lines of Security.framework calls that
+   `enclave_darwin.go` wraps, or cgo-link `internal/signer/enclave` into the target.
+   **Unverified:** whether free Personal Teams are permitted the Keychain Sharing
+   capability at all. If Xcode refuses to add it, this path is blocked and only a
+   paid membership works — this is the next thing to test.
+2. **Embed the Xcode-generated profile around the test binary.** Once step 1 has
+   produced a profile (`~/Library/MobileDevice/Provisioning Profiles/*.provisionprofile`,
+   or `App.app/Contents/embedded.provisionprofile`), wrap `bin/enclave.test` in a
+   minimal `.app` bundle, copy the profile to `Contents/embedded.provisionprofile`,
+   and re-`codesign --entitlements build/enclave.entitlements`. This runs the *real*
+   Go code under a valid profile.
+3. **Paid Apple Developer Program ($99/yr).** Mints an App ID + profile for any
+   bundle id (a CLI tool included), which makes the entitlement authorizable
+   directly. Definite, but outside the free-validation path this runbook targeted.
+
+`make test-enclave-signed SIGN_IDENTITY="…"` only performs the signature step; it
+does not embed a profile, so it will `Killed: 9` until one of the above supplies
+one. Treat it as the signing helper, not a complete recipe.
 
 ## 3. Biometric path — manual smoke test
 
