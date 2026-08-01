@@ -12,6 +12,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/Gneiss-Group/Kessa/internal/did"
 	"github.com/Gneiss-Group/Kessa/internal/enroll"
 	"github.com/Gneiss-Group/Kessa/internal/macaroon"
 	"github.com/Gneiss-Group/Kessa/pkg/types"
@@ -48,7 +49,9 @@ func cmdEnroll(args []string, stdout, stderr io.Writer) int {
 	deviceDID := fs.String("did", "", "this device's employee DID (credential subject) (required)")
 	orgDID := fs.String("org-did", "", "issuing organization DID (credential issuer) (required)")
 	ksPath := fs.String("keystore", "", "MOCK keystore JSON: DID -> hex seed, holding the org signing key (required)")
-	rootKeyHex := fs.String("root-key-hex", "", "org macaroon root key (hex) (required)")
+	rootKeyHex := fs.String("root-key-hex", "", "org macaroon root key (hex); prefer --root-key-file to keep it out of argv")
+	rootKeyFile := fs.String("root-key-file", "", "file containing the org macaroon root key (hex); preferred over --root-key-hex")
+	fetchOrgDID := fs.Bool("fetch-org-did", false, "preflight the org DID over HTTPS (did:web) instead of the local publication root")
 	identifier := fs.String("identifier", "", "macaroon identifier for this credential (required)")
 	location := fs.String("location", "", "macaroon location (informational)")
 	statusURL := fs.String("status-url", "", "status list URL this credential's revocation bit lives in (required)")
@@ -67,9 +70,20 @@ func cmdEnroll(args []string, stdout, stderr io.Writer) int {
 	if err := fs.Parse(args); err != nil {
 		return exitUsage
 	}
+	// Resolve the org macaroon root key, preferring a file (keeps the secret out of
+	// argv / shell history, R4-04) over the inline hex flag.
+	rootHex := *rootKeyHex
+	if *rootKeyFile != "" {
+		b, err := os.ReadFile(*rootKeyFile)
+		if err != nil {
+			fmt.Fprintf(stderr, "kessa-issuer: read --root-key-file: %v\n", err)
+			return exitUsage
+		}
+		rootHex = strings.TrimSpace(string(b))
+	}
 	if *identity == "" || *deviceDID == "" || *orgDID == "" || *ksPath == "" ||
-		*rootKeyHex == "" || *identifier == "" || *statusURL == "" || *statusIndex < 0 {
-		fmt.Fprintln(stderr, "kessa-issuer: --identity, --did, --org-did, --keystore, --root-key-hex, --identifier, --status-url, and --status-index are required")
+		rootHex == "" || *identifier == "" || *statusURL == "" || *statusIndex < 0 {
+		fmt.Fprintln(stderr, "kessa-issuer: --identity, --did, --org-did, --keystore, one of --root-key-file/--root-key-hex, --identifier, --status-url, and --status-index are required")
 		return exitUsage
 	}
 
@@ -83,9 +97,9 @@ func cmdEnroll(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "kessa-issuer: %v\n", err)
 		return exitUsage
 	}
-	rootKey, err := hex.DecodeString(*rootKeyHex)
+	rootKey, err := hex.DecodeString(rootHex)
 	if err != nil {
-		fmt.Fprintf(stderr, "kessa-issuer: --root-key-hex is not hex: %v\n", err)
+		fmt.Fprintf(stderr, "kessa-issuer: org macaroon root key is not hex: %v\n", err)
 		return exitUsage
 	}
 
@@ -104,7 +118,7 @@ func cmdEnroll(args []string, stdout, stderr io.Writer) int {
 		dev.Tag = []byte("kessa-issuer:" + *deviceDID)
 	}
 
-	res, err := enroll.Enroll(enroll.Config{
+	cfg := enroll.Config{
 		Identity:        *identity,
 		DeviceDID:       types.DID(*deviceDID),
 		OrgDID:          types.DID(*orgDID),
@@ -120,7 +134,13 @@ func cmdEnroll(args []string, stdout, stderr io.Writer) int {
 		CredentialOut:   *out,
 		Device:          dev,
 		Backend:         enroll.LocalTOFU{In: os.Stdin, Out: stderr, AssumeYes: *yes},
-	})
+	}
+	// SO-1: preflight the org DID over the network (real did:web reachability)
+	// instead of the local publication root, when asked.
+	if *fetchOrgDID {
+		cfg.Resolver = did.HTTPResolver{}
+	}
+	res, err := enroll.Enroll(cfg)
 	if err != nil {
 		fmt.Fprintf(stderr, "kessa-issuer: %v\n", err)
 		return exitUsage

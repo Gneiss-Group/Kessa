@@ -14,11 +14,16 @@ import (
 	"os"
 	"sort"
 	"sync"
+	"time"
 
 	"github.com/Gneiss-Group/Kessa/internal/did"
 	"github.com/Gneiss-Group/Kessa/internal/signer"
 	"github.com/Gneiss-Group/Kessa/pkg/types"
 )
+
+// idleTimeout bounds how long a connection may sit without completing a request
+// (R4-01). Generous relative to the client's own 5s round-trip deadline.
+const idleTimeout = 30 * time.Second
 
 // Server holds a set of signers keyed by DID and brokers Sign/Public over a
 // net.Listener. It is safe for concurrent connections. Two independent gates
@@ -146,6 +151,12 @@ func (s *Server) handle(conn net.Conn) {
 
 	r := bufio.NewReader(io.LimitReader(conn, maxMessage))
 	for {
+		// Idle deadline (R4-01): a client that opens a connection and never finishes
+		// a request must not wedge this goroutine forever. One-shot clients (the
+		// norm) close after their single exchange well within this window. The
+		// peer-uid + 0600 gates already bound the caller to the owner; this is
+		// defense-in-depth against a stuck/hostile same-uid client.
+		_ = conn.SetReadDeadline(time.Now().Add(idleTimeout))
 		line, err := r.ReadBytes('\n')
 		if len(line) > 0 {
 			if werr := writeResponse(conn, s.dispatch(line)); werr != nil {
