@@ -1,0 +1,31 @@
+# SPDX-FileCopyrightText: 2026 Gneiss Group Inc.
+# SPDX-License-Identifier: Apache-2.0
+#
+# systemd USER service template for the on-device Kessa signing daemon. It runs
+# as the logged-in user (a user unit, not a system unit), so key material and the
+# socket stay user-owned. Install with:
+#
+#   mkdir -p ~/.config/systemd/user
+#   cp build/systemd/kessa-issuer.service ~/.config/systemd/user/
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now kessa-issuer
+#
+# The daemon defaults its socket to $XDG_RUNTIME_DIR/kessa/issuer.sock, which
+# systemd sets for user services. See docs/daemon.md.
+
+[Unit]
+Description=Kessa on-device signing daemon (brokers the device key over a local socket)
+Documentation=https://github.com/Gneiss-Group/Kessa/blob/main/docs/daemon.md
+
+[Service]
+ExecStart=/usr/local/bin/kessa-issuer daemon --keystore %h/.kessa/keystore.json
+Restart=on-failure
+RestartSec=2
+# Harden: the daemon needs only its own user's files and a local socket.
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=%h/.kessa %t/kessa
+PrivateTmp=true
+
+[Install]
+WantedBy=default.target

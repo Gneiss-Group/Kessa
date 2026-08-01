@@ -20,7 +20,7 @@ MOD="github.com/Gneiss-Group/Kessa"
 # plug-point seams, and passive tools that classify without enforcing.
 APACHE_PKGS=(
   pkg/types
-  internal/did internal/signer internal/signer/enclave internal/audit internal/macaroon
+  internal/did internal/signer internal/signer/enclave internal/signerd internal/audit internal/macaroon
   internal/status internal/vc internal/credential internal/chain
   internal/policy internal/export internal/shadow internal/version
   auditsink cmd/verify cmd/shadow scripts/genfixtures scripts/stories
