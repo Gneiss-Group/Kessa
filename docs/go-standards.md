@@ -75,6 +75,18 @@ All four run in CI on every pull request, and again before any release.
   the same class of bug — a verdict-relevant field left outside the signed
   material or accepted as an assertion — so a new field on a signed struct
   should be assumed to be an instance of it until shown otherwise.
+- **Validate before the side effect, never after — this repo's demonstrated blind
+  spot.** Three separate security findings across three branches (R2-01, R3-01,
+  R4-03) were the *same* shape: a gate that used to fire before an irreversible
+  step got refactored so it fires after it — a construction-time reject becoming a
+  verify-time reject, a uniqueness check running after the file was already
+  overwritten. The side effect is still "eventually caught," which is exactly why
+  it survives review. So it is a standing rule, not a per-instance fix: **any
+  change to a validation path must keep the check ahead of every side effect it
+  guards (key generation, file writes, minting, appends), and must ship a test
+  that asserts the gate fires *before* the side effect** — see the Tests section.
+  When you touch a validation path, assume you have moved a gate until you have
+  shown you have not.
 
 ## Concurrency
 
@@ -95,6 +107,13 @@ All four run in CI on every pull request, and again before any release.
 - **A security finding gets a test named after it** (`TestR2_05_TrustRootIsDisclosed`)
   that fails on the unfixed code. The finding number in the name is the link back
   to the review document.
+- **A validation gate is tested for WHEN it fires, not just THAT it fires.** For
+  any check that guards a side effect, assert the rejection leaves no partial state
+  — the existing record is untouched, the file was not written, the key was not
+  minted — not merely that an error is returned. A "the verifier eventually rejects
+  it" test cannot tell an early gate from a late one, and the late-gate bug
+  (R2-01/R3-01/R4-03) is precisely the one this codebase keeps reintroducing.
+  `TestEnroll_DuplicateDID_RejectedBeforeSideEffect` is the pattern to copy.
 - **Goldens are frozen, and regenerating one is a deliberate act.** `make
   fixtures` regenerates `testdata/`, and doing so means the frozen export format
   changed: it needs an entry in the format-history record (`CHANGELOG.md`; see

@@ -141,22 +141,67 @@ func TestEnroll_DeviceLoss_SecondDeviceAppends(t *testing.T) {
 	}
 }
 
-func TestEnroll_DuplicateDID_Rejected(t *testing.T) {
+// TestEnroll_DuplicateDID_RejectedBeforeSideEffect is the R4-03 regression test.
+// It asserts not merely that a duplicate-DID enroll ERRORS, but that the
+// uniqueness gate fires BEFORE any side effect: the first device's published DID
+// document is left untouched (its key not overwritten) and the second attempt's
+// credential file is never written. A test that only checked "the second enroll
+// returns an error" would pass even with the gate firing too late, which is
+// exactly the failure shape (R2-01/R3-01/R4-03) this codebase keeps regressing to
+// — so the assertion is specifically on the absence of the side effect.
+func TestEnroll_DuplicateDID_RejectedBeforeSideEffect(t *testing.T) {
 	root := t.TempDir()
 	mapPath := filepath.Join(root, "map.json")
+	deviceDID := types.DID("did:web:localhost:employees:alice-laptop")
 
-	c1 := baseConfig(t, root, "did:web:localhost:employees:alice-laptop", 3, 0x33)
+	c1 := baseConfig(t, root, deviceDID, 3, 0x33)
 	c1.MappingPath = mapPath
 	if _, err := Enroll(c1); err != nil {
 		t.Fatalf("first enroll: %v", err)
 	}
-	// Re-enrolling the SAME device DID is a real collision and must be refused.
-	c2 := baseConfig(t, root, "did:web:localhost:employees:alice-laptop", 5, 0x55)
+
+	// Snapshot the published DID document the first enroll wrote.
+	docPath, err := did.DocumentPath(root, deviceDID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	before, err := os.ReadFile(docPath)
+	if err != nil {
+		t.Fatalf("read published DID doc: %v", err)
+	}
+
+	// Re-enroll the SAME device DID with a DIFFERENT key (seed 0x55) and a fresh
+	// output path. This must be refused, and must not have touched anything.
+	c2 := baseConfig(t, root, deviceDID, 5, 0x55)
 	c2.OrgSigner = c1.OrgSigner
 	c2.MappingPath = mapPath
-	_, err := Enroll(c2)
+	c2.CredentialOut = filepath.Join(t.TempDir(), "second.json")
+
+	_, err = Enroll(c2)
 	if err == nil || !strings.Contains(err.Error(), "already registered") {
 		t.Fatalf("duplicate DID must be rejected, got %v", err)
+	}
+
+	// The published DID document must be byte-identical: the collision did NOT
+	// overwrite the existing device's key.
+	after, err := os.ReadFile(docPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(before, after) {
+		t.Fatal("a rejected duplicate-DID enroll overwrote the existing device's published DID document")
+	}
+	// The second attempt's credential file must not exist: nothing was minted.
+	if _, err := os.Stat(c2.CredentialOut); !os.IsNotExist(err) {
+		t.Fatalf("a rejected enroll wrote a credential file (want none): %v", err)
+	}
+	// The mapping still holds exactly the first device.
+	m, err := LoadMapping(mapPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if e := m.Employees[c1.Identity]; e == nil || len(e.Credentials) != 1 {
+		t.Fatalf("mapping should still hold exactly 1 credential, got %+v", e)
 	}
 }
 

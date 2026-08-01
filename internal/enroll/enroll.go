@@ -148,13 +148,22 @@ func (c *Config) validate() error {
 	return nil
 }
 
-// Enroll runs the ceremony end to end. Ordering is deliberate: the org-DID
-// preflight and the trust-on-first-use confirmation both run BEFORE anything is
-// written or minted, so a failed preflight or a declined fingerprint leaves no
-// partial state (no DID document, no credential, no mapping entry). The mapping
-// is updated LAST, after the credential exists, so the map never references a
-// credential that was not actually produced.
-func Enroll(cfg Config) (*Result, error) {
+// Enroll runs the ceremony end to end. Ordering is deliberate and load-bearing:
+// every check that can reject an enrollment — org-DID preflight, DID-uniqueness,
+// and the trust-on-first-use confirmation — runs BEFORE any side effect, so a
+// rejected enrollment leaves NO partial state: no generated key, no overwritten
+// DID document, no credential, no mapping entry.
+//
+// The DID-uniqueness gate in particular runs up front, not at the mapping append
+// at the end (R4-03). A device DID identifies one device key and its published DID
+// document; discovering a collision only AFTER WriteDocument had already
+// overwritten an existing device's published key would silently break that
+// device's credential (its bound key would no longer match the published one).
+// Checking first is what makes the no-partial-state guarantee true rather than
+// aspirational. (This is the third instance of the codebase's recurring
+// gate-after-side-effect shape — R2-01, R3-01, R4-03 — so it is guarded here and
+// asserted by a dedicated test.)
+func Enroll(cfg Config) (result *Result, err error) {
 	if err := cfg.validate(); err != nil {
 		return nil, err
 	}
@@ -181,13 +190,34 @@ func Enroll(cfg Config) (*Result, error) {
 		return nil, fmt.Errorf("enroll: org DID %q is not resolvable (publish the org DID document first): %w", cfg.OrgDID, err)
 	}
 
-	// 2. Generate the device key (hardware if available, else software).
+	// 2. DID-uniqueness gate, UP FRONT (R4-03): load the mapping and reject a
+	// duplicate DID before generating a key or writing anything. AddCredential
+	// re-checks at the end (harmless, and it closes the tiny window), but this early
+	// check is what guarantees no side effect precedes the rejection.
+	m, err := LoadMapping(cfg.MappingPath)
+	if err != nil {
+		return nil, err
+	}
+	if owner, dup := m.findByDID(cfg.DeviceDID); dup {
+		return nil, fmt.Errorf("enroll: mapping: DID %q is already registered to identity %q", cfg.DeviceDID, owner)
+	}
+
+	// 3. Generate the device key (hardware if available, else software).
 	deviceSigner, keyInfo, err := ProvisionDeviceKey(cfg.DeviceDID, cfg.Device)
 	if err != nil {
 		return nil, err
 	}
+	// From here a key EXISTS (a persistent Enclave key is already in the keychain).
+	// If any subsequent step fails, tear it down so a rejected enrollment still
+	// leaves no partial state. Cleared once the enrollment is committed.
+	committed := false
+	defer func() {
+		if !committed {
+			cleanupDeviceKey(deviceSigner, keyInfo)
+		}
+	}()
 
-	// 3. Trust-on-first-use / backend authorization, before any persistence.
+	// 4. Trust-on-first-use / backend authorization.
 	if err := backend.Confirm(ConfirmRequest{
 		Identity:    cfg.Identity,
 		DID:         cfg.DeviceDID,
@@ -197,13 +227,13 @@ func Enroll(cfg Config) (*Result, error) {
 		return nil, err
 	}
 
-	// 4. Publish the device DID document (public key only).
+	// 5. Publish the device DID document (public key only).
 	docPath, err := did.WriteDocument(cfg.Root, did.NewDocument(cfg.DeviceDID, deviceSigner.Public()))
 	if err != nil {
 		return nil, fmt.Errorf("enroll: write device DID document: %w", err)
 	}
 
-	// 5. Mint the org->employee credential.
+	// 6. Mint the org->employee credential.
 	cred, link, err := cfg.mintCredential(deviceSigner.Public())
 	if err != nil {
 		return nil, err
@@ -217,11 +247,7 @@ func Enroll(cfg Config) (*Result, error) {
 		return nil, err
 	}
 
-	// 6. Record the mapping LAST (append-only; new DID never collides).
-	m, err := LoadMapping(cfg.MappingPath)
-	if err != nil {
-		return nil, err
-	}
+	// 7. Record the mapping LAST (append-only; new DID never collides).
 	tag := ""
 	if len(keyInfo.Tag) > 0 {
 		tag = string(keyInfo.Tag)
@@ -242,6 +268,7 @@ func Enroll(cfg Config) (*Result, error) {
 	if err := m.Save(cfg.MappingPath); err != nil {
 		return nil, err
 	}
+	committed = true // enrollment succeeded: keep the key, skip cleanup
 
 	return &Result{
 		Identity:      cfg.Identity,

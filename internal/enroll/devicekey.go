@@ -126,6 +126,22 @@ func algorithmOf(pub any) (string, error) {
 	}
 }
 
+// cleanupDeviceKey tears down a freshly provisioned device key when an enrollment
+// is rejected after the key was created, so a failed/declined enrollment leaves no
+// partial state. It closes the signer handle and, for a PERSISTENT secure-element
+// key, deletes it from the keychain (a persistent Enclave key already exists in
+// the keychain the moment Generate returns). A software key needs no keychain
+// cleanup; Delete on a non-darwin build is a no-op. Best-effort: cleanup errors
+// are swallowed because the enrollment is already failing for another reason.
+func cleanupDeviceKey(sg signer.Signer, info KeyInfo) {
+	if c, ok := sg.(interface{ Close() error }); ok {
+		_ = c.Close()
+	}
+	if info.Backend == backendSecureEnclave && len(info.Tag) > 0 {
+		_ = enclave.Delete(info.Tag)
+	}
+}
+
 // Fingerprint is the stable identifier an operator confirms at trust-on-first-use.
 // It is SHA-256 over the key's canonical JWK JSON — the same self-describing
 // encoding the credential binds and the DID document publishes — so the value an
