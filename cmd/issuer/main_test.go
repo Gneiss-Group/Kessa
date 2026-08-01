@@ -20,6 +20,7 @@ import (
 	"github.com/Gneiss-Group/Kessa/internal/audit"
 	"github.com/Gneiss-Group/Kessa/internal/chain"
 	"github.com/Gneiss-Group/Kessa/internal/did"
+	"github.com/Gneiss-Group/Kessa/internal/enroll"
 	"github.com/Gneiss-Group/Kessa/internal/export"
 	"github.com/Gneiss-Group/Kessa/internal/policy"
 	"github.com/Gneiss-Group/Kessa/internal/signer"
@@ -567,12 +568,88 @@ func TestCLI_PublishAndRevoke(t *testing.T) {
 	}
 }
 
+// TestCLI_Enroll drives the enroll subcommand end to end against a published
+// root: it mints a software P-256 device key, writes the org->employee credential
+// and mapping, and the credential verifies as a one-hop chain using only the
+// published DID documents.
+func TestCLI_Enroll(t *testing.T) {
+	root, _, spec, _ := publishTo(t)
+	mapPath := filepath.Join(t.TempDir(), "map.json")
+	credOut := filepath.Join(t.TempDir(), "cred.json")
+	deviceDID := "did:web:localhost:employees:alice-laptop"
+
+	code, out, errb := invoke(t, "enroll",
+		"--identity", "alice@acme.example",
+		"--did", deviceDID,
+		"--org-did", didAcme,
+		"--keystore", ksPath,
+		"--root-key-hex", spec.RootKeyHex,
+		"--identifier", "acme-alice-laptop",
+		"--status-url", spec.Status.URL,
+		"--status-index", "9",
+		"--root", root,
+		"--mapping", mapPath,
+		"--out", credOut,
+		"--software-key",
+		"--yes",
+	)
+	if code != exitOK {
+		t.Fatalf("enroll exit=%d\n%s\n%s", code, out, errb)
+	}
+	if !strings.Contains(out, "SHA256:") {
+		t.Fatalf("enroll should print a fingerprint:\n%s", out)
+	}
+	if !strings.Contains(out, "NON-PRODUCTION software key") {
+		t.Fatalf("a --software-key enroll must warn it is not hardware-backed:\n%s", out)
+	}
+
+	data, err := os.ReadFile(credOut)
+	if err != nil {
+		t.Fatalf("credential not written: %v", err)
+	}
+	ch, err := chain.Parse(data)
+	if err != nil {
+		t.Fatalf("parse minted credential: %v", err)
+	}
+	if err := ch.Verify(did.FileResolver{Root: root}); err != nil {
+		t.Fatalf("enrolled credential must verify against the published root: %v", err)
+	}
+	if ch.Root() != didAcme || string(ch.Actor()) != deviceDID {
+		t.Fatalf("minted hop is not org->employee: root=%q actor=%q", ch.Root(), ch.Actor())
+	}
+}
+
+// TestDaemon_RefusesSoftwareEnrolledApprovalKey is the daemon-wiring half of
+// R4-02: an enrolled key recorded as software-backed is approval-capable, so the
+// daemon must refuse to broker it (it cannot back the human-approval control).
+// Exercises loadEnrolledKeys directly, which is where the refusal lives.
+func TestDaemon_RefusesSoftwareEnrolledApprovalKey(t *testing.T) {
+	mapPath := filepath.Join(t.TempDir(), "map.json")
+	m := enroll.NewMapping()
+	if err := m.AddCredential("alice@acme.example", enroll.Credential{
+		DID:        "did:web:localhost:employees:alice-laptop",
+		KeyBackend: enroll.BackendSoftware,
+		KeyTag:     "kessa-issuer:alice",
+		Algorithm:  "P-256",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.Save(mapPath); err != nil {
+		t.Fatal(err)
+	}
+	_, err := loadEnrolledKeys(mapPath)
+	if err == nil || !strings.Contains(err.Error(), "SOFTWARE") {
+		t.Fatalf("a software-enrolled approval key must be refused, got %v", err)
+	}
+}
+
 func TestCLI_UsageErrors(t *testing.T) {
 	for _, args := range [][]string{
 		{},
 		{"frobnicate"},
 		{"publish"}, // no --spec/--keystore
 		{"revoke", "--spec", specPath, "--keystore", ksPath}, // no --index
+		{"enroll"}, // no required flags
 	} {
 		if code, _, _ := invoke(t, args...); code != exitUsage {
 			t.Fatalf("args %v: exit=%d, want %d", args, code, exitUsage)

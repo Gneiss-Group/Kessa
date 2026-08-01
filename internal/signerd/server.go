@@ -14,11 +14,16 @@ import (
 	"os"
 	"sort"
 	"sync"
+	"time"
 
 	"github.com/Gneiss-Group/Kessa/internal/did"
 	"github.com/Gneiss-Group/Kessa/internal/signer"
 	"github.com/Gneiss-Group/Kessa/pkg/types"
 )
+
+// idleTimeout bounds how long a connection may sit without completing a request
+// (R4-01). Generous relative to the client's own 5s round-trip deadline.
+const idleTimeout = 30 * time.Second
 
 // Server holds a set of signers keyed by DID and brokers Sign/Public over a
 // net.Listener. It is safe for concurrent connections. Two independent gates
@@ -35,15 +40,69 @@ type Server struct {
 	Logf func(format string, args ...any)
 }
 
-// New builds a Server over signers, binding the peer-uid gate to the current
-// process owner. Every held signer is brokered; nil or empty is a legal (inert)
-// daemon.
+// KeyPolicy classifies a brokered key by how deliberate what it signs is, which
+// determines whether a software key is acceptable for it.
+type KeyPolicy int
+
+const (
+	// Routine is high-frequency signing (proof-of-possession). A software key is
+	// acceptable: PoP is bound to (action, seq, prevHash) by the proxy, so a freely
+	// brokered PoP signature authorizes exactly one action at one slot.
+	Routine KeyPolicy = iota
+	// Approval is the human approval / issuance key — the deliberate-act moment the
+	// whole architecture leans on to make "a human decided this" a real, verifiable
+	// claim. It MUST be hardware-backed (Secure Enclave), so the per-use gesture is
+	// enforced by the OS. Brokering it as software would silently degrade that
+	// control to an unenforced convention (R4-02).
+	Approval
+)
+
+// HeldKey is a signer plus its declared policy.
+type HeldKey struct {
+	Signer signer.Signer
+	Policy KeyPolicy
+}
+
+// hardwareGated is satisfied by signers whose private-key use is enforced by a
+// secure element (e.g. *enclave.Signer). An Approval key must satisfy it. Kept as
+// a local interface so this package does not import the enclave backend (which
+// keeps signerd's dependency set pure-Go on every platform).
+type hardwareGated interface{ Hardware() bool }
+
+func isHardwareBacked(s signer.Signer) bool {
+	h, ok := s.(hardwareGated)
+	return ok && h.Hardware()
+}
+
+// New builds a Server over signers, all as Routine policy, binding the peer-uid
+// gate to the current process owner. Every held signer is brokered; nil or empty
+// is a legal (inert) daemon. For approval-capable keys use NewKeys, which enforces
+// the hardware requirement.
 func New(signers map[types.DID]signer.Signer) *Server {
 	m := make(map[types.DID]signer.Signer, len(signers))
 	for d, s := range signers {
 		m[d] = s
 	}
 	return &Server{signers: m, ownerUID: uint32(os.Getuid())}
+}
+
+// NewKeys builds a Server from keys with explicit policies. It REFUSES to broker
+// an Approval key that is not hardware-backed (R4-02): the human-approval control
+// must not silently degrade to a convention just because a software key was handed
+// in. Routine keys may be software.
+func NewKeys(keys []HeldKey) (*Server, error) {
+	m := make(map[types.DID]signer.Signer, len(keys))
+	for _, k := range keys {
+		if k.Signer == nil {
+			return nil, errors.New("signerd: nil signer in key set")
+		}
+		if k.Policy == Approval && !isHardwareBacked(k.Signer) {
+			return nil, fmt.Errorf("signerd: refusing to broker approval-capable key %q as a software signer; "+
+				"an approval/issuance key must be hardware-backed (Secure Enclave) so the per-use gesture is enforced", k.Signer.DID())
+		}
+		m[k.Signer.DID()] = k.Signer
+	}
+	return &Server{signers: m, ownerUID: uint32(os.Getuid())}, nil
 }
 
 // Add registers (or replaces) a signer after construction, e.g. as keys are
@@ -92,6 +151,12 @@ func (s *Server) handle(conn net.Conn) {
 
 	r := bufio.NewReader(io.LimitReader(conn, maxMessage))
 	for {
+		// Idle deadline (R4-01): a client that opens a connection and never finishes
+		// a request must not wedge this goroutine forever. One-shot clients (the
+		// norm) close after their single exchange well within this window. The
+		// peer-uid + 0600 gates already bound the caller to the owner; this is
+		// defense-in-depth against a stuck/hostile same-uid client.
+		_ = conn.SetReadDeadline(time.Now().Add(idleTimeout))
 		line, err := r.ReadBytes('\n')
 		if len(line) > 0 {
 			if werr := writeResponse(conn, s.dispatch(line)); werr != nil {

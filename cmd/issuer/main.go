@@ -49,6 +49,7 @@ func usage(w io.Writer) {
 	fmt.Fprint(w, `usage: kessa-issuer <command> [flags]
 
   publish  mint the delegation chain; write did:web docs + signed status list
+  enroll   generate an on-device employee key, mint its org->employee credential
   revoke   flip a credential's bit in the published status list and re-sign
   serve    serve the publication root over HTTP (static files; demo only)
   daemon   run the on-device signing daemon (brokers keys over a local socket)
@@ -69,6 +70,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 	switch args[0] {
 	case "publish":
 		return cmdPublish(args[1:], stdout, stderr)
+	case "enroll":
+		return cmdEnroll(args[1:], stdout, stderr)
 	case "revoke":
 		return cmdRevoke(args[1:], stdout, stderr)
 	case "serve":

@@ -150,3 +150,62 @@ func TestDaemon_MissingSocket(t *testing.T) {
 		t.Fatal("Dial to a nonexistent socket must fail fast")
 	}
 }
+
+// hwSigner wraps a software signer but reports hardware backing, standing in for
+// an enclave signer so the R4-02 policy check can be exercised without a real
+// Secure Enclave.
+type hwSigner struct{ signer.Signer }
+
+func (hwSigner) Hardware() bool { return true }
+
+// TestNewKeys_RefusesSoftwareApprovalKey is the R4-02 regression: an
+// approval-capable key that is not hardware-backed must be refused at
+// construction, so the human-approval control can never silently rest on a
+// software key. Routine software keys and hardware-backed approval keys are fine.
+func TestNewKeys_RefusesSoftwareApprovalKey(t *testing.T) {
+	soft := softwareSigner(t, "did:web:localhost:employees:alice", 0x33)
+
+	// Software + Approval: refused.
+	if _, err := NewKeys([]HeldKey{{Signer: soft, Policy: Approval}}); err == nil {
+		t.Fatal("a software approval key must be refused")
+	}
+	// Software + Routine: fine (PoP is bound to action+slot by the proxy).
+	if _, err := NewKeys([]HeldKey{{Signer: soft, Policy: Routine}}); err != nil {
+		t.Fatalf("a software routine key must be accepted: %v", err)
+	}
+	// Hardware-backed + Approval: fine.
+	if _, err := NewKeys([]HeldKey{{Signer: hwSigner{soft}, Policy: Approval}}); err != nil {
+		t.Fatalf("a hardware-backed approval key must be accepted: %v", err)
+	}
+	// A hardware-backed approval key is brokered end to end like any other.
+	sock := startDaemonKeys(t, HeldKey{Signer: hwSigner{soft}, Policy: Approval})
+	cl, err := Dial(sock, soft.DID())
+	if err != nil {
+		t.Fatalf("Dial: %v", err)
+	}
+	if _, err := cl.Sign([]byte("approval bytes")); err != nil {
+		t.Fatalf("Sign through a hardware approval key: %v", err)
+	}
+}
+
+// startDaemonKeys is startDaemon's policy-aware sibling.
+func startDaemonKeys(t *testing.T, keys ...HeldKey) string {
+	t.Helper()
+	dir, err := os.MkdirTemp("/tmp", "ks")
+	if err != nil {
+		t.Fatalf("tempdir: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	sock := filepath.Join(dir, "s")
+	l, err := net.Listen("unix", sock)
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	srv, err := NewKeys(keys)
+	if err != nil {
+		t.Fatalf("NewKeys: %v", err)
+	}
+	go func() { _ = srv.Serve(l) }()
+	t.Cleanup(func() { _ = l.Close() })
+	return sock
+}
