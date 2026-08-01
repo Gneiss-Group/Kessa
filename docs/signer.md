@@ -104,8 +104,11 @@ reports which build you have.
   enrollment is P-256, full stop.
 - Constructors: `Generate` (persistent, by keychain tag), `GenerateEphemeral` (no
   keychain, no entitlement needed), `Load` (by tag), `Delete` (by tag). Persisting a
-  key needs a `keychain-access-groups` entitlement, i.e. a code-signed binary; an
-  unsigned binary gets `ErrMissingEntitlement`. See [`enclave-runbook.md`](enclave-runbook.md).
+  key needs a `keychain-access-groups` entitlement, which on macOS is *restricted*:
+  it must be authorized by an embedded **provisioning profile**, so the binary has to
+  be a signed, profile-bearing **app bundle** — a hand-`codesign`'d bare binary is
+  killed at launch (AMFI, `-413`), and an unsigned one gets `ErrMissingEntitlement`.
+  See [`enclave-runbook.md`](enclave-runbook.md).
 
 ### TPM (Linux)
 **Not built.** A TPM-backed P-256 signer is the natural Linux counterpart to the
@@ -218,12 +221,17 @@ built**; today it is two deliberate commands (`enroll`, then `revoke`).
 
 Blunt, and only what's true today:
 
-- **Secure Enclave persistence is not yet hardware-validated on a code-signed
-  binary.** The `Generate`/`Load`/`Delete` code is written and mechanism-reasoned,
-  and unsigned interop (sign/verify, JWK round-trip, PoP) is validated on real
-  hardware — but generate-once/load-by-tag across restarts has not been run on a
-  signed binary. Until it is, "non-extractable hardware-backed identity" is a
-  reviewed design, not a hardware-proven fact.
+- **Secure Enclave persistence: mechanism validated on hardware; the Go binary's
+  macOS *packaging* is the residual.** The generate→persist-by-tag→reload-by-tag→
+  sign→delete loop is confirmed on a real Enclave (free Personal Team), so
+  "non-extractable hardware-backed identity" is a hardware-proven fact, not just a
+  reviewed design. What was validated was a Swift harness issuing the identical
+  Security.framework calls inside a profile-bearing app bundle; the compiled Go
+  `enclave.Signer` itself hasn't run under a profile yet, because a `go build`/`go
+  test` binary can't carry one. Closing that means shipping the daemon as a signed,
+  profile-bearing **macOS app bundle** — a **macOS-specific, open-tier packaging**
+  task (a solo build-from-source user hits the same wall; it is *not* a paid/fleet
+  concern and *not* a mechanism gap). Linux/TPM has no equivalent bundling wall.
 - **No op-level approval-vs-PoP policy.** Enforcement stops at the hardware/software
   gate on approval keys (§3); the daemon cannot distinguish a PoP sign from an
   approval sign per operation.

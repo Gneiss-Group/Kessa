@@ -129,10 +129,21 @@ binary, not the free team.
 
 **Residual, stated precisely (don't let it round up):** what executed was the
 Swift harness inside a profile-bearing `.app`, not the compiled Go
-`enclave.Signer` itself (a `go test` binary can't carry a profile). The Go code is
-a literal passthrough to the validated calls, so this is a **packaging** gap —
-running the Go path under a profile means wrapping the binary in a profiled `.app`
-or shipping the daemon as a signed app bundle — **not a mechanism gap.**
+`enclave.Signer` itself (a `go test`/`go build` binary can't carry a profile). The
+Go code is a literal passthrough to the validated calls, so this is a **packaging**
+gap — running the Go path under a profile means shipping the daemon as a signed,
+profile-bearing macOS **app bundle** — **not a mechanism gap.**
+
+**Which tier this belongs to (matters — don't file it under fleet tooling):** this
+packaging step is **open-tier (§2a) core work, and macOS-specific.** It is an
+OS-level constraint (Gatekeeper/AMFI/entitlement inheritance), not a scale one: a
+solo developer building from source on their own Mac hits the *identical* wall a
+500-laptop fleet would, so it is load-bearing for the open tier's own "try this
+yourself" promise, not a paid convenience. It is distinct from **production Apple
+Developer ID signing + notarization for fleet-wide distribution**, which *is*
+scale-dependent and correctly stays §2b. Linux/TPM almost certainly has no
+equivalent bundling wall, so don't generalize this to "the daemon needs bundling
+everywhere" — it's macOS specifically.
 
 Harness (drop into the App target's `@main` `App.init()`, Run, read the console):
 
