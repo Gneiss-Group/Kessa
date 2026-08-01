@@ -6,7 +6,7 @@
 GO      ?= go
 BINDIR  ?= bin
 
-.PHONY: all build test test-race-condition test-fast vet license-check fixtures demo stories stories-capture stories-images verify version release-version release-check release-artifacts clean
+.PHONY: all build test test-race-condition test-fast vet license-check fixtures demo stories stories-capture stories-images verify version release-version release-check release-artifacts clean test-enclave-signed
 
 all: build
 
@@ -44,6 +44,23 @@ test-fast:
 
 vet:
 	$(GO) vet ./...
+
+# test-enclave-signed runs the Secure Enclave PERSISTENCE tests, which need a
+# code-signed binary with a keychain-access-group entitlement (see
+# docs/enclave-runbook.md). The interop tests run unsigned via `go test`; this
+# target is only for the persistence path. Requires a real Apple Development
+# identity (ad-hoc signing cannot carry the restricted entitlement).
+#
+#   make test-enclave-signed SIGN_IDENTITY="Apple Development: you@example.com (TEAMID)"
+#
+# Set the entitlement's access group to <TeamID>.com.gneiss.kessa in
+# build/enclave.entitlements first.
+test-enclave-signed:
+	@test -n "$(SIGN_IDENTITY)" || { echo "set SIGN_IDENTITY (see docs/enclave-runbook.md)"; exit 2; }
+	@mkdir -p $(BINDIR)
+	CGO_ENABLED=1 $(GO) test -c -o $(BINDIR)/enclave.test ./internal/signer/enclave
+	codesign --force --sign "$(SIGN_IDENTITY)" --entitlements build/enclave.entitlements $(BINDIR)/enclave.test
+	$(BINDIR)/enclave.test -test.v
 
 # license-check enforces the open/paid license boundary: no Apache-tier package
 # may import an AGPL-tier package, or the copyleft goes viral into the permissive

@@ -51,6 +51,7 @@ func usage(w io.Writer) {
   publish  mint the delegation chain; write did:web docs + signed status list
   revoke   flip a credential's bit in the published status list and re-sign
   serve    serve the publication root over HTTP (static files; demo only)
+  daemon   run the on-device signing daemon (brokers keys over a local socket)
 
   --version  print the build version and exit
 `)
@@ -72,6 +73,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return cmdRevoke(args[1:], stdout, stderr)
 	case "serve":
 		return cmdServe(args[1:], stdout, stderr)
+	case "daemon":
+		return cmdDaemon(args[1:], stdout, stderr)
 	default:
 		usage(stderr)
 		return exitUsage

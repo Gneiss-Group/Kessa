@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-FileCopyrightText: 2026 Gneiss Group Inc. -->
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!--
+  Entitlement for code-signing the Secure Enclave test/daemon binary so it can
+  PERSIST keys in the data-protection keychain. Replace TEAMID with your Apple
+  Development Team ID (see: security find-identity -v -p codesigning, and
+  docs/enclave-runbook.md). Ad-hoc signatures cannot carry this restricted
+  entitlement; a real Apple Development identity is required.
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>keychain-access-groups</key>
+  <array>
+    <string>TEAMID.com.gneiss.kessa</string>
+  </array>
+</dict>
+</plist>

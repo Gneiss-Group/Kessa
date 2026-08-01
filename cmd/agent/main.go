@@ -33,6 +33,7 @@ import (
 	"github.com/Gneiss-Group/Kessa/internal/enforce"
 	"github.com/Gneiss-Group/Kessa/internal/keystore"
 	"github.com/Gneiss-Group/Kessa/internal/signer"
+	"github.com/Gneiss-Group/Kessa/internal/signerd"
 	"github.com/Gneiss-Group/Kessa/internal/version"
 	"github.com/Gneiss-Group/Kessa/pkg/types"
 )
@@ -67,7 +68,8 @@ func cmdAttempt(args []string, stdout, stderr io.Writer) int {
 	fs.SetOutput(stderr)
 	proxyURL := fs.String("proxy", "http://127.0.0.1:8181", "base URL of a running kessa-proxy")
 	chainPath := fs.String("chain", "", "delegation chain file (the credential this agent holds) (required)")
-	ksPath := fs.String("keystore", "", "MOCK keystore JSON: DID -> hex seed (required)")
+	ksPath := fs.String("keystore", "", "MOCK keystore JSON: DID -> hex seed (required unless --agent-sock is set)")
+	agentSock := fs.String("agent-sock", "", "path to a running kessa-issuer daemon socket; fetch signing keys from it instead of a keystore")
 	as := fs.String("as", "", "sign proof-of-possession as this DID (default: the chain's actor). Use a different DID to impersonate — it will be denied.")
 	approver := fs.String("approver", "", "human DID to sign an approval (needed for consequential actions)")
 	actionType := fs.String("type", "", "action type, e.g. payment.transfer (required)")
@@ -79,8 +81,8 @@ func cmdAttempt(args []string, stdout, stderr io.Writer) int {
 	if err := fs.Parse(args); err != nil {
 		return exitUsage
 	}
-	if *chainPath == "" || *ksPath == "" || *actionType == "" {
-		fmt.Fprintln(stderr, "kessa-agent: --chain, --keystore and --type are required")
+	if *chainPath == "" || *actionType == "" || (*ksPath == "" && *agentSock == "") {
+		fmt.Fprintln(stderr, "kessa-agent: --chain, --type, and one of --keystore/--agent-sock are required")
 		return exitUsage
 	}
 	ts, err := time.Parse(time.RFC3339, *tsStr)
@@ -94,23 +96,37 @@ func cmdAttempt(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "kessa-agent: %v\n", err)
 		return exitUsage
 	}
-	ks, err := keystore.Load(*ksPath)
-	if err != nil {
-		fmt.Fprintf(stderr, "kessa-agent: %v\n", err)
-		return exitUsage
+	// signerFor resolves a DID to a signer either from the on-device daemon
+	// (--agent-sock, the ssh-agent shape: the private key never leaves the daemon)
+	// or from the mock keystore. The rest of the agent is identical either way —
+	// both return a signer.Signer, which is the whole point of the seam.
+	var ks keystore.Keystore
+	if *agentSock == "" {
+		ks, err = keystore.Load(*ksPath)
+		if err != nil {
+			fmt.Fprintf(stderr, "kessa-agent: %v\n", err)
+			return exitUsage
+		}
 	}
+	signerFor := func(d types.DID) (signer.Signer, error) {
+		if *agentSock != "" {
+			return signerd.Dial(*agentSock, d)
+		}
+		return ks.Signer(d)
+	}
+
 	actorDID := types.DID(*as)
 	if actorDID == "" {
 		actorDID = ch.Actor() // the credential's bound holder
 	}
-	actor, err := ks.Signer(actorDID)
+	actor, err := signerFor(actorDID)
 	if err != nil {
 		fmt.Fprintf(stderr, "kessa-agent: signer for %q: %v\n", actorDID, err)
 		return exitUsage
 	}
 	var approverSigner signer.Signer
 	if *approver != "" {
-		approverSigner, err = ks.Signer(types.DID(*approver))
+		approverSigner, err = signerFor(types.DID(*approver))
 		if err != nil {
 			fmt.Fprintf(stderr, "kessa-agent: approver %q: %v\n", *approver, err)
 			return exitUsage

@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-FileCopyrightText: 2026 Gneiss Group Inc. -->
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!--
+  macOS LaunchAgent template for the on-device Kessa signing daemon. It runs the
+  daemon in the user's session (a LaunchAgent, not a system LaunchDaemon), so the
+  key material and socket stay owned by that user. Replace YOU with your short
+  username and adjust paths, then:
+
+    cp build/launchd/com.gneiss.kessa.issuer.plist ~/Library/LaunchAgents/
+    launchctl load ~/Library/LaunchAgents/com.gneiss.kessa.issuer.plist
+
+  See docs/daemon.md.
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.gneiss.kessa.issuer</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/local/bin/kessa-issuer</string>
+    <string>daemon</string>
+    <string>--keystore</string>
+    <string>/Users/YOU/.kessa/keystore.json</string>
+  </array>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>StandardOutPath</key>
+  <string>/Users/YOU/.kessa/issuer.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/YOU/.kessa/issuer.log</string>
+</dict>
+</plist>
