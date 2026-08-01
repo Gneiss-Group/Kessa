@@ -28,7 +28,7 @@ APACHE_PKGS=(
 # Protective tier: anything that issues authority or decides whether a real
 # action may proceed, plus the benchmarks that link it.
 AGPL_PKGS=(
-  internal/enforce internal/keystore cmd/proxy cmd/issuer cmd/agent perf
+  internal/enforce internal/keystore internal/enroll cmd/proxy cmd/issuer cmd/agent perf
 )
 
 fail=0
