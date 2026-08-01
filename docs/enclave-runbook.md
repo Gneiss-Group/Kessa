@@ -20,7 +20,7 @@ ephemeral one does not.
 | Path | API | Needs code-signing? | Covered by |
 | --- | --- | --- | --- |
 | Crypto interop (sign/verify, public key, PoP) | `GenerateEphemeral` | **No** | `go test` on any Mac, unsigned — **validated** |
-| Persistence (durable device identity) | `Generate` / `Load` / `Delete` | **Yes — signature + provisioning profile** | **not yet validated**; needs a profile-carrying build, see §2 |
+| Persistence (durable device identity) | `Generate` / `Load` / `Delete` | **Yes — signature + provisioning profile** | **mechanism validated** on real hardware via an Xcode app target (free Personal Team); see §2 |
 
 The security-critical claim — *an Enclave signature verifies under the same
 `signer.Verify` path a software P-256 signature does, and the key flows through
@@ -109,6 +109,91 @@ binary is not. Options, in order of effort:
 `make test-enclave-signed SIGN_IDENTITY="…"` only performs the signature step; it
 does not embed a profile, so it will `Killed: 9` until one of the above supplies
 one. Treat it as the signing helper, not a complete recipe.
+
+### Validated on hardware (2026-08-01) — the mechanism works, free team
+
+Option 1 above was confirmed on an Apple-Silicon Mac with a **free Personal Team**:
+
+- **Keychain Sharing *is* available to a free Personal Team** — adding the
+  capability to an Xcode macOS **App** target (bundle id `com.gneiss.kessa`,
+  automatic signing) generated + embedded a provisioning profile with no error.
+- Running the harness below (the exact `SecKeyCreateRandomKey` /
+  `SecItemCopyMatching` / `SecItemDelete` calls and attributes `enclave_darwin.go`
+  issues) **generated a permanent Enclave key by tag, reloaded the same key by a
+  fresh keychain lookup, signed with it, and deleted it** — the daemon's
+  restart-time `Load` is precisely that reload. It worked **without**
+  `kSecUseDataProtectionKeychain`, matching the Go code's attribute set.
+
+So: **no paid membership is required** — the wall was the hand-`codesign`'d CLI
+binary, not the free team.
+
+**Residual, stated precisely (don't let it round up):** what executed was the
+Swift harness inside a profile-bearing `.app`, not the compiled Go
+`enclave.Signer` itself (a `go test` binary can't carry a profile). The Go code is
+a literal passthrough to the validated calls, so this is a **packaging** gap —
+running the Go path under a profile means wrapping the binary in a profiled `.app`
+or shipping the daemon as a signed app bundle — **not a mechanism gap.**
+
+Harness (drop into the App target's `@main` `App.init()`, Run, read the console):
+
+```swift
+import SwiftUI
+import Security
+
+let kessaTag = "com.gneiss.kessa.test".data(using: .utf8)!
+
+func kessaGenerate() -> SecKey? {
+    var err: Unmanaged<CFError>?
+    guard let ac = SecAccessControlCreateWithFlags(
+        kCFAllocatorDefault, kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
+        [.privateKeyUsage], &err) else { print("❌ access-control:", err!.takeRetainedValue()); return nil }
+    let attrs: [String: Any] = [
+        kSecAttrKeyType as String: kSecAttrKeyTypeECSECPrimeRandom,
+        kSecAttrKeySizeInBits as String: 256,
+        kSecAttrTokenID as String: kSecAttrTokenIDSecureEnclave,
+        kSecPrivateKeyAttrs as String: [
+            kSecAttrIsPermanent as String: true,
+            kSecAttrApplicationTag as String: kessaTag,
+            kSecAttrAccessControl as String: ac,
+        ],
+    ]
+    guard let key = SecKeyCreateRandomKey(attrs as CFDictionary, &err) else {
+        print("❌ generate:", err!.takeRetainedValue()); return nil }
+    return key
+}
+func kessaLoad() -> SecKey? {
+    let q: [String: Any] = [
+        kSecClass as String: kSecClassKey,
+        kSecAttrApplicationTag as String: kessaTag,
+        kSecAttrKeyType as String: kSecAttrKeyTypeECSECPrimeRandom,
+        kSecAttrKeyClass as String: kSecAttrKeyClassPrivate,
+        kSecReturnRef as String: true,
+    ]
+    var out: CFTypeRef?
+    let st = SecItemCopyMatching(q as CFDictionary, &out)
+    if st != errSecSuccess { print("❌ load OSStatus:", st); return nil }
+    return (out as! SecKey)
+}
+func kessaDelete() {
+    SecItemDelete([kSecClass as String: kSecClassKey,
+                   kSecAttrApplicationTag as String: kessaTag] as CFDictionary)
+}
+func kessaRunTest() {
+    kessaDelete()
+    guard kessaGenerate() != nil else { print("FAIL generate"); return }
+    guard let k = kessaLoad() else { print("FAIL reload-by-tag"); return }
+    var e: Unmanaged<CFError>?
+    _ = SecKeyCreateSignature(k, .ecdsaSignatureMessageX962SHA256,
+                              "hello".data(using: .utf8)! as CFData, &e)
+    kessaDelete()
+    print("RESULT: ✅ PERSISTENCE VALIDATED")
+}
+```
+
+For a belt-and-suspenders *cross-process-restart* proof (optional): comment out
+both `kessaDelete()` calls, Run once (generates), quit, Run again — the second run
+reloads the key a prior process wrote. The reload-by-tag above already exercises a
+genuine keychain retrieval, so this only removes the last "same process" caveat.
 
 ## 3. Biometric path — manual smoke test
 
