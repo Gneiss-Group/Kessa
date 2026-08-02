@@ -1,8 +1,8 @@
 # Kessa Documentation
 
 The **code and the top-level [`README`](../README.md) are the source of truth for
-how the system behaves today.** The documents here are the record of how it was
-reviewed and hardened, plus the material for running the demo.
+how the system behaves today.** The documents here are the reference material:
+how the system is built, how its signing backends work, and how to run the demo.
 
 ## How the project is built
 
@@ -11,12 +11,21 @@ reviewed and hardened, plus the material for running the demo.
 | [Go standards](go-standards.md) | The rules this codebase is written to, including the ones that exist because of what the verifier claims. |
 | [Branching, commits, and releases](branching.md) | Short-lived branches off `main`, Conventional Commits, semantic versioning, and the manual owner-only release. |
 
+## Keys, devices, and signing
+
+| Document | What it is |
+|----------|------------|
+| [Signing backends](signer.md) | The `Signer` seam: the software keystore, the macOS Secure Enclave backend, the hardware gate, and a blunt list of what is *not* true yet. Read §6 before trusting any hardware claim. |
+| [Enrollment](enrollment.md) | How a device gets its own key and its own credential, and why per-device credentials make revocation symmetric. |
+| [Signing daemon](daemon.md) | The long-running signer: its socket, permissions, and trust boundary. |
+| [Enclave runbook](enclave-runbook.md) | Reproducing the Secure Enclave path on real hardware, including the code-signing and entitlement setup it requires. |
+
 ## Security review
 
 Kessa was put through two adversarial review rounds (self-run AI red-team passes,
-**not a third-party audit**); all findings are closed. A single **consolidated
-security-review document** is being prepared and will be linked here, replacing
-the earlier round-by-round working notes.
+**not a third-party audit**); all findings are closed. The round-by-round working
+notes are not published. A single **consolidated security-review document** is
+being prepared and will be linked here when it lands.
 
 For the precise, current statement of what a clean verdict proves and does not,
 see [what a clean verdict actually

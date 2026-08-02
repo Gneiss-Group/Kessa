@@ -68,12 +68,26 @@ only, with no third-party dependencies. The milestones that matter are provable
 attenuation, provable auditability, the independent verifier, and the full
 seven-scenario demo.
 
-It is **not production-hardened, not yet.** Key management is a documented mock,
-with hardware binding left as a seam, and the other boundaries are spelled out
-under [Known limits](#known-limits). Open design questions and known gaps are
+It is **not production-hardened, not yet.** Key handling runs behind a `Signer`
+seam with two backends: a software keystore (the demo, CI, and
+`--software-key` path, whose private key exists in plaintext in the file) and a
+**macOS Secure Enclave** backend holding a non-extractable P-256 key. The Enclave
+generate → persist → reload → sign → delete loop is **validated on real
+hardware**; the residual is macOS *packaging* — the compiled Go daemon still has
+to ship as a signed, profile-bearing app bundle to carry the required
+entitlement. There is no Linux/TPM or Windows backend. What each backend does and
+does not prove is stated bluntly in [Signing backends](docs/signer.md); the other
+boundaries are under [Known limits](#known-limits), and open questions are
 collected in [`UPCOMING.md`](UPCOMING.md).
 
 ## Try it
+
+**Prerequisites:** Go **1.26 or newer** (the version in [`go.mod`](go.mod); an
+older toolchain will try to download 1.26 and fail if it cannot), plus `make` and
+`bash`. There is nothing else to install — Kessa has no third-party Go
+dependencies, so `make demo` builds and runs with the network off. The
+[container images](#container-images) additionally need a running Docker daemon,
+and the provenance check needs the [GitHub CLI](https://cli.github.com).
 
 ```sh
 make demo     # the whole story: all seven scenarios, end to end, deterministic
@@ -226,10 +240,19 @@ Open design questions and known gaps beyond these limits are collected in
 
 [How Kessa Works](docs/how-it-works.md) is the mechanical walkthrough: the
 delegation, enforcement, and verification stages, and what a clean verdict
-proves. The security review record and the demo material live in
-[`docs/`](docs/README.md); the [documentation index](docs/README.md) lays out
-the reading order and maps which earlier claims were superseded by the round-2
-hardening.
+proves. The [documentation index](docs/README.md) lays out the reading order for
+everything else:
+
+| Document | What it is |
+|----------|------------|
+| [Signing backends](docs/signer.md) | The `Signer` seam: software keystore, macOS Secure Enclave, and precisely what each one does and does not prove. |
+| [Enrollment](docs/enrollment.md) | How a device gets its own key and credential. |
+| [Signing daemon](docs/daemon.md) | The long-running signer, its socket, and its trust boundary. |
+| [Enclave runbook](docs/enclave-runbook.md) | Reproducing the Secure Enclave path on real hardware, including code-signing setup. |
+
+The two adversarial review rounds were **self-run AI red-team passes, not a
+third-party audit**; their findings are closed and the working notes are not
+published. A consolidated security-review document is being prepared.
 
 ## Layout
 

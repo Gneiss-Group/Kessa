@@ -83,6 +83,7 @@ For what the system does today, and for the limits of a clean verdict, the
   themselves are deferred: their content should come from design partners rather
   than from guessing what a vertical considers consequential.
 
-- **Named third-party security audit.** The two adversarial review rounds
-  recorded in [`docs/`](docs/) were **self-run**, not third-party. An
-  independent, named audit has not been commissioned.
+- **Named third-party security audit.** The two adversarial review rounds were
+  **self-run** AI red-team passes, not third-party; their working notes are not
+  published, and a consolidated write-up is being prepared. An independent, named
+  audit has not been commissioned.
