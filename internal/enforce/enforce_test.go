@@ -443,7 +443,7 @@ func TestLyingProxyIsCaughtByVerifier(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			rec := audit.Record{
+			rec := audit.EntryDraft{
 				Action: tc.action, ResolvedChain: h.chain.Principals(), ChainCredentialIDs: ids, PolicyID: polID,
 				Decision: types.Decision{Allowed: true, Consequential: true, StatusCheckedHops: 1,
 					RuleFired: derived.RuleFired, PolicyVersion: derived.PolicyVersion, Reason: "trust me"},

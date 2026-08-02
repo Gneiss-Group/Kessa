@@ -13,8 +13,8 @@ import (
 )
 
 // rec is a minimal routine record for the Seal/Commit/Load tests.
-func rec(target string) Record {
-	return Record{
+func rec(target string) EntryDraft {
+	return EntryDraft{
 		Action:        types.Action{Type: "payment.transfer", Target: target},
 		ResolvedChain: []types.DID{"did:web:localhost:people:alice", "did:web:localhost:agents:worker"},
 		Decision:      types.Decision{Allowed: true},

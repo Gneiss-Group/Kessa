@@ -332,7 +332,7 @@ func TestTrustBoundary_DIDRootIsTheAnchor(t *testing.T) {
 	// The re-pinning happens inside the seal, not after it, because evidence binds
 	// to PrevHash (R2-04): editing a sealed entry would break the next entry's
 	// proofs, which is a different failure from the one this test pins.
-	recs := f.recordsWith(t, func(_ int, r *audit.Record) {
+	recs := f.recordsWith(t, func(_ int, r *audit.EntryDraft) {
 		r.PolicyID = newPID
 		derived, err := permissive.Evaluate(r.Action)
 		if err != nil {
