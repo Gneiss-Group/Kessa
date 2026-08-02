@@ -1,0 +1,43 @@
+[
+  {
+    "chainFile": "/pub/chain.json",
+    "nonce": "c1",
+    "action": {
+      "type": "payment.transfer",
+      "target": "acct/999",
+      "attributes": { "amount": "10" },
+      "timestamp": "2026-07-09T12:00:00Z"
+    }
+  },
+  {
+    "chainFile": "/pub/chain.json",
+    "nonce": "c2",
+    "action": {
+      "type": "payment.transfer",
+      "target": "acct/999",
+      "attributes": { "amount": "500" },
+      "timestamp": "2026-07-09T12:00:00Z"
+    }
+  },
+  {
+    "chainFile": "/pub/chain.json",
+    "nonce": "c3a",
+    "action": {
+      "type": "payment.transfer",
+      "target": "acct/999",
+      "attributes": { "amount": "100" },
+      "timestamp": "2026-07-09T12:00:00Z"
+    }
+  },
+  {
+    "chainFile": "/pub/chain.json",
+    "nonce": "c3b",
+    "approver": "did:web:localhost:people:alice",
+    "action": {
+      "type": "payment.transfer",
+      "target": "acct/999",
+      "attributes": { "amount": "100" },
+      "timestamp": "2026-07-09T12:00:00Z"
+    }
+  }
+]

@@ -108,8 +108,8 @@ network access `kessa` can make, and it is off by default.
 
 ## Container images
 
-Two images per release, split along the same licence boundary as the binaries,
-published to GHCR. Both are multi-arch (linux/amd64 + arm64), built `FROM`
+Three images per release, split along the same licence boundary as the binaries,
+published to GHCR. All are multi-arch (linux/amd64 + arm64), built `FROM`
 distroless/static as a nonroot user, and signed with build provenance.
 
 ```sh
@@ -121,7 +121,18 @@ docker run --rm -v "$PWD:/data:ro" ghcr.io/gneiss-group/kessa:latest \
 # listeners into one enforcement engine: generic HTTP (8181) and MCP-native
 # Streamable HTTP (8182). Close either with an empty address (e.g. --mcp-addr "").
 docker run --rm -p 8181:8181 -p 8182:8182 ghcr.io/gneiss-group/kessa-proxy:latest serve --help
+
+# The issuer (AGPL-3.0-only) — mint/publish/enroll/daemon. Publishes a chain's
+# public artifacts into a mounted directory (software-key path; see docker/README).
+docker run --rm -v "$PWD/out:/pub" -v "$PWD/scripts/demo:/in:ro" \
+  ghcr.io/gneiss-group/kessa-issuer:latest \
+  publish --spec /in/spec.json --keystore /in/keystore.json --root /pub --out /pub/chain.json
 ```
+
+See the containers directory for the full three-image, end-to-end demo
+([`docker/`](docker/README.md), `docker/demo.sh`): the issuer publishes, the proxy
+enforces a batch, and the Apache verifier re-derives every verdict from the shared
+files alone.
 
 Verify an image's provenance before trusting it:
 
