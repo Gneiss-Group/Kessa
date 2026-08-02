@@ -476,7 +476,7 @@ func TestIssuerOutputVerifiesWithTheVerifier(t *testing.T) {
 		t.Fatal(err)
 	}
 	log := audit.NewLog(gatekeeper)
-	if _, err := log.Append(audit.Record{
+	if _, err := log.Append(audit.EntryDraft{
 		Action:             act,
 		ResolvedChain:      res.Chain.Principals(),
 		ChainCredentialIDs: ids,

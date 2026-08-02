@@ -304,7 +304,7 @@ func (p *Proxy) decideAndAppend(req Request) (audit.Entry, types.Decision, error
 	// the Decision; the entry is sealed, made durable, then committed, once.
 	dec, popRecorded := p.decide(req, terminal, seq, prevHash)
 
-	rec := audit.Record{
+	rec := audit.EntryDraft{
 		Action:             req.Action,
 		ResolvedChain:      principals,
 		ChainCredentialIDs: credIDs,

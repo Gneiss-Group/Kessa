@@ -95,10 +95,10 @@ type Export struct {
 	Entries []Entry   `json:"entries"`
 }
 
-// Record is the caller-supplied content of a new entry; the log fills in Seq,
+// EntryDraft is the caller-supplied content of a new entry; the log fills in Seq,
 // PrevHash, EntryHash, and Signature. It is never serialized (only Entry is)
 // so it carries no JSON tags.
-type Record struct {
+type EntryDraft struct {
 	Action             types.Action
 	ResolvedChain      []types.DID
 	ChainCredentialIDs []string
@@ -126,7 +126,7 @@ func NewLog(s signer.Signer) *Log {
 // entry's hash, computes this entry's hash, signs it, and appends. The stored
 // entry is returned by value (a copy) so callers cannot mutate the log's
 // internals. It is exactly Seal followed by Commit.
-func (l *Log) Append(r Record) (Entry, error) {
+func (l *Log) Append(r EntryDraft) (Entry, error) {
 	e, err := l.Seal(r)
 	if err != nil {
 		return Entry{}, err
@@ -147,7 +147,7 @@ func (l *Log) Append(r Record) (Entry, error) {
 // never Committed simply never happened; the same slot is produced again next
 // time. Under a single writer (the proxy holds its lock across Seal+Commit) this
 // is exact; Commit re-checks the slot regardless.
-func (l *Log) Seal(r Record) (Entry, error) {
+func (l *Log) Seal(r EntryDraft) (Entry, error) {
 	seq, prev := l.Tip()
 	e := Entry{
 		Seq:                seq,

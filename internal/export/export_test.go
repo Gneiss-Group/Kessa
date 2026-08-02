@@ -201,7 +201,7 @@ func (f *fixture) pop(t *testing.T, c *credential.Credential, holder signer.Sign
 // and the PrevHash it links to. Tests that hand-craft evidence for a specific
 // entry need this, because evidence now binds to PrevHash as well as Seq
 // (R2-04) and PrevHash is only knowable by replaying the log up to that point.
-func (f *fixture) posOf(t *testing.T, recs []audit.Record, i int) (uint64, []byte) {
+func (f *fixture) posOf(t *testing.T, recs []audit.EntryDraft, i int) (uint64, []byte) {
 	t.Helper()
 	scratch := audit.NewLog(f.proxy)
 	for j := 0; j < i; j++ {
@@ -213,7 +213,7 @@ func (f *fixture) posOf(t *testing.T, recs []audit.Record, i int) (uint64, []byt
 }
 
 // records builds the four golden entries.
-func (f *fixture) records(t *testing.T) []audit.Record { return f.recordsWith(t, nil) }
+func (f *fixture) records(t *testing.T) []audit.EntryDraft { return f.recordsWith(t, nil) }
 
 // recordsWith builds the four golden entries, giving mutate a chance to adjust
 // each one BEFORE it is sealed into the hash chain.
@@ -224,7 +224,7 @@ func (f *fixture) records(t *testing.T) []audit.Record { return f.recordsWith(t,
 // sealed record gets a cascade of failures rather than the one it meant to
 // provoke. Mutating inside the seal keeps the log internally consistent, which
 // is the right model for an adversary who controls the whole log.
-func (f *fixture) recordsWith(t *testing.T, mutate func(i int, r *audit.Record)) []audit.Record {
+func (f *fixture) recordsWith(t *testing.T, mutate func(i int, r *audit.EntryDraft)) []audit.EntryDraft {
 	t.Helper()
 	shortChain := []types.DID{didAlice, didAcme, didWorker}
 	deepChain := []types.DID{didAlice, didAcme, didWorker, didHelper}
@@ -251,8 +251,8 @@ func (f *fixture) recordsWith(t *testing.T, mutate func(i int, r *audit.Record))
 	// point: the fixture can no longer express evidence a real proxy could not
 	// have produced.
 	scratch := audit.NewLog(f.proxy)
-	out := make([]audit.Record, 0, 4)
-	seal := func(mk func(seq uint64, prev []byte) audit.Record) {
+	out := make([]audit.EntryDraft, 0, 4)
+	seal := func(mk func(seq uint64, prev []byte) audit.EntryDraft) {
 		seq, prev := scratch.Tip()
 		r := mk(seq, prev)
 		if mutate != nil {
@@ -265,9 +265,9 @@ func (f *fixture) recordsWith(t *testing.T, mutate func(i int, r *audit.Record))
 	}
 
 	// 0: routine allow, below the consequentiality threshold, within scope.
-	seal(func(seq uint64, prev []byte) audit.Record {
+	seal(func(seq uint64, prev []byte) audit.EntryDraft {
 		n, s := f.pop(t, &f.credB, f.worker, "nonce-0001", act0, seq, prev)
-		return audit.Record{
+		return audit.EntryDraft{
 			Action: act0, ResolvedChain: shortChain,
 			ChainCredentialIDs: []string{f.idA, f.idB}, PolicyID: f.polID,
 			Decision: types.Decision{Allowed: true, Consequential: false, RuleFired: "default",
@@ -280,13 +280,13 @@ func (f *fixture) recordsWith(t *testing.T, mutate func(i int, r *audit.Record))
 	//    Reuses credA and credB: the dedup proof. Exactly one of its two hops
 	//    (acme->worker) carries a StatusRef, so statusCheckedHops is 1 and the
 	//    verifier re-derives that same 1 from the evidence.
-	seal(func(seq uint64, prev []byte) audit.Record {
+	seal(func(seq uint64, prev []byte) audit.EntryDraft {
 		n, s := f.pop(t, &f.credB, f.worker, "nonce-0002", act1, seq, prev)
 		approval, err := audit.SignApproval(f.alice, didWorker, act1, seq, prev)
 		if err != nil {
 			t.Fatalf("sign approval: %v", err)
 		}
-		return audit.Record{
+		return audit.EntryDraft{
 			Action: act1, ResolvedChain: shortChain,
 			ChainCredentialIDs: []string{f.idA, f.idB}, PolicyID: f.polID,
 			Decision: types.Decision{Allowed: true, Consequential: true, RuleFired: "high-value-transfer",
@@ -298,9 +298,9 @@ func (f *fixture) recordsWith(t *testing.T, mutate func(i int, r *audit.Record))
 		}
 	})
 	// 2: scope-exceeded deny, $5000 against an attenuated $100 ceiling.
-	seal(func(seq uint64, prev []byte) audit.Record {
+	seal(func(seq uint64, prev []byte) audit.EntryDraft {
 		n, s := f.pop(t, &f.credB, f.worker, "nonce-0003", act2, seq, prev)
-		return audit.Record{
+		return audit.EntryDraft{
 			Action: act2, ResolvedChain: shortChain,
 			ChainCredentialIDs: []string{f.idA, f.idB}, PolicyID: f.polID,
 			Decision: types.Decision{Allowed: false, Consequential: true, RuleFired: "high-value-transfer",
@@ -311,9 +311,9 @@ func (f *fixture) recordsWith(t *testing.T, mutate func(i int, r *audit.Record))
 	})
 	// 3: mid-chain-revoked deny, the action is within scope and PoP is good;
 	//    the only defect is that the acme->worker hop was revoked at runtime.
-	seal(func(seq uint64, prev []byte) audit.Record {
+	seal(func(seq uint64, prev []byte) audit.EntryDraft {
 		n, s := f.pop(t, &f.credC, f.helper, "nonce-0004", act3, seq, prev)
-		return audit.Record{
+		return audit.EntryDraft{
 			Action: act3, ResolvedChain: deepChain,
 			ChainCredentialIDs: []string{f.idA, f.idB2, f.idC}, PolicyID: f.polID,
 			Decision: types.Decision{Allowed: false, Consequential: true, RuleFired: "high-value-transfer",
@@ -327,7 +327,7 @@ func (f *fixture) recordsWith(t *testing.T, mutate func(i int, r *audit.Record))
 
 // build seals records into a signed log and wraps them in a v2 envelope, carrying
 // the policy and signing the envelope header.
-func (f *fixture) build(t *testing.T, recs []audit.Record) *Export {
+func (f *fixture) build(t *testing.T, recs []audit.EntryDraft) *Export {
 	t.Helper()
 	log := audit.NewLog(f.proxy)
 	for i, r := range recs {
@@ -611,12 +611,12 @@ func TestVerify_ResolvedChainMismatchFails(t *testing.T) {
 func TestVerify_WithheldEvidenceOnAllowedEntryFails(t *testing.T) {
 	cases := []struct {
 		name   string
-		mutate func(r *audit.Record)
+		mutate func(r *audit.EntryDraft)
 		want   string
 	}{
-		{"no credential IDs", func(r *audit.Record) { r.ChainCredentialIDs = nil }, "evidence withheld"},
-		{"no PoP signature", func(r *audit.Record) { r.PoPSignature = nil }, "no proof of possession"},
-		{"no PoP nonce", func(r *audit.Record) { r.PoPNonce = nil }, "no proof of possession"},
+		{"no credential IDs", func(r *audit.EntryDraft) { r.ChainCredentialIDs = nil }, "evidence withheld"},
+		{"no PoP signature", func(r *audit.EntryDraft) { r.PoPSignature = nil }, "no proof of possession"},
+		{"no PoP nonce", func(r *audit.EntryDraft) { r.PoPNonce = nil }, "no proof of possession"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -1018,7 +1018,7 @@ func TestF4_evidenceReplayAcrossEntries(t *testing.T) {
 		recs := f.records(t)
 		// Reuse entry 1's whole (action, approval, PoP) tuple at seq 2, the "one
 		// approval, N executions" attack. entry 1's PoP was signed for seq 1.
-		recs[2] = audit.Record{
+		recs[2] = audit.EntryDraft{
 			Action: recs[1].Action, ResolvedChain: shortChain,
 			ChainCredentialIDs: []string{f.idA, f.idB}, PolicyID: f.polID,
 			Decision: recs[1].Decision,
@@ -1044,7 +1044,7 @@ func TestF4_evidenceReplayAcrossEntries(t *testing.T) {
 		// authorize seq 2.
 		seq2, prev2 := f.posOf(t, recs, 2)
 		n, s := f.pop(t, &f.credB, f.worker, "nonce-replay", recs[1].Action, seq2, prev2)
-		recs[2] = audit.Record{
+		recs[2] = audit.EntryDraft{
 			Action: recs[1].Action, ResolvedChain: shortChain,
 			ChainCredentialIDs: []string{f.idA, f.idB}, PolicyID: f.polID,
 			Decision: recs[1].Decision,
@@ -1094,7 +1094,7 @@ func TestR2_07_RuleAndPolicyVersionAreReDerived(t *testing.T) {
 			// Mutate inside the seal, so the log is internally consistent and the
 			// entry is a LIE rather than a tamper, otherwise the hash chain catches
 			// it first and this never reaches the check it exists to test.
-			recs := f.recordsWith(t, func(i int, r *audit.Record) {
+			recs := f.recordsWith(t, func(i int, r *audit.EntryDraft) {
 				if i == 1 {
 					tc.mutate(&r.Decision)
 				}

@@ -730,7 +730,7 @@ func reseal(t *testing.T, exp *export.Export) {
 	log := audit.NewLog(ep)
 	for i := range exp.Entries {
 		e := exp.Entries[i]
-		sealed, err := log.Append(audit.Record{
+		sealed, err := log.Append(audit.EntryDraft{
 			Action: e.Action, ResolvedChain: e.ResolvedChain, ChainCredentialIDs: e.ChainCredentialIDs,
 			Decision: e.Decision, PolicyID: e.PolicyID, PoPNonce: e.PoPNonce, PoPSignature: e.PoPSignature,
 			ApprovedBy: e.ApprovedBy, Approval: e.Approval, Timestamp: e.Timestamp,

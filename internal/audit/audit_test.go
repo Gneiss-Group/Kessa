@@ -51,7 +51,7 @@ func buildGoldenLog(t *testing.T) *Log {
 		"did:web:localhost:orgs:acme",
 		"did:web:localhost:agents:worker",
 	}
-	records := []Record{
+	records := []EntryDraft{
 		{
 			Action:        types.Action{Type: "post.publish", Target: "blog/hello", Attributes: map[string]string{"audience": "external"}, Timestamp: base},
 			ResolvedChain: chain,
@@ -207,7 +207,7 @@ func buildEvidenceLog(t *testing.T) *Log {
 	l := NewLog(enforcementSigner(t))
 	base := time.Date(2026, 7, 9, 12, 0, 0, 0, time.UTC)
 	for i := range 2 {
-		if _, err := l.Append(Record{
+		if _, err := l.Append(EntryDraft{
 			Action:             types.Action{Type: "payment.transfer", Target: "acct/999", Timestamp: base},
 			ResolvedChain:      []types.DID{"did:web:localhost:orgs:acme", "did:web:localhost:agents:worker"},
 			ChainCredentialIDs: []string{"cred-narrow-100"},
@@ -227,7 +227,7 @@ func buildEvidenceLog(t *testing.T) *Log {
 // when populated.
 func TestEvidenceFieldsChangeTheHash(t *testing.T) {
 	base := time.Date(2026, 7, 9, 12, 0, 0, 0, time.UTC)
-	rec := Record{
+	rec := EntryDraft{
 		Action:        types.Action{Type: "payment.transfer", Timestamp: base},
 		ResolvedChain: []types.DID{"a", "b"},
 		Decision:      types.Decision{Allowed: true},
