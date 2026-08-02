@@ -30,6 +30,7 @@ path = [
   "scripts/verify-scene.sh",
   "scripts/demo/**",
   "scripts/stories/**",
+  "docker/demo/**",
 ]
 SPDX-FileCopyrightText = "2026 Gneiss Group Inc."
 SPDX-License-Identifier = "Apache-2.0"
