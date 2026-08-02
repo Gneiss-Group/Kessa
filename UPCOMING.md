@@ -38,6 +38,30 @@ For what the system does today, and for the limits of a clean verdict, the
   and org position, so that an audit export reads like an org chart rather than
   a list of identifiers. A candidate paid feature.
 
+- **Linux TPM `Signer` backend.** The macOS Secure Enclave backend has no Linux
+  counterpart yet. A TPM 2.0-backed, non-extractable P-256 key would drop straight
+  into the algorithm-agile signing seam — a TPM does ECDSA P-256, so no verifier
+  change is needed, exactly as the Enclave slotted in. The cost is real rather than
+  incremental: the Go standard library has no TPM support, so it means either cgo
+  against `libtss2` (a system build dependency, plus the heavier TPM 2.0 object
+  model — hierarchies, sessions, create/load/sign) or the external `go-tpm`
+  library (which would breach the no-external-Go-dependencies discipline). Choosing
+  between those, and a `swtpm`-simulator test story, is the design decision this
+  needs; unstarted. Worth building on a real trigger (a deployment needing
+  hardware-backed keys on Linux *endpoints* — note a containerized daemon has no
+  clean TPM access, so this is a host concern), not speculatively.
+
+- **macOS app-bundle packaging for the signing daemon.** Persisting a Secure
+  Enclave key needs the `keychain-access-groups` entitlement, which macOS treats
+  as *restricted*: it must be authorized by an embedded provisioning profile, so
+  the daemon has to ship as a signed, profile-bearing **app bundle**, not a bare
+  binary. The Enclave mechanism itself is hardware-validated; this is the packaging
+  that lets the compiled Go daemon (rather than an equivalent harness) run under a
+  profile. It is **open-tier and macOS-specific** — a solo developer building from
+  source hits the same wall, so it is not fleet/paid tooling, and Linux has no
+  equivalent. Distinct from production Developer ID signing + notarization for
+  fleet distribution, which is the separate scale-dependent piece.
+
 ## Coverage and evidence
 
 - **Tool-call payload coverage.** Kessa authorizes today: it records that an

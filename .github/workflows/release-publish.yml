@@ -277,6 +277,36 @@ jobs:
           subject-digest: ${{ steps.proxy.outputs.digest }}
           push-to-registry: true
 
+      # ---- issuer image (AGPL-3.0-only tier) -------------------------------
+
+      - name: build and push the issuer image
+        id: issuer
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: .
+          file: docker/issuer.Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          sbom: true
+          provenance: false
+          tags: |
+            ghcr.io/${{ steps.o.outputs.owner }}/kessa-issuer:${{ env.VERSION }}
+            ghcr.io/${{ steps.o.outputs.owner }}/kessa-issuer:latest
+          labels: |
+            org.opencontainers.image.title=kessa-issuer
+            org.opencontainers.image.description=Kessa issuer (issue/publish/enroll/daemon; eval/dev)
+            org.opencontainers.image.version=${{ env.VERSION }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.licenses=AGPL-3.0-only
+
+      - name: attest the issuer image
+        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
+        with:
+          subject-name: ghcr.io/${{ steps.o.outputs.owner }}/kessa-issuer
+          subject-digest: ${{ steps.issuer.outputs.digest }}
+          push-to-registry: true
+
       - name: summary
         env:
           OWNER: ${{ steps.o.outputs.owner }}
@@ -286,7 +316,8 @@ jobs:
             echo
             echo "- \`ghcr.io/$OWNER/kessa:$VERSION\` (verifier, Apache-2.0)"
             echo "- \`ghcr.io/$OWNER/kessa-proxy:$VERSION\` (proxy, AGPL-3.0-only)"
+            echo "- \`ghcr.io/$OWNER/kessa-issuer:$VERSION\` (issuer, AGPL-3.0-only)"
             echo
-            echo "Both linux/amd64 + linux/arm64, distroless/static nonroot, SBOM + signed provenance."
+            echo "All linux/amd64 + linux/arm64, distroless/static nonroot, SBOM + signed provenance."
             echo "Verify: \`gh attest verify oci://ghcr.io/$OWNER/kessa:$VERSION --repo ${{ github.repository }}\`"
           } >>"$GITHUB_STEP_SUMMARY"
