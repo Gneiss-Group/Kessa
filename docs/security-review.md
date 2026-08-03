@@ -30,8 +30,8 @@ rounds.
 
 | Round | When | Scope | Outcome |
 |---|---|---|---|
-| **R1** | before first publication | Core delegation, enforcement, audit chain, and verifier | Ten findings (F1–F10), all closed or accepted as documented boundaries, before any code was published |
-| **R2** | 2026-07-22 | Second adversarial pass over the same core, plus the export envelope and audit-sink path | Seven findings (R2-01–R2-07), all closed before any code was published |
+| **R1** | before first publication | Core delegation, enforcement, audit chain, and verifier | Ten findings (F1–F10), highest severity High. All closed or accepted as documented boundaries before any code was published |
+| **R2** | 2026-07-22 | Second adversarial pass over the same core, plus the export envelope and audit-sink path | Seven findings (R2-01–R2-07), one Critical. All closed before any code was published |
 | **R3** | 2026-07-26 | Scoped P-256 employee key and algorithm-agile verification (`feat/scoped-p256-employee-key`, merged 2026-07-27) | No critical or high. No false-PASS path. Four findings, all closed |
 | **R4** | 2026-08-01 | The whole on-device issuer surface: enrollment, Secure Enclave backend, signing daemon, agent wiring (`feat/issuer-enrollment`, merged 2026-08-01) | No critical or high. No false-PASS path in the verifier. Four findings plus two scope observations, all closed |
 
@@ -44,9 +44,8 @@ The entries below are drawn from them.
 
 ## Findings index
 
-Severity is recorded where the round recorded one. Identifiers appear throughout
-the source as `(R2-01)`-style references, so any comment or test naming a finding
-resolves here.
+Severity is as each round rated it. Identifiers appear throughout the source as
+`(R2-01)`-style references, so any comment or test naming a finding resolves here.
 
 ### R1
 
@@ -59,18 +58,18 @@ informational: they were resolved by deciding and documenting a boundary rather
 than by changing behaviour, and they are the origin of the *Accepted, documented
 risks* list in the [README](../README.md#known-limits).
 
-| ID | Area | Status |
-|---|---|---|
-| F1 | Verifier re-derivation of consequentiality from the carried policy | Closed |
-| F2 | Export format version bound into the signed material; integrity-only exit semantics | Closed |
-| F3 | Proof-of-possession binding to a specific action | Closed |
-| F4 | Binding of possession and approval to an entry's position in the log | Closed |
-| F5 | Host validation on the status publication path | Closed |
-| F6 | Inbound request size limit on the enforcement endpoint | Closed |
-| F7 | Role of the VC wrapper in cross-org trust | Closed — documented as not load-bearing |
-| F8 | Clock trust for expiry caveats (no independent clock) | Accepted, documented boundary |
-| F9 | Surface of the opt-in `--fetch-dids` mode | Accepted, documented boundary |
-| F10 | Committed demo key material | Accepted, documented boundary |
+| ID | Sev | Area | Status |
+|---|---|---|---|
+| F1 | High | Verifier re-derivation of consequentiality from the carried policy | Closed |
+| F2 | High | Export format version bound into the signed material; integrity-only exit semantics | Closed |
+| F3 | Medium | Proof-of-possession binding to a specific action | Closed |
+| F4 | Medium | Binding of possession and approval to an entry's position in the log | Closed |
+| F5 | Low | Host validation on the status publication path | Closed |
+| F6 | Low | Inbound request size limit on the enforcement endpoint | Closed |
+| F7 | Info | Role of the VC wrapper in cross-org trust | Closed — documented as not load-bearing |
+| F8 | Info | Clock trust for expiry caveats (no independent clock) | Accepted, documented boundary |
+| F9 | Info | Surface of the opt-in `--fetch-dids` mode | Accepted, documented boundary |
+| F10 | Info | Committed demo key material | Accepted, documented boundary |
 
 ### R2 — 2026-07-22
 
@@ -79,15 +78,15 @@ the round-1 class; the rest included one class the round-1 principle did not
 cover. The round also recorded negative results — attacks attempted that did not
 work — against the round-1 open items.
 
-| ID | Area | Status |
-|---|---|---|
-| R2-01 | Coverage of credential and status references by the issuance signature | Closed |
-| R2-02 | Export envelope completeness — entry count and log tip | Closed |
-| R2-03 | Audit-sink dispatch behaviour under a slow or hung sink | Closed |
-| R2-04 | Concurrency on the hash-chained audit log | Closed |
-| R2-05 | Disclosure of the verifier's trust root in its own output | Closed |
-| R2-06 | An overclaiming statement in the documented guarantees | Closed |
-| R2-07 | Policy rule and version handling in re-derivation | Closed |
+| ID | Sev | Area | Status |
+|---|---|---|---|
+| R2-01 | **Critical** | Coverage of credential and status references by the issuance signature | Closed |
+| R2-02 | High | Export envelope completeness — entry count and log tip | Closed |
+| R2-03 | High | Audit-sink dispatch behaviour under a slow or hung sink | Closed |
+| R2-04 | Medium | Concurrency on the hash-chained audit log | Closed |
+| R2-05 | Low | Disclosure of the verifier's trust root in its own output | Closed |
+| R2-06 | Low | An overclaiming statement in the documented guarantees | Closed |
+| R2-07 | Low | Policy rule and version handling in re-derivation | Closed |
 
 ### R3 — scoped P-256 employee key (2026-07-26)
 
