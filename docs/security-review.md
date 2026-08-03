@@ -30,16 +30,17 @@ rounds.
 
 | Round | When | Scope | Outcome |
 |---|---|---|---|
-| **R1** | before first publication | Core delegation, enforcement, audit chain, and verifier | All findings closed before any code was published |
-| **R2** | before first publication | Second adversarial pass over the same core, plus the export envelope and audit-sink path | All findings closed before any code was published |
+| **R1** | before first publication | Core delegation, enforcement, audit chain, and verifier | Ten findings (F1–F10), all closed or accepted as documented boundaries, before any code was published |
+| **R2** | 2026-07-22 | Second adversarial pass over the same core, plus the export envelope and audit-sink path | Seven findings (R2-01–R2-07), all closed before any code was published |
 | **R3** | 2026-07-26 | Scoped P-256 employee key and algorithm-agile verification (`feat/scoped-p256-employee-key`, merged 2026-07-27) | No critical or high. No false-PASS path. Four findings, all closed |
 | **R4** | 2026-08-01 | The whole on-device issuer surface: enrollment, Secure Enclave backend, signing daemon, agent wiring (`feat/issuer-enrollment`, merged 2026-08-01) | No critical or high. No false-PASS path in the verifier. Four findings plus two scope observations, all closed |
 
 **R1 and R2 predate this repository's first commit** (2026-07-23). Their fixes are
 contained in the initial publication, so no released or published version of Kessa
-ever carried them unfixed. Their round-by-round working notes are not published;
-the entries below reconstruct scope from the finding references that remain in the
-code and documentation.
+ever carried them unfixed.
+
+The working notes for every round are retained privately and are not published.
+The entries below are drawn from them.
 
 ## Findings index
 
@@ -51,15 +52,32 @@ resolves here.
 
 | ID | Area | Status |
 |---|---|---|
+Round 1 raised ten findings. F1–F4 were four instances of a single class — a
+verdict-relevant field left outside the signed material — which became the
+project's central coding rule. F5–F6 were low-severity hardening. F7–F10 were
+informational: they were resolved by deciding and documenting a boundary rather
+than by changing behaviour, and they are the origin of the *Accepted, documented
+risks* list in the [README](../README.md#known-limits).
+
+| ID | Area | Status |
+|---|---|---|
 | F1 | Verifier re-derivation of consequentiality from the carried policy | Closed |
-| F2 | Verifier output and exit-code semantics, including integrity-only downgrades | Closed |
+| F2 | Export format version bound into the signed material; integrity-only exit semantics | Closed |
 | F3 | Proof-of-possession binding to a specific action | Closed |
 | F4 | Binding of possession and approval to an entry's position in the log | Closed |
-| F5 | Publication and DID path handling | Closed |
-| F6 | Inbound request size limits on the enforcement endpoint | Closed |
-| F7 | Scope of the VC wrapper in the cross-org trust path | Closed (documented boundary) |
+| F5 | Host validation on the status publication path | Closed |
+| F6 | Inbound request size limit on the enforcement endpoint | Closed |
+| F7 | Role of the VC wrapper in cross-org trust | Closed — documented as not load-bearing |
+| F8 | Clock trust for expiry caveats (no independent clock) | Accepted, documented boundary |
+| F9 | Surface of the opt-in `--fetch-dids` mode | Accepted, documented boundary |
+| F10 | Committed demo key material | Accepted, documented boundary |
 
-### R2
+### R2 — 2026-07-22
+
+Seven findings, plus one item on `macaroon.Verify`. Two were further instances of
+the round-1 class; the rest included one class the round-1 principle did not
+cover. The round also recorded negative results — attacks attempted that did not
+work — against the round-1 open items.
 
 | ID | Area | Status |
 |---|---|---|
