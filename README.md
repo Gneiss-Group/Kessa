@@ -61,24 +61,24 @@ is in **[How Kessa Works](docs/how-it-works.md)**.
 ## Status
 
 Kessa is complete and works end to end: seven scenarios run start to finish
-(`make demo`), and two adversarial security review rounds are closed with every
-finding fixed. Both rounds were **self-run AI red-team passes, not a third-party
-audit**; no named external audit has been commissioned. It is standard-library
+(`make demo`), and multiple adversarial security review rounds are closed with every
+finding fixed. All rounds were **self-run AI red-team passes, not a third-party
+audit**; no external audit has been commissioned yet. It is standard-library
 only, with no third-party dependencies. The milestones that matter are provable
 attenuation, provable auditability, the independent verifier, and the full
 seven-scenario demo.
 
-It is **not production-hardened, not yet.** Key handling runs behind a `Signer`
+It is **not production-hardened yet.** Key handling runs behind a `Signer`
 seam with two backends: a software keystore (the demo, CI, and
 `--software-key` path, whose private key exists in plaintext in the file) and a
 **macOS Secure Enclave** backend holding a non-extractable P-256 key. The Enclave
 generate → persist → reload → sign → delete loop is **validated on real
-hardware**; the residual is macOS *packaging* — the compiled Go daemon still has
-to ship as a signed, profile-bearing app bundle to carry the required
-entitlement. There is no Linux/TPM or Windows backend. What each backend does and
-does not prove is stated bluntly in [Signing backends](docs/signer.md); the other
-boundaries are under [Known limits](#known-limits), and open questions are
-collected in [`UPCOMING.md`](UPCOMING.md).
+hardware**, and the compiled Go daemon has not yet run under a profile, so
+packaging is the remaining step. There is no Linux/TPM or Windows backend. What
+each backend does and does not prove is stated bluntly in
+[Signing backends](docs/signer.md); the other boundaries are under
+[Known limits](#known-limits), and open questions are collected in
+[`UPCOMING.md`](UPCOMING.md).
 
 ## Try it
 
