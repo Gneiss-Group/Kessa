@@ -84,6 +84,6 @@ For what the system does today, and for the limits of a clean verdict, the
   than from guessing what a vertical considers consequential.
 
 - **Named third-party security audit.** The adversarial review rounds were
-  **self-run** AI red-team passes, not third-party; their working notes are not
-  published, and a consolidated write-up is being prepared. An independent, named
-  audit has not been commissioned.
+  **self-run** AI red-team passes, not third-party; they are registered in the
+  [security review record](docs/security-review.md). An independent, named audit
+  has not been commissioned.

@@ -251,8 +251,9 @@ everything else:
 | [Enclave runbook](docs/enclave-runbook.md) | Reproducing the Secure Enclave path on real hardware, including code-signing setup. |
 
 The adversarial review rounds were **self-run AI red-team passes, not a
-third-party audit**; their findings are closed and the working notes are not
-published. A consolidated security-review document is being prepared.
+third-party audit**; their findings are closed. The [security review
+record](docs/security-review.md) lists what each round covered and every finding
+raised, without reproducing the mechanism; the working notes are not published.
 
 ## Layout
 
