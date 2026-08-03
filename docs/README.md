@@ -22,10 +22,10 @@ how the system is built, how its signing backends work, and how to run the demo.
 
 ## Security review
 
-Kessa was put through two adversarial review rounds (self-run AI red-team passes,
-**not a third-party audit**); all findings are closed. The round-by-round working
-notes are not published. A single **consolidated security-review document** is
-being prepared and will be linked here when it lands.
+Kessa has been put through multiple adversarial review rounds (self-run AI
+red-team passes, **not a third-party audit**); all findings are closed. The
+working notes are not published. A single **consolidated security-review
+document** is being prepared and will be linked here when it lands.
 
 For the precise, current statement of what a clean verdict proves and does not,
 see [what a clean verdict actually

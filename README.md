@@ -250,7 +250,7 @@ everything else:
 | [Signing daemon](docs/daemon.md) | The long-running signer, its socket, and its trust boundary. |
 | [Enclave runbook](docs/enclave-runbook.md) | Reproducing the Secure Enclave path on real hardware, including code-signing setup. |
 
-The two adversarial review rounds were **self-run AI red-team passes, not a
+The adversarial review rounds were **self-run AI red-team passes, not a
 third-party audit**; their findings are closed and the working notes are not
 published. A consolidated security-review document is being prepared.
 
