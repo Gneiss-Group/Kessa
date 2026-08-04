@@ -77,6 +77,29 @@ For what the system does today, and for the limits of a clean verdict, the
   daemon already does); a bearer token (weakest, easiest). The choice interacts
   with the MCP deployment model below.
 
+  **It is also coupled to the still-open root-of-trust layer**: org-root
+  enrollment and key rotation, which [`enrollment`](docs/enrollment.md) names as
+  separate open questions and which the device-enrollment ceremony deliberately
+  does not cover. The coupling is a constraint, not a sequencing note. Kessa's
+  reach today is bounded by an asymmetry: a proxy resolves DIDs only from its own
+  local `--dids` directory and has no network resolution, so authority artifacts
+  are usable only against a deployment whose trust root already resolves every
+  hop of them. **Trust is granted locally by the receiving side, never asserted
+  by the presenting side**, which is what confines the R5-06 blast radius to the
+  deployment that issued an export plus any proxy deliberately configured to
+  trust that org.
+
+  A caller-authentication mechanism provisioned any other way would erode that.
+  A credential minted by a central authority, or an mTLS trust store rooted in a
+  CA spanning organizations, moves the admission decision off the receiving
+  deployment and hands a presenter reach it does not have today. So the
+  requirement is that whatever authenticates callers be provisioned the same way
+  `--dids` is: locally, per deployment, by the side accepting the risk. The unix
+  socket satisfies this by construction (the kernel is the authority, and it is
+  per-host); mTLS satisfies it only if each deployment runs its own CA. Settle
+  the org-root question first, or settle both together, but do not pick a caller
+  authentication scheme that quietly assumes an answer to it.
+
 ## Coverage and evidence
 
 - **Tool-call payload coverage.** Kessa authorizes today: it records that an
