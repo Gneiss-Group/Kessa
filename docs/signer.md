@@ -6,10 +6,9 @@ SPDX-License-Identifier: Apache-2.0
 # The `Signer` seam — behavior reference
 
 A code-grounded reference for developers, auditors, and future contributors: how
-`Signer` and its backends actually behave. Not *why* they were designed this way
-(that's the MCP deployment design decision log) and not the enrollment ceremony
-narrative (that's [`enrollment.md`](enrollment.md)). If you hold a `Signer`, are
-implementing one, or are auditing what got signed, this is what you need to know.
+`Signer` and its backends actually behave — not the enrollment ceremony narrative
+(that's [`enrollment.md`](enrollment.md)). If you hold a `Signer`, are implementing
+one, or are auditing what got signed, this is what you need to know.
 
 Grounded in the code as it exists today (B1–B4, including the R4-02/SO-2 fixes).
 Where this doc and the code ever disagree, the code wins.
@@ -56,9 +55,8 @@ P-256 for *any* DID key, dispatched purely on key type, with no per-role logic. 
 statement "the employee key is the hardware P-256 key" is a property of what
 *enrollment generates*, not a rule the verifier enforces. If you extend this system,
 do not add role-awareness to verification — it would break the "empty trusted
-bucket" property the whole security argument rests on. (This is the property most
-often misunderstood by someone extending the system; rationale is in the design
-decision log.)
+bucket" property the whole security argument rests on. It is the property most
+often misunderstood by someone extending the system.
 
 ## 2. Backends
 
@@ -244,8 +242,9 @@ Blunt, and only what's true today:
 
 ---
 
-*Design rationale (why scoped P-256, why the verifier is role-blind, why R4-02 was
-fixed rather than deferred) lives in the MCP deployment design decision log — the
-project's internal "why" record — not here. Enrollment ceremony details are in
-[`enrollment.md`](enrollment.md); daemon operation in [`daemon.md`](daemon.md); the
-Secure Enclave test/validation runbook in [`enclave-runbook.md`](enclave-runbook.md).*
+*This is a behavior reference, not a rationale record. The findings named here
+(R4-02, SO-2) are indexed in the [security review record](security-review.md); open
+questions, including the Linux/TPM backend, are in [`UPCOMING.md`](../UPCOMING.md).
+Enrollment ceremony details are in [`enrollment.md`](enrollment.md); daemon
+operation in [`daemon.md`](daemon.md); the Secure Enclave test/validation runbook in
+[`enclave-runbook.md`](enclave-runbook.md).*

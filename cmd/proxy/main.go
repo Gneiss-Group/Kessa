@@ -311,9 +311,9 @@ func cmdServe(args []string, stdout, stderr io.Writer) int {
 	defer func() { _ = px.FlushSink(sinkFlushTimeout) }()
 
 	// Two independently configurable front-end listeners, both funneling into the
-	// SAME enforcement engine (design note §3). The MCP-native listener is a thin
-	// protocol adapter (enforce.MCPHandler calls the same px.Handle/px.Tip the HTTP
-	// handler does), so an MCP host can point its server address straight at Kessa.
+	// SAME enforcement engine. The MCP-native listener is a thin protocol adapter
+	// (enforce.MCPHandler calls the same px.Handle/px.Tip the HTTP handler does),
+	// so an MCP host can point its server address straight at Kessa.
 	// Each listener is enabled by having an address and disabled by clearing it: a
 	// security-conscious operator closes a port they don't want rather than being
 	// forced to commit to a protocol. Both enabled is the default (lowest deployment
@@ -366,9 +366,9 @@ type listener struct {
 // enabledListeners keeps only the listeners with a non-empty address, preserving
 // order. Clearing an address is how a listener is turned off: attack-surface
 // minimization for an operator who wants a port closed, not a forced up-front
-// protocol commitment (design note §3). Returning zero listeners is legal and
-// inert, deliberately, so the config does not hardcode "at least one protocol"
-// as an assumption a future third listener shape could break.
+// protocol commitment. Returning zero listeners is legal and inert, deliberately,
+// so the config does not hardcode "at least one protocol" as an assumption a
+// future third listener shape could break.
 func enabledListeners(ls []listener) []listener {
 	out := make([]listener, 0, len(ls))
 	for _, l := range ls {
@@ -385,7 +385,7 @@ func enabledListeners(ls []listener) []listener {
 // silently got one is a misconfiguration the operator must see, so the first
 // listener error (a bind failure, most often) stops the process rather than being
 // logged and swallowed. Crash/redundancy hardening ACROSS listeners once they are
-// up is separately scoped and explicitly deferred (design note §5).
+// up is separately scoped and explicitly deferred.
 func serveAll(ls []listener) error {
 	errc := make(chan error, len(ls))
 	for _, l := range ls {
