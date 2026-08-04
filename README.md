@@ -220,6 +220,22 @@ Works](docs/how-it-works.md#what-a-clean-verdict-actually-proves).
   one of the allow-checks failing; running those checks on denied entries would
   make "correctly denied" and "verifier failure" indistinguishable.
 
+- **An export is a bearer artifact, and the enforcement endpoint has no caller
+  authentication.** A v2 export carries each credential with its issuer proof —
+  deliberately, because that is what lets the verifier re-check a chain offline
+  with no shared secret. The consequence is that the delegation chain can be
+  re-derived from an export alone, and chain verification is the only gate before
+  an audit entry is written. A chain proves *issuance*, which is public; it does
+  not prove *possession*, which is what the holder's key is for. So anyone holding
+  an export can make a **reachable** proxy record entries: they are denials, but
+  they are genuine entries, and each one advances the log tip out from under an
+  honest caller whose proof was bound to the position it read. No unauthorized
+  action is allowed by this — an ALLOW still needs a valid proof of possession —
+  but writing to the record and allowing an action are different properties, and
+  only the second one is closed. The listeners bind to loopback by default, which
+  is the current mitigation and is not authentication. Closing it properly means
+  authenticating the caller; see [`UPCOMING.md`](UPCOMING.md).
+
 Accepted, documented risks (current boundaries, not defects):
 
 - **VC wrapper is not the cross-org anchor.** Cross-org trust rests on the per-hop

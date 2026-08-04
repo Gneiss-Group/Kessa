@@ -62,6 +62,21 @@ For what the system does today, and for the limits of a clean verdict, the
   equivalent. Distinct from production Developer ID signing + notarization for
   fleet distribution, which is the separate scale-dependent piece.
 
+- **Caller authentication on the enforcement endpoint.** The listeners have none:
+  the only gate before an audit entry is written is chain verification, and a
+  chain verifies against public DID documents, so it proves issuance rather than
+  possession. An export therefore doubles as a write credential for the proxy
+  that produced it (see the README's *Known limits*). This is the chain design
+  working as intended — public verifiability is what makes the offline verifier
+  possible — meeting an ingress path that assumed more than a chain provides.
+
+  The fix is not to carry fewer credentials in the export, and not to stop logging
+  denials: both are load-bearing. It is to authenticate the caller, which is an
+  open design question. mTLS matches the sidecar topology; a unix socket with a
+  peer-uid check matches the same-host case and reuses what the signing daemon
+  already does; a bearer token is the weakest and the easiest. Unstarted, and the
+  choice interacts with the MCP deployment model below.
+
 ## Coverage and evidence
 
 - **Tool-call payload coverage.** Kessa authorizes today: it records that an

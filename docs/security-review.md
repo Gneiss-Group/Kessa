@@ -35,7 +35,7 @@ rounds.
 | **R3** | 2026-07-26 | Scoped P-256 employee key and algorithm-agile verification (`feat/scoped-p256-employee-key`, merged 2026-07-27) | No critical or high. No false-PASS path. Four findings, all closed |
 | **R4** | 2026-08-01 | The whole on-device issuer surface: enrollment, Secure Enclave backend, signing daemon, agent wiring (`feat/issuer-enrollment`, merged 2026-08-01) | No critical or high. No false-PASS path in the verifier. Four findings plus two scope observations, all closed |
 | *(spec alignment)* | 2026-08-03 | Not a review round — see below. Conformance work bringing the MCP listener to revision 2026-07-28 | Surfaced one security-relevant defect (SA-01) as a by-product |
-| **R5** | 2026-08-03 | The ingress surface of both listeners, reviewed because it had just changed | Five findings (R5-01–R5-05), no critical or high. No false-ALLOW path |
+| **R5** | 2026-08-03 | The ingress surface of both listeners, reviewed because it had just changed | Six findings. Five closed (R5-01–R5-05, no critical or high). **R5-06 is High and open**: an export is a bearer artifact, so it doubles as a write credential for a reachable proxy. No false-ALLOW path in any of them |
 
 **R1 and R2 predate this repository's first commit** (2026-07-23). Their fixes are
 contained in the initial publication, so no released or published version of Kessa
@@ -148,7 +148,8 @@ Recorded separately from the numbered rounds because of how it was found. See
 Scoped to ingress because that is what the spec-alignment work had just changed,
 and anchored on SA-01's defect class: **a check that does not fire.** Two findings
 are checks that fired only under some inputs; two are checks that were absent
-altogether.
+altogether. The sixth is what following the fifth to its root turned up: a check
+that fires correctly and still does not establish what the endpoint needed.
 
 | ID | Sev | Area | Status |
 |---|---|---|---|
@@ -157,6 +158,11 @@ altogether.
 | R5-03 | Low | An explicit null JSON-RPC id processed as a request | Closed |
 | R5-04 | Low | Required `clientCapabilities` checked for presence only, so a null satisfied it | Closed |
 | R5-05 | Low | No request `Content-Type` validation, leaving cross-origin forgery defence incidental rather than deliberate | Closed |
+| R5-06 | **High** | An export is a bearer artifact: the chain re-derives from it, and chain verification is the only gate before an audit entry is written, so an export doubles as a write credential for a reachable proxy | **Open** — documented; needs caller authentication |
+
+R5-06 is **open**, is the only High in this round, and is not an ingress bug —
+following R5-05 to its root turned up an architectural property instead. It is
+stated in full below because it changes what the other five findings mean.
 
 These findings touch **two properties that must be stated separately**, because
 "no false-ALLOW" on its own is the more flattering half and would leave the other
@@ -193,13 +199,63 @@ Two consequences follow, neither covered by "no false-ALLOW":
 Audit disclosure under rebinding (R5-01) compounds both: the same page that can
 write can also read the export.
 
+### R5-06 — the export is a bearer artifact (High, open)
+
+Naming *what* the write gate actually is, rather than what it looks like:
+
+**Chain verification is public verifiability, not authentication.** A delegation
+chain verifies against public DID documents. That is deliberate and load-bearing:
+it is exactly what lets the independent verifier re-check a chain offline, with no
+shared secret and nothing of ours running. It is the property the product is built
+on.
+
+A v2 export carries each credential together with its issuer proof, for the same
+reason. So **the chain can be re-derived from an export alone** — demonstrated, not
+inferred: a chain rebuilt from nothing but exported bytes verifies.
+
+Chain verification being the only pre-write gate therefore means a chain proves
+**issuance**, which is public, where the endpoint needed **possession**, which is
+what a private key is for. This is not a flaw in the chain design. It is the chain
+design meeting an ingress path that assumed more than a chain provides.
+
+**The reach is wider than R5's browser framing.** R5-01 and R5-05 defend against a
+web page. This needs no browser: a plain HTTP POST with an export-derived chain and
+a worthless signature is enough. Observed end to end — the entry is written, the
+tip advances, and an honest caller whose proof was bound to the previous position
+is then denied. No key, no browser, no insider access; only an export, which is the
+artifact this system exists to hand out.
+
+**Severity is High and gated on reachability.** The listeners bind to loopback by
+default, so the practical precondition is network reach to the endpoint — which a
+non-local bind, or the documented container command's published ports, grants.
+Loopback is the current mitigation and it is not authentication.
+
+**Why it is open rather than fixed.** The two changes that would close it at the
+ingress are both wrong. Carrying fewer credentials in the export breaks the
+offline verifier, which is the central claim. Not logging a failed proof of
+possession breaks the rule that a denial is a real decision (R2), and that rule is
+what scenario 5 of the demo demonstrates. The correct fix is caller
+authentication, which the endpoint does not have and which is a design decision
+rather than a patch; it is filed in [`UPCOMING.md`](../UPCOMING.md) with the
+candidate mechanisms. Until then the property is stated in the README's [Known
+limits](../README.md#known-limits): **treat an export as a write credential for
+the proxy that produced it.**
+
 R5-01 and R5-05 also applied to the generic HTTP listener, which had not changed.
 They were fixed there too: a defence applied to one of two doors is not a defence.
 
 ## Deferred, and why
 
-These are recorded as open rather than closed. They are design decisions or
-scale-dependent work, not unfixed defects:
+These are recorded as open rather than closed. All but the first are design
+decisions or scale-dependent work rather than unfixed defects:
+
+- **R5-06 — no caller authentication on the enforcement endpoint**, so an export
+  doubles as a write credential. This one **is** an unfixed defect, listed first
+  because the rest of this section is boundaries and this is not. It is open
+  because the fix is a design decision (mTLS, a unix socket with a peer-uid check,
+  or a bearer token) rather than a patch, and because the two changes that would
+  close it at the ingress would each break something load-bearing. Mitigated today
+  only by the loopback default. See the R5-06 entry above.
 
 - **S1 — status is checked against the current status list**, not the list as of
   action time. Re-verifying an old export after a later revocation flips
