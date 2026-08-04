@@ -54,6 +54,12 @@ them:
   (which the release pipeline reads to decide the version), semantic versioning,
   and the manual, owner-only release.
 
+Kessa is built with AI-assisted development, with every change reviewed, tested,
+and owned by the maintainer exactly as if it had been typed by hand; the
+project's security review posture is documented separately in
+[`SECURITY.md`](SECURITY.md) and the [security review
+record](docs/security-review.md).
+
 ## Building and testing
 
 Requirements: Go (see [`go.mod`](go.mod)) and a POSIX shell for the demo.
