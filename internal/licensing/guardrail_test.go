@@ -25,13 +25,32 @@ import (
 // `go list -m` in the working directory for exactly this reason: a check that can
 // only ever be pointed at this repository cannot be shown a violation.
 
-const (
-	marker = "//kessa:plugin-interface"
+const marker = "//kessa:plugin-interface"
 
-	apacheHdr = "// SPDX-FileCopyrightText: 2026 Gneiss Group Inc.\n" +
-		"//\n// SPDX-License-Identifier: Apache-2.0\n\n"
-	agplHdr = "// SPDX-FileCopyrightText: 2026 Gneiss Group Inc.\n" +
-		"//\n// SPDX-License-Identifier: AGPL-3.0-only\n\n"
+// hdr builds the SPDX header this test writes into its fixture files.
+//
+// The tag is assembled from two pieces rather than written whole, and that is not
+// squeamishness. Spelled out literally, every scanner that reads this repository
+// finds the fixture headers and takes them for this file's own licensing: `reuse
+// lint` tries to parse "AGPL-3.0-only\n\n\"" as an SPDX expression, fails, and
+// then skips the file entirely, reporting it as having no licence at all. The
+// same root cause made license-check.sh read this package as split-tier before
+// its scans were anchored.
+//
+// The general shape is worth naming, because this file has now tripped it twice
+// against two different tools: a file that must *quote* the thing a scanner looks
+// for has to keep the quotation from reading as a declaration. Anchoring solves
+// it on the scanner side, splitting solves it on this side, and a file that
+// writes licence headers as data needs the second one too.
+func hdr(license string) string {
+	tag := "SPDX-License-" + "Identifier"
+	return "// SPDX-FileCopyright" + "Text: 2026 Gneiss Group Inc.\n" +
+		"//\n// " + tag + ": " + license + "\n\n"
+}
+
+var (
+	apacheHdr = hdr("Apache-2.0")
+	agplHdr   = hdr("AGPL-3.0-only")
 )
 
 // fixture is one synthesized module: a set of files, written verbatim.
@@ -299,12 +318,15 @@ func TestMarker_OnImplementationFile_IsRejected(t *testing.T) {
 // the same failure as a check that passes without testing anything, arriving from
 // the other direction.
 func TestQuotedMarkerAndIdentifiers_DoNotDesignate(t *testing.T) {
+	// Split for the same reason hdr splits: this fixture's whole point is to
+	// contain the tag as data, so it must not read as this file's own header.
+	quotedTag := "SPDX-License-" + "Identifier"
 	dir := fixture{
 		"tool/tool.go": apacheHdr + "package tool\n\n" +
 			"// These are strings a checker must not read as declarations.\n" +
 			"const (\n" +
 			"\tmarkerText = \"" + marker + "\"\n" +
-			"\theaderText = \"// SPDX-License-Identifier: AGPL-3.0-only\"\n" +
+			"\theaderText = \"// " + quotedTag + ": AGPL-3.0-only\"\n" +
 			")\n\n" +
 			"// Describe reports what this package talks about.\n" +
 			"func Describe() string { return markerText + headerText }\n\n" +
