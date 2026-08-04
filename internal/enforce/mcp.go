@@ -194,6 +194,13 @@ func MCPHandler(px *Proxy) http.Handler {
 }
 
 func (s *mcpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// Origin is checked before the method is even dispatched: the transport spec
+	// requires validating it on ALL incoming connections, and a rebound page must
+	// not learn which methods exist by probing.
+	if !originAllowed(r) {
+		http.Error(w, "forbidden: cross-origin request to a local enforcement endpoint", http.StatusForbidden)
+		return
+	}
 	switch r.Method {
 	case http.MethodPost:
 		s.handlePost(w, r)
@@ -209,6 +216,14 @@ func (s *mcpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *mcpServer) handlePost(w http.ResponseWriter, r *http.Request) {
+	// A JSON-RPC body must arrive as application/json. Requiring it refuses a
+	// forged cross-origin "simple request" on its own merits rather than relying
+	// on the required custom headers to do it incidentally.
+	if !hasJSONContentType(r) {
+		http.Error(w, "unsupported media type: this endpoint accepts application/json", http.StatusUnsupportedMediaType)
+		return
+	}
+
 	// Cap the body exactly as the HTTP listener does (F6): a crafted body must not
 	// stream unbounded into the JSON decoder on the evaluator's machine.
 	r.Body = http.MaxBytesReader(w, r.Body, maxRequestBody)
@@ -242,6 +257,14 @@ func (s *mcpServer) handlePost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// An explicit null id is neither a request nor a notification. The spec says
+	// the id MUST NOT be null, and testing only for an ABSENT id would let null
+	// through as a request — a third state the rest of this file does not model.
+	if bytes.Equal(bytes.TrimSpace(req.ID), []byte("null")) {
+		writeRPCErrorStatus(w, nil, http.StatusBadRequest, rpcInvalidRequest, `"id" must not be null`)
+		return
+	}
+
 	// A notification carries no id and gets no response body. This revision
 	// defines no client-to-server notifications over Streamable HTTP and does not
 	// define header requirements for a notification POST, so one is acknowledged
@@ -267,15 +290,13 @@ func (s *mcpServer) handlePost(w http.ResponseWriter, r *http.Request) {
 // checked for support, so a client that disagrees with itself is told that
 // rather than being told its version is unsupported.
 func (s *mcpServer) validateRequestMetadata(w http.ResponseWriter, r *http.Request, req rpcRequest) bool {
-	hdrVersion := r.Header.Get(hdrMCPProtocolVersion)
-	if hdrVersion == "" {
-		writeHeaderMismatch(w, req.ID, "missing required "+hdrMCPProtocolVersion+" header")
+	hdrVersion, ok := requireSingleHeader(w, r, req.ID, hdrMCPProtocolVersion)
+	if !ok {
 		return false
 	}
 
-	hdrMethod := r.Header.Get(hdrMCPMethod)
-	if hdrMethod == "" {
-		writeHeaderMismatch(w, req.ID, "missing required "+hdrMCPMethod+" header")
+	hdrMethod, ok := requireSingleHeader(w, r, req.ID, hdrMCPMethod)
+	if !ok {
 		return false
 	}
 	if hdrMethod != req.Method {
@@ -301,9 +322,13 @@ func (s *mcpServer) validateRequestMetadata(w http.ResponseWriter, r *http.Reque
 			"params._meta must carry "+metaProtocolVersion)
 		return false
 	}
-	if _, present := pe.Meta[metaClientCapabilities]; !present {
+	// clientCapabilities must be an OBJECT, not merely present. Checking presence
+	// alone accepts a JSON null, which satisfies the letter of "required field"
+	// while supplying nothing — the same shape as a check that fires only when a
+	// field happens to be there.
+	if !metaIsObject(pe.Meta, metaClientCapabilities) {
 		writeRPCErrorStatus(w, req.ID, http.StatusBadRequest, rpcInvalidParams,
-			"params._meta must carry "+metaClientCapabilities)
+			"params._meta must carry "+metaClientCapabilities+" as an object")
 		return false
 	}
 
@@ -321,6 +346,31 @@ func (s *mcpServer) validateRequestMetadata(w http.ResponseWriter, r *http.Reque
 	}
 
 	return true
+}
+
+// requireSingleHeader reads a mirrored header that must be present exactly once,
+// writing the HeaderMismatch refusal itself when it is missing or repeated.
+func requireSingleHeader(w http.ResponseWriter, r *http.Request, id json.RawMessage, name string) (string, bool) {
+	v, present, duplicated := singleHeader(r, name)
+	switch {
+	case duplicated:
+		writeHeaderMismatch(w, id, "header "+name+" appears more than once")
+		return "", false
+	case !present:
+		writeHeaderMismatch(w, id, "missing required "+name+" header")
+		return "", false
+	}
+	return v, true
+}
+
+// metaIsObject reports whether a _meta field is present AND a JSON object.
+func metaIsObject(meta map[string]json.RawMessage, key string) bool {
+	raw, ok := meta[key]
+	if !ok {
+		return false
+	}
+	var obj map[string]json.RawMessage
+	return json.Unmarshal(raw, &obj) == nil && obj != nil
 }
 
 // metaString reads a string-valued _meta field. A field present but not a JSON
@@ -382,9 +432,8 @@ func (s *mcpServer) handleToolsCall(w http.ResponseWriter, r *http.Request, req 
 	// the body's params do. It may arrive Base64-encoded, and MUST be decoded
 	// before the comparison — comparing the encoded form would reject a
 	// conforming client.
-	h := r.Header.Get(hdrMCPName)
-	if h == "" {
-		writeHeaderMismatch(w, req.ID, "missing required "+hdrMCPName+" header")
+	h, ok := requireSingleHeader(w, r, req.ID, hdrMCPName)
+	if !ok {
 		return
 	}
 	name, err := decodeHeaderValue(h)
