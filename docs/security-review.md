@@ -35,7 +35,7 @@ rounds.
 | **R3** | 2026-07-26 | Scoped P-256 employee key and algorithm-agile verification (`feat/scoped-p256-employee-key`, merged 2026-07-27) | No critical or high. No false-PASS path. Four findings, all closed |
 | **R4** | 2026-08-01 | The whole on-device issuer surface: enrollment, Secure Enclave backend, signing daemon, agent wiring (`feat/issuer-enrollment`, merged 2026-08-01) | No critical or high. No false-PASS path in the verifier. Four findings plus two scope observations, all closed |
 | *(spec alignment)* | 2026-08-03 | Not a review round — see below. Conformance work bringing the MCP listener to revision 2026-07-28 | Surfaced one security-relevant defect (SA-01) as a by-product |
-| **R5** | 2026-08-03 | The ingress surface of both listeners, reviewed because it had just changed | Six findings, all closed. Five of one class (R5-01–R5-05, no critical or high); **R5-06 was High** — an export doubled as a write credential — and was closed by making possession an attribution gate. No false-ALLOW path in any of them |
+| **R5** | 2026-08-03 | The ingress surface of both listeners, reviewed because it had just changed | Six findings. Five closed (R5-01–R5-05, no critical or high). **R5-06 was High** and is closed *as to the attack* — possession became an attribution gate, so the harm is unreachable — while the property it rests on is unchanged by design. No false-ALLOW path in any of them |
 
 **R1 and R2 predate this repository's first commit** (2026-07-23). Their fixes are
 contained in the initial publication, so no released or published version of Kessa
@@ -156,7 +156,7 @@ that fires correctly and still does not establish what the endpoint needed.
 | R5-03 | Low | An explicit null JSON-RPC id processed as a request | Closed |
 | R5-04 | Low | Required `clientCapabilities` checked for presence only, so a null satisfied it | Closed |
 | R5-05 | Low | No request `Content-Type` validation, leaving cross-origin forgery defence incidental rather than deliberate | Closed |
-| R5-06 | **High** | An export is a bearer artifact: the chain re-derived from it, and chain verification was the only gate before an audit entry was written, so an export doubled as a write credential for a reachable proxy | **Closed** — possession is now an attribution gate; see below |
+| R5-06 | **High** | An export is a bearer artifact: the chain re-derives from it, and chain verification was the only gate before an audit entry was written, so an export doubled as a write credential for a reachable proxy | **Closed as to the attack** — unexploitable at `/enforce`. The bearer property itself is unchanged and is a standing characteristic; see below |
 
 R5-06 was the only High in this round and is not an ingress bug — following R5-05
 to its root turned up an architectural property instead. It is stated in full
@@ -198,7 +198,7 @@ Two consequences follow, neither covered by "no false-ALLOW":
 Audit disclosure under rebinding (R5-01) compounds both: the same page that can
 write can also read the export.
 
-### R5-06 — the export was a bearer artifact (High, closed)
+### R5-06 — the export is a bearer artifact (High, closed as to the attack)
 
 Naming *what* the write gate actually is, rather than what it looks like:
 
@@ -281,10 +281,25 @@ request took — so honest races no longer leave denials in the record either. T
 refusal names the position and the retry, because the proxy cannot distinguish a
 stale proof from a forged one and does not pretend to.
 
-What remains open is the narrower question of **who may submit at all**: the
-endpoint still has no caller authentication, and a non-loopback bind is refused
-unless `--allow-unauthenticated-remote` is passed. See
-[`UPCOMING.md`](../UPCOMING.md).
+**What is closed, and what is not — stated separately, because "closed" alone
+invites the wrong conclusion.**
+
+*Closed:* the harm. Pollution and tip-advance are unreachable at `/enforce`. An
+export can no longer be turned into an audit entry in anyone's log.
+
+*Unchanged, by design:* the property underneath. **An export is still re-derivable
+into a verifying delegation chain by anyone holding it.** That was never a defect
+to fix — it is public verifiability, the thing that lets the offline verifier work
+against public keys with no shared secret, and removing it would remove the
+product's central claim. It is recorded here as a **standing characteristic**, not
+as a resolved finding, so that a future ingress path is designed knowing a chain
+proves issuance and not possession. R5-06 happened because one path assumed
+otherwise; the property will still be there for the next one.
+
+*Still open:* the narrower question of **who may submit at all**. The endpoint has
+no caller authentication; a non-loopback bind is refused unless
+`--allow-unauthenticated-remote` is passed, which is a fail-closed default rather
+than an answer. See [`UPCOMING.md`](../UPCOMING.md).
 
 R5-01 and R5-05 also applied to the generic HTTP listener, which had not changed.
 They were fixed there too: a defence applied to one of two doors is not a defence.

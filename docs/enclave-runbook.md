@@ -37,6 +37,28 @@ CGO_ENABLED=1 go test ./internal/signer/enclave/ -v
 The `GenerateEphemeral`-based tests pass; the persistence tests **SKIP** with a
 pointer here (they never fail an unsigned run). This is the everyday check.
 
+> **The Mac must be unlocked, and a locked one fails loudly rather than
+> skipping.** Every Enclave key here is created with
+> `kSecAttrAccessibleWhenUnlockedThisDeviceOnly`, so key generation and use are
+> refused while the device is locked:
+>
+> ```
+> enclave: generate key: Security framework error -25308
+> ```
+>
+> `-25308` is `errSecInteractionNotAllowed`. This is the protection class working
+> as intended, not a defect and not a flaky test — the key is *supposed* to be
+> unreachable on a locked device, which is most of the point of putting it there.
+>
+> It matters because the failure is confusing in context: a long `make test` run
+> that started on an unlocked Mac and finished after the screensaver engaged will
+> show six Enclave failures and nothing else, which reads like a regression in the
+> one area that backs the hardware claim. It is not. Unlock and re-run.
+>
+> The same applies to any unattended runner: an Enclave test needs an unlocked
+> login session, so these tests cannot run on a locked-screen CI box at all. That
+> is a reason the hardware validation is a manual runbook step rather than a gate.
+
 ## 2. Persistence tests — a code-signed binary with an entitlement
 
 Persisting a Secure Enclave key uses the data-protection keychain, which requires

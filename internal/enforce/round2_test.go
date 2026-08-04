@@ -537,6 +537,34 @@ func TestR2_03_ErroringSinkChangesNothing(t *testing.T) {
 	}
 }
 
+// submitRetrying models what an honest client does under contention, and exists
+// so these tests still force the interleaving they were written for.
+//
+// Since possession became an attribution gate (R5-06), a proof bound to a slot
+// another request took is refused rather than logged — correctly, since it is
+// indistinguishable from a forgery. But a test whose goroutines all bind to the
+// same starting tip would then have exactly ONE request reach Append, and the
+// serialization property R2-04 exists to guard would go untested while the
+// assertions still passed. That is the failure mode these tests were written to
+// catch, so it must not be the failure mode they acquire.
+//
+// A real client re-reads the tip and re-signs. So does this: every request
+// reaches Append, and the concurrent-append path is exercised as before.
+func submitRetrying(t *testing.T, px *Proxy, req Request, resign func(Tip) credential.PoP) (*Result, error) {
+	t.Helper()
+	for attempt := 0; attempt < 50; attempt++ {
+		res, err := px.Handle(req)
+		var ue *UnattributableError
+		if errors.As(err, &ue) && ue.Stage == "possession" {
+			req.PoP = resign(px.Tip()) // lost the race for that slot; rebind and retry
+			continue
+		}
+		return res, err
+	}
+	t.Fatal("gave up retrying: a caller could not reach Append in 50 attempts")
+	return nil, nil
+}
+
 // ---- R2-04: concurrency ------------------------------------------------------
 
 // TestR2_04_OneApprovalAuthorizesOneAction is the finding's core, and the reason
@@ -566,10 +594,10 @@ func TestR2_04_OneApprovalAuthorizesOneAction(t *testing.T) {
 		go func(i int) {
 			defer wg.Done()
 			<-start
-			results[i], errs[i] = px.Handle(Request{
+			results[i], errs[i] = submitRetrying(t, px, Request{
 				Chain: h.chain, Action: a, PoP: pop,
 				Approver: didAlice, Approval: approval,
-			})
+			}, func(tp Tip) credential.PoP { return h.pop(t, tp, a, "n-race-retry") })
 		}(i)
 	}
 	close(start)
@@ -585,33 +613,18 @@ func TestR2_04_OneApprovalAuthorizesOneAction(t *testing.T) {
 		t.Fatalf("SECURITY: %d actions executed against ONE human approval bound to one slot; want exactly 1", allowed)
 	}
 
-	// Interleaving B: no entry may be lost or overwritten. Since possession became
-	// an attribution gate (R5-06), a request that loses the race for a slot is
-	// REFUSED rather than logged — its proof was bound to a position another
-	// request took — so the entry count is no longer the request count. What must
-	// still hold, and is what the original overwrite bug violated, is that every
-	// entry that exists sits at its own consecutive Seq: an overwrite shows up as a
-	// duplicate or a gap.
-	//
-	// Every request must also be accounted for: allowed, logged denial, or
-	// explicit refusal. A request that silently produced neither is the failure
-	// this arm exists to catch.
+	// Interleaving B: no entry may be lost. Every request rebinds and retries until
+	// it reaches Append, so all of them produce exactly one entry, at its own Seq.
+	// The original bug showed up here as a short log: two entries at seq 0, one
+	// silently overwriting the other.
 	entries := px.Entries()
-	if len(entries) == 0 {
-		t.Fatal("SECURITY: concurrent requests produced no entries at all")
+	if len(entries) != goroutines {
+		t.Fatalf("SECURITY: %d requests produced %d audit entries — the log lost one", goroutines, len(entries))
 	}
-	accounted := 0
-	for i := range results {
-		var ue *UnattributableError
-		switch {
-		case errs[i] == nil && results[i] != nil:
-			accounted++ // a decision was recorded
-		case errors.As(errs[i], &ue):
-			accounted++ // refused, unlogged, by design
+	for i := range errs {
+		if errs[i] != nil {
+			t.Fatalf("request %d never reached a decision: %v", i, errs[i])
 		}
-	}
-	if accounted != goroutines {
-		t.Fatalf("SECURITY: %d requests, only %d accounted for", goroutines, accounted)
 	}
 	for i, e := range entries {
 		if e.Seq != uint64(i) {
@@ -643,18 +656,17 @@ func TestR2_04_ConcurrentHandleIsRaceFree(t *testing.T) {
 			// Each goroutine binds to whatever tip it observes. Some will lose the
 			// race for that slot and be denied; none may corrupt the log.
 			tip := px.Tip()
-			pop := h.pop(t, tip, a, "n-"+string(rune('a'+i)))
-			_, _ = px.Handle(Request{Chain: h.chain, Action: a, PoP: pop})
+			nonce := "n-" + string(rune('a'+i))
+			pop := h.pop(t, tip, a, nonce)
+			_, _ = submitRetrying(t, px, Request{Chain: h.chain, Action: a, PoP: pop},
+				func(tp Tip) credential.PoP { return h.pop(t, tp, a, nonce) })
 		}(i)
 	}
 	wg.Wait()
 
-	// Race losers are refused rather than logged (R5-06), so the entry count is
-	// not the request count. The property under test is that concurrent appends do
-	// not corrupt the log: consecutive Seqs, and the whole thing still verifies.
 	entries := px.Entries()
-	if len(entries) == 0 {
-		t.Fatal("concurrent requests produced no entries at all")
+	if len(entries) != goroutines {
+		t.Fatalf("want %d entries, got %d", goroutines, len(entries))
 	}
 	for i, e := range entries {
 		if e.Seq != uint64(i) {

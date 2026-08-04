@@ -233,14 +233,19 @@ Works](docs/how-it-works.md#what-a-clean-verdict-actually-proves).
   decision and no entry; it is refused, and reported to the audit sink as
   telemetry instead.
 
-  This closed a real hole (R5-06). An export carries each credential with its
-  issuer proof, deliberately, because that is what lets the verifier re-check a
-  chain offline with no shared secret — so the chain re-derives from an export
-  alone. When chain verification was the only gate before a write, that made an
-  export a *write credential*: giving one to an auditor, a regulator, or a
-  counterparty gave them the ability to append to the log they were auditing.
-  Possession is now checked first, so the entries they could once cause are
+  This closed a real hole (R5-06). When chain verification was the only gate
+  before a write, giving someone an export gave them the ability to append to the
+  log they were auditing. Possession is now checked first, so those entries are
   impossible rather than merely denied.
+
+  **A standing characteristic, which the fix does not change and is not meant to:**
+  an export carries each credential with its issuer proof, so **anyone holding one
+  can re-derive a delegation chain that verifies.** That is deliberate — it is what
+  lets the verifier re-check a chain offline against public keys with no shared
+  secret, and it is the product's central claim. A chain proves *issuance*, which
+  is public; it never proved *possession*. Design anything that consumes a chain
+  accordingly: R5-06 happened because one path assumed a chain established more
+  than it does.
 
   What this does **not** close: the endpoint still has no caller authentication, so
   anyone who can reach it may *submit* — they simply cannot make it record
