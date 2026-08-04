@@ -220,21 +220,38 @@ Works](docs/how-it-works.md#what-a-clean-verdict-actually-proves).
   one of the allow-checks failing; running those checks on denied entries would
   make "correctly denied" and "verifier failure" indistinguishable.
 
-- **An export is a bearer artifact, and the enforcement endpoint has no caller
-  authentication.** A v2 export carries each credential with its issuer proof —
-  deliberately, because that is what lets the verifier re-check a chain offline
-  with no shared secret. The consequence is that the delegation chain can be
-  re-derived from an export alone, and chain verification is the only gate before
-  an audit entry is written. A chain proves *issuance*, which is public; it does
-  not prove *possession*, which is what the holder's key is for. So anyone holding
-  an export can make a **reachable** proxy record entries: they are denials, but
-  they are genuine entries, and each one advances the log tip out from under an
-  honest caller whose proof was bound to the position it read. No unauthorized
-  action is allowed by this — an ALLOW still needs a valid proof of possession —
-  but writing to the record and allowing an action are different properties, and
-  only the second one is closed. The listeners bind to loopback by default, which
-  is the current mitigation and is not authentication. Closing it properly means
-  authenticating the caller; see [`UPCOMING.md`](UPCOMING.md).
+- **Giving someone an export gives them the ability to write to the log they are
+  auditing.** Stated in the terms that matter, because this is a property of the
+  distribution model rather than a deployment caveat: an export exists to be handed
+  to parties who do not trust you and whom you need not trust — an auditor, a
+  regulator, a counterparty, opposing counsel — and a recipient can use it to make
+  your proxy record entries.
+
+  **How.** A v2 export carries each credential with its issuer proof, deliberately,
+  because that is what lets the verifier re-check a chain offline with no shared
+  secret. So the delegation chain re-derives from an export alone. Chain
+  verification is the only gate before an entry is written, and a chain proves
+  *issuance*, which is public — not *possession*, which is what the holder's key is
+  for. The endpoint has no caller authentication.
+
+  **What they get.** Entries that are denials, but genuine: correctly signed,
+  correctly chained, and verifying PASS, because the verifier faithfully re-derives
+  what the enforcement point saw. Each one also advances the log tip out from under
+  an honest caller whose proof was bound to the position it read, so an interleaved
+  write makes a legitimate request fail. No unauthorized *action* is allowed — an
+  ALLOW still requires a valid proof of possession — but **writing to the record and
+  allowing an action are different properties, and only the second is closed.**
+
+  **How far it reaches.** Bounded, and the bound is real: a proxy resolves DIDs from
+  its local `--dids` directory and has no network resolution, so a chain is only
+  usable against a proxy whose trust root resolves *every* hop of it. In practice
+  that is the deployment that issued the export, plus any proxy deliberately
+  configured to trust that org — the cross-org case, working as designed. **It does
+  not reach an arbitrary party on the internet.** The recipient of your export can
+  write to *your* log, not to a stranger's.
+
+  Loopback binding is today's mitigation and it is not authentication. Closing this
+  means authenticating the caller; see [`UPCOMING.md`](UPCOMING.md).
 
 Accepted, documented risks (current boundaries, not defects):
 

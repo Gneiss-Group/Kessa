@@ -225,6 +225,30 @@ tip advances, and an honest caller whose proof was bound to the previous positio
 is then denied. No key, no browser, no insider access; only an export, which is the
 artifact this system exists to hand out.
 
+**The customer-facing statement.** "Treat an export as a write credential" is
+accurate and too soft. An export exists to be handed to parties who do not trust
+you and whom you need not trust. So: **anyone you give an export to gains the
+ability to write to the log they are auditing** — auditor, regulator,
+counterparty, opposing counsel. That is a property of the distribution model the
+product is built on, not a deployment caveat, and it is where a reader lands
+within a minute of the limitation anyway.
+
+**How far it reaches — bounded, and the bound was checked rather than assumed.**
+A proxy resolves DIDs with `did.FileResolver` over its local `--dids` directory
+and has **no network resolution**; there is no `--fetch-dids` on the proxy as
+there is on the verifier. A chain is therefore only usable against a proxy whose
+trust root resolves **every** hop of it. Verified: an unrelated org's root rejects
+the chain, and so does a partially-trusting root. The reach is:
+
+1. the deployment that issued the export, which necessarily resolves its own DIDs;
+2. any proxy deliberately configured to trust that org — the cross-org case,
+   working as designed.
+
+**It does not reach an arbitrary party on the internet.** The recipient of your
+export can write to *your* log, not to a stranger's. That distinction is stated
+explicitly because a reader who cannot tell will assume the worse one, and the
+worse one would be disqualifying rather than merely bad.
+
 **Severity is High and gated on reachability.** The listeners bind to loopback by
 default, so the practical precondition is network reach to the endpoint — which a
 non-local bind, or the documented container command's published ports, grants.

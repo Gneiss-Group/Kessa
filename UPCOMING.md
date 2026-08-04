@@ -62,20 +62,30 @@ For what the system does today, and for the limits of a clean verdict, the
   equivalent. Distinct from production Developer ID signing + notarization for
   fleet distribution, which is the separate scale-dependent piece.
 
-- **Caller authentication on the enforcement endpoint.** The listeners have none:
-  the only gate before an audit entry is written is chain verification, and a
-  chain verifies against public DID documents, so it proves issuance rather than
-  possession. An export therefore doubles as a write credential for the proxy
-  that produced it (see the README's *Known limits*). This is the chain design
-  working as intended — public verifiability is what makes the offline verifier
-  possible — meeting an ingress path that assumed more than a chain provides.
+- **Caller authentication on the enforcement endpoint. This one is not a
+  roadmap item in the ordinary sense — it gates the distribution model.**
+  Kessa's neutrality argument requires exports to circulate freely: an auditor, a
+  regulator, or a counterparty must be able to take one and verify it against
+  public keys, trusting nothing of ours. That circulation is exactly what is
+  currently unsafe. The listeners have no caller authentication, and the only gate
+  before an audit entry is written is chain verification — which proves *issuance*,
+  a public fact, not *possession*. So a party you hand an export to can make your
+  proxy write to the log they are auditing (README, *Known limits*; R5-06).
 
-  The fix is not to carry fewer credentials in the export, and not to stop logging
-  denials: both are load-bearing. It is to authenticate the caller, which is an
-  open design question. mTLS matches the sidecar topology; a unix socket with a
-  peer-uid check matches the same-host case and reuses what the signing daemon
-  already does; a bearer token is the weakest and the easiest. Unstarted, and the
-  choice interacts with the MCP deployment model below.
+  The property is not a chain-design flaw: public verifiability is precisely what
+  makes the offline verifier possible. It is that design meeting an ingress path
+  that assumed more than a chain provides. Which is why **the fix cannot be at the
+  export**: carrying fewer credentials breaks the verifier, and not logging failed
+  proofs of possession breaks "a denial is a real decision" and erases the evidence
+  of the attack. It has to be caller authentication.
+
+  Candidates, all unstarted: mTLS (matches the sidecar topology); a unix socket
+  with a peer-uid check (matches the same-host case and reuses what the signing
+  daemon already does); a bearer token (weakest, easiest). The choice interacts
+  with the MCP deployment model below. **Blast radius is bounded** — a proxy
+  resolves DIDs only from its local `--dids` root, with no network resolution, so
+  an export reaches the issuing deployment and any proxy configured to trust that
+  org, not an arbitrary internet party.
 
 ## Coverage and evidence
 
