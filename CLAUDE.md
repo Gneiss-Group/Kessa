@@ -2,7 +2,7 @@
 
 ## House style
 
-**Never use em dashes (`—`). Not in code, comments, documentation, commit
+**Never use em dashes (U+2014). Not in code, comments, documentation, commit
 messages, PR descriptions, or chat.** There is no exception and no context where
 one is acceptable.
 
@@ -17,10 +17,11 @@ Use instead, whichever fits:
 
 This is enforced, not merely requested: `scripts/ci/gate.sh` fails the build on
 any em dash in a tracked file, so the rule holds without anyone having to
-remember it. The one exception is `LICENSE` and `LICENSES/`, which are
-third-party legal text and are never edited.
+remember it. Both characters are named by code point above rather than written
+out, so this file does not trip the check it describes. The one exception is
+`LICENSE` and `LICENSES/`, which are third-party legal text and never edited.
 
-En dashes (`–`) are not used either. Write ranges with a plain hyphen (`F1-F10`)
+En dashes (U+2013) are not used either. Write ranges with a plain hyphen (`F1-F10`)
 or with "to".
 
 ## Why this is written down
