@@ -325,8 +325,9 @@ func cmdServe(args []string, stdout, stderr io.Writer) int {
 			"GET  /export    the signed audit export so far",
 		}},
 		{name: "MCP-native (Streamable HTTP)", addr: *mcpAddr, handler: enforce.MCPHandler(px), hints: []string{
-			"POST /          an MCP JSON-RPC message (initialize, tools/list, tools/call)",
+			"POST /          an MCP JSON-RPC message (ping, tools/list, tools/call)",
 			"tools           kessa/tip, kessa/enforce",
+			"revision        2026-07-28 (stateless: no sessions, no initialize)",
 		}},
 	})
 	if len(listeners) == 0 {

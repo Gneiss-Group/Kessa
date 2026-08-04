@@ -6,6 +6,7 @@ package enforce
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -27,8 +28,9 @@ type mcpResp struct {
 	ID      json.RawMessage `json:"id"`
 	Result  json.RawMessage `json:"result"`
 	Error   *struct {
-		Code    int    `json:"code"`
-		Message string `json:"message"`
+		Code    int             `json:"code"`
+		Message string          `json:"message"`
+		Data    json.RawMessage `json:"data"`
 	} `json:"error"`
 }
 
@@ -39,10 +41,48 @@ type mcpToolReply struct {
 	IsError           bool            `json:"isError"`
 }
 
+// stdMeta is the per-request protocol metadata every 2026-07-28 request must
+// carry. It replaced the initialize handshake, so it rides in params._meta on
+// each call rather than being negotiated once.
+func stdMeta() map[string]any {
+	return map[string]any{
+		metaProtocolVersion:    mcpProtocolVersion,
+		metaClientCapabilities: map[string]any{},
+	}
+}
+
+// rpcBody builds a conformant request body: params with _meta merged in.
+func rpcBody(id int, method string, params map[string]any) map[string]any {
+	if params == nil {
+		params = map[string]any{}
+	}
+	params["_meta"] = stdMeta()
+	return map[string]any{"jsonrpc": "2.0", "id": id, "method": method, "params": params}
+}
+
+// stdHeaders is the required header set. name is omitted when empty (only
+// requests that name a tool carry Mcp-Name).
+func stdHeaders(method, name string) map[string]string {
+	h := map[string]string{
+		hdrMCPProtocolVersion: mcpProtocolVersion,
+		hdrMCPMethod:          method,
+	}
+	if name != "" {
+		h[hdrMCPName] = name
+	}
+	return h
+}
+
+// postOK sends a fully conformant request: required headers, required _meta.
+func postOK(t *testing.T, url string, id int, method string, params map[string]any) (*http.Response, *mcpResp) {
+	t.Helper()
+	return post(t, url, stdHeaders(method, ""), rpcBody(id, method, params))
+}
+
 // post sends one JSON-RPC message and returns the raw HTTP response plus the
 // decoded body (nil body when the server sends none, e.g. a 202 to a
-// notification). headers are applied verbatim so a test can exercise the routing
-// headers.
+// notification). headers and body are applied verbatim, so a test can send a
+// deliberately non-conformant request.
 func post(t *testing.T, url string, headers map[string]string, msg map[string]any) (*http.Response, *mcpResp) {
 	t.Helper()
 	body, err := json.Marshal(msg)
@@ -67,8 +107,10 @@ func post(t *testing.T, url string, headers map[string]string, msg map[string]an
 		t.Fatalf("read body: %v", err)
 	}
 	raw := buf.Bytes()
-	// A transport-level fault (bad routing header, unknown session) comes back as a
-	// plain-text HTTP error, not a JSON-RPC body; those tests assert on status only.
+	// Envelope faults now carry a JSON-RPC error body alongside their HTTP status,
+	// so almost everything decodes. The exceptions are bodiless replies (202 to a
+	// notification) and the pre-JSON faults (413, 405) that http.Error writes as
+	// plain text.
 	if len(bytes.TrimSpace(raw)) == 0 || !strings.HasPrefix(resp.Header.Get("Content-Type"), "application/json") {
 		return resp, nil
 	}
@@ -94,12 +136,7 @@ func callTool(t *testing.T, url, name string, args any) (*http.Response, *mcpToo
 	if args != nil {
 		params["arguments"] = args
 	}
-	resp, reply := post(t, url, map[string]string{
-		hdrMCPMethod: "tools/call",
-		hdrMCPName:   name,
-	}, map[string]any{
-		"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": params,
-	})
+	resp, reply := post(t, url, stdHeaders("tools/call", name), rpcBody(1, "tools/call", params))
 	if reply == nil || reply.Error != nil {
 		return resp, nil, reply
 	}
@@ -110,30 +147,12 @@ func callTool(t *testing.T, url, name string, args any) (*http.Response, *mcpToo
 	return resp, &tr, reply
 }
 
-func TestMCPInitializeAndToolsList(t *testing.T) {
+func TestMCPToolsList(t *testing.T) {
 	url := mcpServerURL(t, newHarness(t).proxy(t))
 
-	resp, reply := post(t, url, nil, map[string]any{
-		"jsonrpc": "2.0", "id": 1, "method": "initialize",
-		"params": map[string]any{"protocolVersion": mcpProtocolVersion, "capabilities": map[string]any{}},
-	})
+	resp, reply := postOK(t, url, 1, "tools/list", nil)
 	if resp.StatusCode != http.StatusOK || reply.Error != nil {
-		t.Fatalf("initialize failed: status %d, reply %+v", resp.StatusCode, reply)
-	}
-	if sid := resp.Header.Get(hdrMCPSessionID); sid == "" {
-		t.Fatal("initialize must issue an Mcp-Session-Id")
-	}
-	var init initializeResult
-	if err := json.Unmarshal(reply.Result, &init); err != nil {
-		t.Fatal(err)
-	}
-	if init.ProtocolVersion != mcpProtocolVersion {
-		t.Fatalf("protocol version = %q, want %q", init.ProtocolVersion, mcpProtocolVersion)
-	}
-
-	_, reply = post(t, url, nil, map[string]any{"jsonrpc": "2.0", "id": 2, "method": "tools/list"})
-	if reply.Error != nil {
-		t.Fatalf("tools/list error: %+v", reply.Error)
+		t.Fatalf("tools/list failed: status %d, reply %+v", resp.StatusCode, reply)
 	}
 	var tl toolsListResult
 	if err := json.Unmarshal(reply.Result, &tl); err != nil {
@@ -238,63 +257,226 @@ func TestMCPUnattributableIsToolError(t *testing.T) {
 	}
 }
 
-func TestMCPRoutingHeaderMismatch(t *testing.T) {
+// TestMCPHeaderBodyDisagreement is the security-relevant case: an intermediary
+// may route on the mirrored header while this server enforces on the body, so a
+// header that contradicts the body must be refused, not ignored. Every rejection
+// is HTTP 400 AND JSON-RPC -32020, because an intermediary may act on the status
+// without parsing the body.
+func TestMCPHeaderBodyDisagreement(t *testing.T) {
 	url := mcpServerURL(t, newHarness(t).proxy(t))
 
-	// Mcp-Method contradicts the body method.
-	resp, _ := post(t, url, map[string]string{hdrMCPMethod: "tools/list"},
-		map[string]any{"jsonrpc": "2.0", "id": 1, "method": "tools/call",
-			"params": map[string]any{"name": toolTip}})
-	if resp.StatusCode != http.StatusBadRequest {
-		t.Fatalf("Mcp-Method mismatch should be 400, got %d", resp.StatusCode)
+	cases := []struct {
+		name    string
+		headers map[string]string
+		body    map[string]any
+	}{
+		{
+			"Mcp-Method contradicts body method",
+			map[string]string{hdrMCPProtocolVersion: mcpProtocolVersion, hdrMCPMethod: "tools/list"},
+			rpcBody(1, "tools/call", map[string]any{"name": toolTip}),
+		},
+		{
+			"Mcp-Name contradicts the tool named in the body",
+			stdHeaders("tools/call", toolEnforce),
+			rpcBody(2, "tools/call", map[string]any{"name": toolTip}),
+		},
+		{
+			"MCP-Protocol-Version contradicts body _meta",
+			map[string]string{hdrMCPProtocolVersion: "2025-11-25", hdrMCPMethod: "tools/list"},
+			rpcBody(3, "tools/list", nil),
+		},
 	}
-
-	// Mcp-Name contradicts the tool named in the body.
-	resp, _ = post(t, url, map[string]string{hdrMCPMethod: "tools/call", hdrMCPName: toolEnforce},
-		map[string]any{"jsonrpc": "2.0", "id": 2, "method": "tools/call",
-			"params": map[string]any{"name": toolTip}})
-	if resp.StatusCode != http.StatusBadRequest {
-		t.Fatalf("Mcp-Name mismatch should be 400, got %d", resp.StatusCode)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			resp, reply := post(t, url, tc.headers, tc.body)
+			if resp.StatusCode != http.StatusBadRequest {
+				t.Fatalf("status = %d, want 400", resp.StatusCode)
+			}
+			if reply == nil || reply.Error == nil || reply.Error.Code != rpcHeaderMismatch {
+				t.Fatalf("want JSON-RPC %d (HeaderMismatch), got %+v", rpcHeaderMismatch, reply)
+			}
+		})
 	}
 }
 
-func TestMCPUnknownSessionRejected(t *testing.T) {
+// TestMCPRequiredHeadersAreRequired: the mirrored headers are REQUIRED, not
+// validated-only-when-present. A missing one is a header mismatch, which is the
+// behavior a gateway relies on when it routes without parsing bodies.
+func TestMCPRequiredHeadersAreRequired(t *testing.T) {
 	url := mcpServerURL(t, newHarness(t).proxy(t))
-	resp, _ := post(t, url, map[string]string{hdrMCPSessionID: "deadbeefdeadbeefdeadbeefdeadbeef"},
-		map[string]any{"jsonrpc": "2.0", "id": 1, "method": "tools/list"})
+
+	cases := []struct {
+		name    string
+		headers map[string]string
+		body    map[string]any
+	}{
+		{"no MCP-Protocol-Version", map[string]string{hdrMCPMethod: "tools/list"}, rpcBody(1, "tools/list", nil)},
+		{"no Mcp-Method", map[string]string{hdrMCPProtocolVersion: mcpProtocolVersion}, rpcBody(2, "tools/list", nil)},
+		{"no Mcp-Name on tools/call", stdHeaders("tools/call", ""), rpcBody(3, "tools/call", map[string]any{"name": toolTip})},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			resp, reply := post(t, url, tc.headers, tc.body)
+			if resp.StatusCode != http.StatusBadRequest {
+				t.Fatalf("status = %d, want 400", resp.StatusCode)
+			}
+			if reply == nil || reply.Error == nil || reply.Error.Code != rpcHeaderMismatch {
+				t.Fatalf("want JSON-RPC %d (HeaderMismatch), got %+v", rpcHeaderMismatch, reply)
+			}
+		})
+	}
+}
+
+// TestMCPRequiredMetaFields: protocolVersion and clientCapabilities ride every
+// request. A body missing one is malformed (-32602), which is deliberately NOT a
+// header mismatch — the headers may be perfectly consistent with an incomplete
+// body, and saying "header mismatch" would send a client looking in the wrong
+// place.
+func TestMCPRequiredMetaFields(t *testing.T) {
+	url := mcpServerURL(t, newHarness(t).proxy(t))
+
+	for _, drop := range []string{metaProtocolVersion, metaClientCapabilities} {
+		t.Run("missing "+drop, func(t *testing.T) {
+			meta := stdMeta()
+			delete(meta, drop)
+			body := map[string]any{"jsonrpc": "2.0", "id": 1, "method": "tools/list",
+				"params": map[string]any{"_meta": meta}}
+			resp, reply := post(t, url, stdHeaders("tools/list", ""), body)
+			if resp.StatusCode != http.StatusBadRequest {
+				t.Fatalf("status = %d, want 400", resp.StatusCode)
+			}
+			if reply == nil || reply.Error == nil || reply.Error.Code != rpcInvalidParams {
+				t.Fatalf("want JSON-RPC %d (invalid params), got %+v", rpcInvalidParams, reply)
+			}
+		})
+	}
+}
+
+// TestMCPUnsupportedProtocolVersion: a client on a revision this adapter does not
+// speak is told so explicitly, and told what IS supported, so it can retry
+// without guessing.
+func TestMCPUnsupportedProtocolVersion(t *testing.T) {
+	url := mcpServerURL(t, newHarness(t).proxy(t))
+
+	body := map[string]any{"jsonrpc": "2.0", "id": 1, "method": "tools/list",
+		"params": map[string]any{"_meta": map[string]any{
+			metaProtocolVersion:    "2025-11-25",
+			metaClientCapabilities: map[string]any{},
+		}}}
+	resp, reply := post(t, url, map[string]string{
+		hdrMCPProtocolVersion: "2025-11-25", hdrMCPMethod: "tools/list",
+	}, body)
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", resp.StatusCode)
+	}
+	if reply == nil || reply.Error == nil || reply.Error.Code != rpcUnsupportedProtocolVersion {
+		t.Fatalf("want JSON-RPC %d, got %+v", rpcUnsupportedProtocolVersion, reply)
+	}
+	var data struct {
+		Supported []string `json:"supported"`
+	}
+	if err := json.Unmarshal(reply.Error.Data, &data); err != nil {
+		t.Fatalf("decode error data: %v", err)
+	}
+	if len(data.Supported) != 1 || data.Supported[0] != mcpProtocolVersion {
+		t.Fatalf("supported = %v, want [%s]", data.Supported, mcpProtocolVersion)
+	}
+}
+
+// TestMCPSessionHeaderIgnored: 2026-07-28 removed protocol-level sessions. A
+// stale Mcp-Session-Id from an older client must be ignored rather than rejected,
+// and the server must not mint or echo one.
+func TestMCPSessionHeaderIgnored(t *testing.T) {
+	url := mcpServerURL(t, newHarness(t).proxy(t))
+
+	h := stdHeaders("tools/list", "")
+	h["Mcp-Session-Id"] = "deadbeefdeadbeefdeadbeefdeadbeef"
+	resp, reply := post(t, url, h, rpcBody(1, "tools/list", nil))
+
+	if resp.StatusCode != http.StatusOK || reply == nil || reply.Error != nil {
+		t.Fatalf("a session header must be ignored, got status %d reply %+v", resp.StatusCode, reply)
+	}
+	if got := resp.Header.Get("Mcp-Session-Id"); got != "" {
+		t.Fatalf("server must not mint or echo a session id, got %q", got)
+	}
+}
+
+// TestMCPInitializeIsNotFound: there is no handshake in this revision, so the
+// legacy initialize call is simply an unimplemented method — and answering 404
+// with a recognized JSON-RPC error is exactly how a dual-era client detects that
+// this server is modern and should not fall back.
+func TestMCPInitializeIsNotFound(t *testing.T) {
+	url := mcpServerURL(t, newHarness(t).proxy(t))
+	resp, reply := postOK(t, url, 1, "initialize", nil)
 	if resp.StatusCode != http.StatusNotFound {
-		t.Fatalf("unknown session should be 404, got %d", resp.StatusCode)
+		t.Fatalf("initialize should be 404, got %d", resp.StatusCode)
 	}
-}
-
-// TestMCPSessionRoundTrip confirms a session id issued by initialize is accepted
-// on a later request.
-func TestMCPSessionRoundTrip(t *testing.T) {
-	url := mcpServerURL(t, newHarness(t).proxy(t))
-	resp, _ := post(t, url, nil, map[string]any{"jsonrpc": "2.0", "id": 1, "method": "initialize",
-		"params": map[string]any{"protocolVersion": mcpProtocolVersion}})
-	sid := resp.Header.Get(hdrMCPSessionID)
-	if sid == "" {
-		t.Fatal("no session issued")
-	}
-	resp, reply := post(t, url, map[string]string{hdrMCPSessionID: sid},
-		map[string]any{"jsonrpc": "2.0", "id": 2, "method": "tools/list"})
-	if resp.StatusCode != http.StatusOK || reply.Error != nil {
-		t.Fatalf("issued session should be accepted, got status %d reply %+v", resp.StatusCode, reply)
+	if reply == nil || reply.Error == nil || reply.Error.Code != rpcMethodNotFound {
+		t.Fatalf("want JSON-RPC %d, got %+v", rpcMethodNotFound, reply)
 	}
 }
 
 func TestMCPMethodNotFound(t *testing.T) {
 	url := mcpServerURL(t, newHarness(t).proxy(t))
-	_, reply := post(t, url, nil, map[string]any{"jsonrpc": "2.0", "id": 1, "method": "does/not/exist"})
+	resp, reply := postOK(t, url, 1, "does/not/exist", nil)
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("unknown method should be HTTP 404, got %d", resp.StatusCode)
+	}
 	if reply.Error == nil || reply.Error.Code != rpcMethodNotFound {
 		t.Fatalf("unknown method should be JSON-RPC %d, got %+v", rpcMethodNotFound, reply.Error)
 	}
 }
 
+// TestMCPBase64NameDecoded: a tool name that cannot ride as plain ASCII arrives
+// Base64-encoded, and the server must decode before comparing. Comparing the
+// encoded form would reject a conforming client.
+func TestMCPBase64NameDecoded(t *testing.T) {
+	url := mcpServerURL(t, newHarness(t).proxy(t))
+
+	encoded := b64Prefix + base64.StdEncoding.EncodeToString([]byte(toolTip)) + b64Suffix
+	h := stdHeaders("tools/call", "")
+	h[hdrMCPName] = encoded
+	resp, reply := post(t, url, h, rpcBody(1, "tools/call", map[string]any{"name": toolTip}))
+
+	if resp.StatusCode != http.StatusOK || reply == nil || reply.Error != nil {
+		t.Fatalf("encoded Mcp-Name must be decoded and accepted, got status %d reply %+v", resp.StatusCode, reply)
+	}
+}
+
+// TestMCPResultCarriesProtocolFields: with no handshake, a result is where a
+// client learns the server's identity, and resultType is required on every
+// result.
+func TestMCPResultCarriesProtocolFields(t *testing.T) {
+	url := mcpServerURL(t, newHarness(t).proxy(t))
+	_, reply := postOK(t, url, 1, "tools/list", nil)
+
+	var got struct {
+		ResultType string `json:"resultType"`
+		Meta       struct {
+			ServerInfo struct {
+				Name    string `json:"name"`
+				Version string `json:"version"`
+			} `json:"io.modelcontextprotocol/serverInfo"`
+		} `json:"_meta"`
+	}
+	if err := json.Unmarshal(reply.Result, &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.ResultType != "complete" {
+		t.Fatalf(`resultType = %q, want "complete"`, got.ResultType)
+	}
+	if got.Meta.ServerInfo.Name == "" || got.Meta.ServerInfo.Version == "" {
+		t.Fatalf("result _meta must carry serverInfo, got %+v", got.Meta.ServerInfo)
+	}
+}
+
 func TestMCPNotificationGetsNoBody(t *testing.T) {
 	url := mcpServerURL(t, newHarness(t).proxy(t))
-	resp, reply := post(t, url, nil, map[string]any{"jsonrpc": "2.0", "method": "notifications/initialized"})
+	// A notification carries no id. This revision defines no client-to-server
+	// notifications over Streamable HTTP and states no header rules for one, so it
+	// is acknowledged rather than refused.
+	resp, reply := post(t, url, nil, map[string]any{"jsonrpc": "2.0", "method": "notifications/progress"})
 	if resp.StatusCode != http.StatusAccepted {
 		t.Fatalf("notification should be 202, got %d", resp.StatusCode)
 	}
@@ -317,14 +499,26 @@ func TestMCPBodyLimit(t *testing.T) {
 	}
 }
 
-func TestMCPGetHasNoStream(t *testing.T) {
+// TestMCPGetAndDeleteRejected: 2026-07-28 removed the GET stream endpoint and
+// the DELETE that terminated a session, so the endpoint is POST-only. 405 on
+// both is also how an older client discovers it is talking to a newer server.
+func TestMCPGetAndDeleteRejected(t *testing.T) {
 	url := mcpServerURL(t, newHarness(t).proxy(t))
-	resp, err := http.Get(url)
-	if err != nil {
-		t.Fatalf("GET: %v", err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusMethodNotAllowed {
-		t.Fatalf("GET with no server stream should be 405, got %d", resp.StatusCode)
+
+	for _, method := range []string{http.MethodGet, http.MethodDelete} {
+		t.Run(method, func(t *testing.T) {
+			req, err := http.NewRequest(method, url, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			resp, err := http.DefaultClient.Do(req)
+			if err != nil {
+				t.Fatalf("%s: %v", method, err)
+			}
+			defer resp.Body.Close()
+			if resp.StatusCode != http.StatusMethodNotAllowed {
+				t.Fatalf("%s should be 405, got %d", method, resp.StatusCode)
+			}
+		})
 	}
 }
