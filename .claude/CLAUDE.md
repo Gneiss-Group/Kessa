@@ -12,7 +12,9 @@ Two things worth having in front of you at all times:
   section of `docs/go-standards.md` for which mark to use when.
 - **Validate before the side effect**, and be suspicious of a check that can pass
   without testing anything (optional-when-present, first-occurrence-only,
-  presence-without-type). Both are standing rules that came out of review rounds,
-  not preferences. `docs/go-standards.md` has the detail.
+  presence-without-type, enumerated-inclusion, and a concurrency test whose
+  requests no longer reach the path they race on). Both are standing rules that
+  came out of review rounds, not preferences. `docs/go-standards.md` has the
+  detail.
 
 Before opening a PR, run `bash scripts/ci/gate.sh`. It is the same gate CI runs.

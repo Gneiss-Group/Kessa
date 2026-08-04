@@ -87,6 +87,27 @@ All four run in CI on every pull request, and again before any release.
   that asserts the gate fires *before* the side effect**: see the Tests section.
   When you touch a validation path, assume you have moved a gate until you have
   shown you have not.
+- **A coverage check enumerates its exclusions, never its inclusions.** Any check
+  claiming to cover "every X" must start from the complete tracked set and
+  subtract named exceptions. An inclusion list silently passes anything nobody
+  remembered to enumerate, so the check reports OK while covering less than it
+  claims, which is the failure mode a green build cannot report. Two instances,
+  both found by accident rather than by the check: `perf` appeared in neither
+  hardcoded tier list in [`scripts/license-check.sh`](../scripts/license-check.sh),
+  so nothing checked its licence boundary; and `docker/demo/requests.json` fell
+  outside the extension glob in [`scripts/ci/gate.sh`](../scripts/ci/gate.sh), so
+  nothing checked it carried an SPDX annotation. The licence check now has the
+  right shape: it derives the package set from `go list ./...` and fails on any
+  package in neither tier, so the lists *classify* packages rather than decide
+  which ones get checked.
+
+  The SPDX check in `gate.sh` still has the wrong shape, knowingly. Widening its
+  glob to every tracked file fails the build immediately, because four shell
+  scripts carry no inline header by design and are covered by `REUSE.toml`
+  annotations instead. The real fix is a checker that accepts a header *or* an
+  annotation, which is a language and dependency decision rather than an edit to
+  a glob. It is recorded here so the current shape is read as known debt and not
+  as the standard.
 
 ## Concurrency
 
@@ -114,6 +135,18 @@ All four run in CI on every pull request, and again before any release.
   it" test cannot tell an early gate from a late one, and the late-gate bug
   (R2-01/R3-01/R4-03) is precisely the one this codebase keeps reintroducing.
   `TestEnroll_DuplicateDID_RejectedBeforeSideEffect` is the pattern to copy.
+- **A concurrency regression test is not trusted until it has been observed to
+  fail with its guard removed.** An interleaving test only tests anything if the
+  racing requests still reach the code path they contend over. When an upstream
+  gate starts rejecting them earlier, the test stops exercising the interleaving
+  and keeps passing: it goes vacuous while staying green, so nothing reports it.
+  This happened to the R2-04 concurrency tests when proof of possession became a
+  pre-log gate (R5-06): the racing requests were refused before the append they
+  were written to contend over, and the assertions held for the wrong reason. So
+  run the test against the code with its fix removed, watch it fail, and do it
+  again whenever the path in front of it changes. Say in the pull request that
+  you did. **A concurrency test that has never been mutation-checked is not known
+  to test anything.**
 - **Goldens are frozen, and regenerating one is a deliberate act.** `make
   fixtures` regenerates `testdata/`, and doing so means the frozen export format
   changed: it needs an entry in the format-history record (`CHANGELOG.md`; see
