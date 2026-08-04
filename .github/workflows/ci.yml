@@ -70,7 +70,7 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - name: gate (fmt, SPDX, vet, licence boundary, race tests, demo)
+      - name: gate (fmt, licence, vet, licence boundary, race tests, demo)
         # The shared gate: the same script the two release phases run, so CI and
         # release cannot check different things. See scripts/ci/gate.sh.
         run: scripts/ci/gate.sh

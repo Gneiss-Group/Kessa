@@ -23,7 +23,7 @@ APACHE_PKGS=(
   internal/did internal/signer internal/signer/enclave internal/signerd internal/audit internal/macaroon
   internal/status internal/vc internal/credential internal/chain
   internal/policy internal/export internal/shadow internal/version
-  auditsink cmd/verify cmd/shadow scripts/genfixtures scripts/stories
+  auditsink cmd/verify cmd/shadow scripts/genfixtures scripts/stories scripts/reusecheck
 )
 # Protective tier: anything that issues authority or decides whether a real
 # action may proceed, plus the benchmarks that link it.
