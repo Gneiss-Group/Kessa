@@ -12,7 +12,11 @@ privately, before they are public.
 **Please do not open a public issue for a security vulnerability.**
 
 Report it privately to: **security@gneiss-group.com**
-(or use GitHub's private vulnerability-reporting flow on this repository).
+
+GitHub's private vulnerability-reporting flow is the preferred channel **where
+this repository has it enabled** — check the *Security* tab. If you do not see it
+there, it is not available on this repository yet; use the email address above.
+Do not fall back to a public issue.
 
 Include what you have: the affected component and version/commit, a description,
 and (ideally) a proof of concept or the exact invariant you believe is broken.
@@ -71,3 +75,12 @@ see the in-scope item on secrets above.
 
 We support coordinated disclosure: report privately, allow reasonable time for a
 fix, and we will credit you (if you wish) when it ships.
+
+Findings raised after a public release are published as a **GitHub security
+advisory** once a fixed version is available — not before. The advisory carries
+the detail; the [security review record](docs/security-review.md) links to it, so
+the public register stays complete without handing a working description of the
+flaw to anyone still running an unfixed version.
+
+Findings from pre-release hardening are documented directly in that record
+instead, since no released version ever carried them.
