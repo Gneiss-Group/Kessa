@@ -158,12 +158,40 @@ altogether.
 | R5-04 | Low | Required `clientCapabilities` checked for presence only, so a null satisfied it | Closed |
 | R5-05 | Low | No request `Content-Type` validation, leaving cross-origin forgery defence incidental rather than deliberate | Closed |
 
-**No false-ALLOW path in any of them.** A request still needs a verifiable
-delegation chain and a valid proof of possession before it can become an ALLOW,
-and none of that machinery was involved. What these findings allowed was
-unauthenticated traffic reaching the enforcement path and the audit log at all,
-and audit disclosure under rebinding — a different property from "cannot forge a
-decision", and one this register should not let blur into it.
+These findings touch **two properties that must be stated separately**, because
+"no false-ALLOW" on its own is the more flattering half and would leave the other
+unsaid.
+
+**1. No unauthorized action was allowed.** An ALLOW still requires a proof of
+possession signed by the holder's key and bound to the action and the entry's
+position. None of that machinery was reachable through these findings, so no
+attacker obtained an authorization they did not hold.
+
+**2. An unauthorized party could write to the system of record.** This is the
+distinct property, and for a product whose claim *is* the audit trail it is the
+one that matters. The only gate before an entry is written is chain verification
+— and a delegation chain verifies against **public** DID documents, so it carries
+no secret. It is a bearer artifact: anyone holding a copy can present it. A
+request bearing a copied chain and a worthless proof of possession is *denied*,
+and **that denial is recorded**: a genuine entry, correctly signed, correctly
+hash-chained, which the independent verifier re-derives as PASS.
+
+The verifier is not wrong to pass it. It re-derives what the enforcement point
+saw, and the enforcement point saw a request it had no business accepting. The
+defect is upstream of every guarantee the verifier makes.
+
+Two consequences follow, neither covered by "no false-ALLOW":
+
+- **Record pollution.** Entries an operator did not cause, indistinguishable
+  after the fact from ones they did, in the log that is meant to settle exactly
+  that question.
+- **Denial of correct operation.** Each write advances the tip. A legitimate
+  caller's proof of possession is bound to the position it read, so an attacker
+  writing entries makes honest in-flight requests fail against a position that
+  has moved.
+
+Audit disclosure under rebinding (R5-01) compounds both: the same page that can
+write can also read the export.
 
 R5-01 and R5-05 also applied to the generic HTTP listener, which had not changed.
 They were fixed there too: a defence applied to one of two doors is not a defence.

@@ -55,6 +55,27 @@ func checkIngress(w http.ResponseWriter, r *http.Request, bodyExpected bool) boo
 // (non-browser clients do not send one), and a request whose Origin names
 // anything other than a loopback host is refused.
 //
+// WHY ABSENCE IS TRUSTED HERE, HAVING JUST BEEN REJECTED TWICE ELSEWHERE.
+// This is deliberately the "check only when present" shape that R5-02 and R5-04
+// were filed for, so the difference has to be stated rather than assumed.
+//
+// The difference is who writes the header. Mcp-Method and clientCapabilities are
+// written by the CALLER, so their absence is attacker-controlled and carries no
+// information: omitting one is free, and a check that only runs when the field
+// is there is a check the caller can decline. Origin is written by the BROWSER,
+// and a page cannot suppress it on a cross-origin request. Within this guard's
+// threat model — a web page the operator visits — absence is therefore positive
+// evidence that the caller is not a cross-origin browser request, which is the
+// entire population being excluded.
+//
+// The corollary is the limit: this is sound only because the threat model stops
+// at the browser. Any non-browser client (curl, a local process, a scripted HTTP
+// call) can set or omit Origin at will, so this guard is worth nothing against
+// one — deliberately, since an attacker with local code execution has better
+// targets than the chokepoint's front door. If the model ever widens to "any
+// network client", Origin stops being evidence and the answer is authentication,
+// not a stricter rule here. It is a browser-scoped defence and only that.
+//
 // Deliberately a fixed policy rather than a configurable allowlist. A
 // cross-origin browser caller is not a use case this transport has — the
 // documented deployments are a local sidecar and an in-process host — so an
