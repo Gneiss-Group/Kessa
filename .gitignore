@@ -1,7 +1,3 @@
-# Local, pre-public maintainer checklist (enumerates not-yet-set GitHub settings;
-# deliberately never committed). See its header.
-/GOING-PUBLIC-CHECKLIST.md
-
 # Build output
 /bin/
 
