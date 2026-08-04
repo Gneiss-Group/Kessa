@@ -139,6 +139,31 @@ Comment density in this repository is high and deliberately so. The convention:
 - **Do not comment what the code says.** The bar is: would a reviewer have had to
   reconstruct this reasoning themselves?
 
+## Prose style
+
+Comments, documentation, and commit messages are written to be read, so the same
+discipline applies to the prose as to the code.
+
+**Em dashes (U+2014) are not used anywhere in this repository.** Neither are en
+dashes (U+2013). This is not a preference to weigh case by case; it is a rule, and
+`scripts/ci/gate.sh` fails the build on any occurrence in a tracked file. The only
+exception is `LICENSE` and `LICENSES/`, which are third-party legal text and are
+never edited.
+
+Reach for these instead, whichever the sentence actually wants:
+
+| Situation | Use |
+|---|---|
+| the clause continues the thought | a comma |
+| an explanation, definition, or list follows | a colon |
+| two independent clauses join | a semicolon |
+| an aside interrupts the sentence | parentheses |
+| a range | a plain hyphen (`F1-F10`) or the word "to" |
+
+If none of those fits, the sentence wants rewriting rather than a dash. The rule
+is enforced mechanically because it was stated repeatedly and kept coming back:
+a convention that lives only in someone's memory is a convention that decays.
+
 ## Licence headers
 
 Every Go source file carries an SPDX header naming its tier, per the

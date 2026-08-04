@@ -45,11 +45,12 @@ fi
 echo "OK"
 
 step "no em dashes (house style, enforced not remembered)"
-# House style: em dashes are not used anywhere in this repository. This check
-# exists because the rule was stated repeatedly and kept being broken: a
-# preference that lives only in someone's memory is a preference that decays.
-# Encoding it here makes it survive a new contributor, a new session, and a
-# tired afternoon.
+# House style: em dashes are not used anywhere in this repository. The rule and
+# the replacement marks are in docs/go-standards.md under "Prose style"; this is
+# the enforcement half. It exists because the rule was stated repeatedly and kept
+# being broken: a convention that lives only in someone's memory is a convention
+# that decays. Encoding it here makes it survive a new contributor, a new
+# session, and a tired afternoon.
 #
 # LICENSE and LICENSES/ are third-party legal text and are never edited.
 # The character is built from its code point rather than written literally, so
