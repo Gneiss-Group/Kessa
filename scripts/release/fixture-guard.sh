@@ -47,11 +47,8 @@ V1_GOLDEN="testdata/audit_export.golden.json"
 DIDS="testdata/dids"
 STATUS_URL="https://localhost/orgs/acme/status.json"
 STATUS_FILE="testdata/status/acme_status.json"
-# Where a change to the frozen export format must be recorded. This was the
-# round-2 fixes doc; that file was removed pending a consolidated security-review
-# document. CHANGELOG.md is the interim home — a format change is release-notable
-# by definition. Repoint this to the consolidated security doc once it lands, if
-# that is where the format history should live.
+# Where a change to the frozen export format is recorded, since a format change is
+# release-notable by definition.
 FORMAT_HISTORY="CHANGELOG.md"
 
 fail=0
