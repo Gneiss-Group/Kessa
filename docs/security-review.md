@@ -34,10 +34,30 @@ rounds.
 | **R2** | 2026-07-22 | Second adversarial pass over the same core, plus the export envelope and audit-sink path | Seven findings (R2-01–R2-07), one Critical. All closed before any code was published |
 | **R3** | 2026-07-26 | Scoped P-256 employee key and algorithm-agile verification (`feat/scoped-p256-employee-key`, merged 2026-07-27) | No critical or high. No false-PASS path. Four findings, all closed |
 | **R4** | 2026-08-01 | The whole on-device issuer surface: enrollment, Secure Enclave backend, signing daemon, agent wiring (`feat/issuer-enrollment`, merged 2026-08-01) | No critical or high. No false-PASS path in the verifier. Four findings plus two scope observations, all closed |
+| *(spec alignment)* | 2026-08-03 | Not a review round — see below. Conformance work bringing the MCP listener to revision 2026-07-28 | Surfaced one security-relevant defect (SA-01) as a by-product |
+| **R5** | 2026-08-03 | The ingress surface of both listeners, reviewed because it had just changed | Five findings (R5-01–R5-05), no critical or high. No false-ALLOW path |
 
 **R1 and R2 predate this repository's first commit** (2026-07-23). Their fixes are
 contained in the initial publication, so no released or published version of Kessa
 ever carried them unfixed.
+
+### Why the spec-alignment row is marked differently
+
+SA-01 was **not found by looking for it.** It surfaced while reconciling the MCP
+listener against a published specification — the defect was noticed because the
+spec said a header was required and the code treated it as optional, not because
+anyone was hunting for a bypass.
+
+That is a weaker kind of evidence than a finding from a review round, and the
+distinction is recorded rather than smoothed over, because it bears on how much
+weight this register should carry. A round is a claim that a surface was
+deliberately attacked. A by-product is a claim that one defect was noticed while
+doing something else, which says nothing about what a real attempt would have
+turned up on the same surface.
+
+R5 is the answer to exactly that question: the ingress surface was then reviewed
+properly, on the theory that a defect class found by accident is unlikely to have
+only one instance. It had four more.
 
 The working notes for every round are retained privately and are not published.
 The entries below are drawn from them.
@@ -107,6 +127,46 @@ work — against the round-1 open items.
 | R4-04 | Low | Org root key passed on the command line | Closed |
 | SO-1 | — | Org-DID preflight limited to local files | Closed |
 | SO-2 | — | Enrolled Enclave key not loadable by the daemon | Closed |
+
+### SA-01 — surfaced by spec alignment, not by review (2026-08-03)
+
+| ID | Sev | Area | Status |
+|---|---|---|---|
+| SA-01 | Medium | Mirrored request headers on the MCP listener validated only when present, so a client could omit them and skip the check entirely | Closed |
+
+The listener advertised conformance to MCP revision 2026-07-28 while implementing
+the model that revision replaced. Reconciling the two turned up SA-01: the
+specification makes the mirrored headers required, and the code treated them as
+optional-if-present. The headers exist so an intermediary can route without
+parsing the body, so a skippable check is a route-versus-enforce split.
+
+Recorded separately from the numbered rounds because of how it was found. See
+[Why the spec-alignment row is marked differently](#why-the-spec-alignment-row-is-marked-differently).
+
+### R5 — ingress surface (2026-08-03)
+
+Scoped to ingress because that is what the spec-alignment work had just changed,
+and anchored on SA-01's defect class: **a check that does not fire.** Two findings
+are checks that fired only under some inputs; two are checks that were absent
+altogether.
+
+| ID | Sev | Area | Status |
+|---|---|---|---|
+| R5-01 | Medium | No `Origin` validation on either listener — a DNS-rebinding path to the chokepoint and to the audit export | Closed |
+| R5-02 | Medium | Mirrored header validated only in its first occurrence, so a repeated, contradictory value went unread | Closed |
+| R5-03 | Low | An explicit null JSON-RPC id processed as a request | Closed |
+| R5-04 | Low | Required `clientCapabilities` checked for presence only, so a null satisfied it | Closed |
+| R5-05 | Low | No request `Content-Type` validation, leaving cross-origin forgery defence incidental rather than deliberate | Closed |
+
+**No false-ALLOW path in any of them.** A request still needs a verifiable
+delegation chain and a valid proof of possession before it can become an ALLOW,
+and none of that machinery was involved. What these findings allowed was
+unauthenticated traffic reaching the enforcement path and the audit log at all,
+and audit disclosure under rebinding — a different property from "cannot forge a
+decision", and one this register should not let blur into it.
+
+R5-01 and R5-05 also applied to the generic HTTP listener, which had not changed.
+They were fixed there too: a defence applied to one of two doors is not a defence.
 
 ## Deferred, and why
 
