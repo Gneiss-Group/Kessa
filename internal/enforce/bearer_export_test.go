@@ -16,24 +16,36 @@ package enforce
 // offline against public DID documents with no shared secret and nothing of ours
 // running. Take it away and the central claim of the product goes with it.
 //
-// The consequence: chain verification is the only gate before an audit entry is
-// written (Gate 0, enforce.go). A chain proves ISSUANCE, which is public; it does
+// The consequence, as found: chain verification used to be the only gate before
+// an audit entry was written. A chain proves ISSUANCE, which is public; it does
 // not prove POSSESSION, which is what a private key is for. So anyone holding an
-// export holds enough to make a reachable enforcement endpoint write entries:
-// no key, no browser, no insider access. The entries are denials, and they are
-// genuine: correctly signed, correctly chained, and the verifier re-derives them
-// as PASS, because it is faithfully re-deriving what the enforcement point saw.
+// export held enough to make a reachable enforcement endpoint write entries: no
+// key, no browser, no insider access. Those entries were denials, and they were
+// genuine: correctly signed, correctly chained, and the verifier re-derived them
+// as PASS, because it was faithfully re-deriving what the enforcement point saw.
 //
-// The fix is NOT to stop carrying credentials, and NOT to stop logging denials (a
-// denial is a real decision: R2, and scenario 5 of the demo turns on exactly
-// that). The fix is that the enforcement endpoint needs CALLER AUTHENTICATION,
-// which it does not have; see the README's Known limits and UPCOMING.md. Until it
-// does, an export must be treated as a write credential for the proxy that
-// produced it.
+// R5-06 IS CLOSED AS TO THE ATTACK. Neither obvious fix was available: carrying
+// fewer credentials breaks the offline verifier, and silently dropping a failed
+// proof of possession erases the evidence of the attack. The fix was to move the
+// attribution boundary instead. An unverifiable chain was already refused unlogged
+// as unattributable; an unverifiable possession was recorded as a decision about
+// the holder, when the one thing established was that it was not the holder.
+// Possession is now Gate 1, checked before the append (enforce.go), so a bearer
+// chain is refused with 422 and writes nothing. Refusals are reported to the audit
+// sink as telemetry, on their own budget, so closing the hole did not convert a
+// loud attack into a silent one.
 //
-// If this test ever fails, one of two things changed: the export stopped being
-// self-contained (a verifier regression), or the write gate moved (in which case
-// the Known limits entry needs revisiting). Either is worth a human reading.
+// What did NOT change, and is not meant to: the property in the paragraph above.
+// A chain is still re-derivable from an export by anyone holding it, and a chain
+// still proves issuance rather than possession. That is a STANDING CHARACTERISTIC,
+// not an open finding, and the next thing built on an ingress path has to be
+// designed knowing it. Caller authentication remains open, but on the narrower
+// question of who may submit at all; see UPCOMING.md.
+//
+// If these tests ever fail, one of two things changed: the export stopped being
+// self-contained (a verifier regression), or the attribution gate moved (in which
+// case the README's Known limits entry and the security review record both need
+// revisiting). Either is worth a human reading.
 
 import (
 	"bytes"
@@ -79,10 +91,13 @@ func TestExportIsSufficientToReDeriveTheChain(t *testing.T) {
 	}
 }
 
-// TestBearerChainCanWriteToTheLog states the consequence as an executable fact:
-// the re-derived chain, with a signature the holder never produced, still causes
-// an entry, and advances the tip out from under an honest caller.
-func TestBearerChainCanWriteToTheLog(t *testing.T) {
+// TestBearerChainCannotWriteToTheLog states the closure as an executable fact:
+// the re-derived chain, carrying a signature the holder never produced, is refused
+// before the append. No entry, and the tip does not move out from under the honest
+// caller whose proof was bound to it. Mutation-checked: with Gate 1 removed from
+// enforce.go this test fails (422 becomes 200), which is the only reason to
+// believe it tests anything. Re-check that when the path in front of it changes.
+func TestBearerChainCannotWriteToTheLog(t *testing.T) {
 	h := newHarness(t)
 	px := h.proxy(t)
 	srv := httptest.NewServer(Handler(px))

@@ -85,6 +85,8 @@ wait_ready "$A" "$WORK/proxyA.log"
 wait_ready "$B" "$WORK/proxyB.log"
 note "Org A proxy  (commerce policy, gatekeeper key)  $A"
 note "Org B proxy  (legal policy,    bravo key)       $B"
+note "(8191/8192, not the 8181/8182 defaults, so the demo cannot collide with a"
+note "proxy you already have running)"
 
 # agent helpers. || true: a DENY exits non-zero and must not abort the script.
 agentA() { "$BIN/kessa-agent" attempt --proxy "$A" --chain "$CH" --keystore "$KS" "$@" || true; }
@@ -106,6 +108,8 @@ agentA $(act) --attr amount=100 --approver "$ALICE" --nonce s3b | sed 's/^/   /'
 
 hr "Scenario 5: token loan (a copied blob signed by the wrong key)"
 agentA --as "$ACME" $(act) --attr amount=10 --nonce s5 | sed 's/^/   /'
+note "refused, not denied: no audit entry was written, because the proxy could"
+note "not attribute the request to anyone. Nothing below carries this attempt."
 
 hr "Scenario 6: cross-org + cross-vertical (same \$100 action, two orgs)"
 note "Org A (commerce): consequential → needs approval → without one:"
@@ -127,6 +131,8 @@ curl -sf "$B/export" > "$WORK/export-B.json"
 
 # ---------------------------------------------------------------------------
 hr "Scenario 4: revocation propagation (live, one rewritten static file)"
+note "(out of order on purpose: revoking rewrites the published status list, so"
+note "it runs after the clean exports above have been verified)"
 "$BIN/kessa-issuer" revoke --spec scripts/demo/spec.json --keystore "$KS" \
   --root "$PUBLIC" --index 42 >/dev/null
 note "issuer revoked the acme→worker credential (index 42)"
