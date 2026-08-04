@@ -28,7 +28,7 @@
 // documented non-production path. The hardware side of the seam is no longer
 // hypothetical: internal/signer/enclave holds a macOS Secure Enclave backend
 // whose P-256 key is non-extractable, and it satisfies this interface returning
-// the same DER-encoded signatures ECDSASigner does — which is why nothing above
+// the same DER-encoded signatures ECDSASigner does, which is why nothing above
 // this package changed when it landed. TPM (Linux) and HSM backends do not exist;
 // see UPCOMING.md. What each backend does and does not prove is stated in
 // docs/signer.md.
@@ -228,7 +228,7 @@ func (s *ECDSASigner) DID() types.DID { return s.did }
 // than panicking: a key we cannot verify is a failed verification, never a skip.
 //
 // PROPERTY NOTE (R3-03): the P-256 path does NOT enforce canonical low-S, so
-// ECDSA signatures are malleable — given a valid (r, s), (r, n-s) also verifies.
+// ECDSA signatures are malleable: given a valid (r, s), (r, n-s) also verifies.
 // Ed25519 is non-malleable, so this property is specific to the P-256
 // (employee/device) key path. This is safe TODAY because no Kessa mechanism
 // treats a signature as an identity, a nonce, or a dedup key: PoP and approval

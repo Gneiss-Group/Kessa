@@ -311,7 +311,7 @@ func writeJSON(t *testing.T, path string, v any) {
 }
 
 // TestRefuseRemoteBind pins the fail-closed default. It removes the accidental
-// exposure — an operator who binds a reachable address without meaning to — while
+// exposure (an operator who binds a reachable address without meaning to), while
 // leaving the deliberate one available, because containerized serving requires it
 // (a container's loopback is unreachable through -p).
 func TestRefuseRemoteBind(t *testing.T) {

@@ -21,7 +21,7 @@ reviewer), reach out directly rather than through a pull request.
 The rest of this document describes how the project is built and reviewed, so
 that the ground rules are visible before contributions open.
 
-## Licensing — read this first
+## Licensing: read this first
 
 Kessa uses a **two-tier license model** (see [`LICENSING.md`](LICENSING.md)): the
 independent verifier and its dependency closure, plus the plug-point seams, are
@@ -45,11 +45,11 @@ Two documents state how this repository is written and how work moves through
 it. They describe existing practice rather than new policy, and review points at
 them:
 
-- [**Go standards**](docs/go-standards.md) — formatting, dependencies, package
+- [**Go standards**](docs/go-standards.md): formatting, dependencies, package
   layout, error handling, concurrency, tests, comments, and the rules that exist
   because of what the verifier claims (fail closed; never trust a field you can
   re-derive; the verifier's dependency set is sacred).
-- [**Branching, commits, and releases**](docs/branching.md) — short-lived
+- [**Branching, commits, and releases**](docs/branching.md): short-lived
   branches off `main`, [Conventional Commits](https://www.conventionalcommits.org)
   (which the release pipeline reads to decide the version), semantic versioning,
   and the manual, owner-only release.

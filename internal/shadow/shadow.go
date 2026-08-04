@@ -338,7 +338,7 @@ func WriteJSONLines(w io.Writer, preds []Prediction) error {
 func WriteText(w io.Writer, preds []Prediction, s Summary, skipped []SkippedLine) error {
 	bw := newErrWriter(w)
 
-	bw.printf("\nkessa-shadow — PREDICTIONS ONLY, nothing was enforced\n\n")
+	bw.printf("\nkessa-shadow: PREDICTIONS ONLY, nothing was enforced\n\n")
 	if len(preds) == 0 {
 		bw.printf("  no actions classified\n")
 	}

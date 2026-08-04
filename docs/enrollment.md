@@ -13,7 +13,7 @@ device in a durable mapping so it can later be revoked.
 
 This is the one place a hardware **P-256** key is minted. Every other principal
 (org, proxy, status issuer) stays software **Ed25519**, simply because that is
-what mints them — the verifier remains role-blind and algorithm-agile and is not
+what mints them: the verifier remains role-blind and algorithm-agile and is not
 touched by enrollment. The chain shape enrollment builds toward is:
 
 ```
@@ -21,7 +21,7 @@ org (Ed25519, root)  ──issues──▶  employee (P-256, device key)  ──
 ```
 
 `enroll` builds the first hop (the employee's own credential). The
-`employee → agent` hop is a separate act — the employee issuing to an agent from
+`employee → agent` hop is a separate act: the employee issuing to an agent from
 their own device, signing with the Touch-ID-gated Enclave key. The grant caveats
 written onto the `org → employee` credential deliberately **do not** constrain
 what kind of principal the employee may issue to next: a service/automation
@@ -33,7 +33,7 @@ identity is a valid next hop under the identical credential format.
    through the normal resolver before doing anything else. An employee credential
    whose issuer resolves to nothing is dead on arrival at the verifier, so this
    fails loudly rather than mint it. (It does **not** cover org-root enrollment or
-   key rotation — those are separate, still-open root-of-trust questions.)
+   key rotation: those are separate, still-open root-of-trust questions.)
 2. **Generate the device key.** Secure Enclave (P-256, non-extractable, Biometric
    use-gate) when available; a non-production software P-256 key with
    `--software-key` (CI, demos, dev machines that cannot code-sign). It never
@@ -41,7 +41,7 @@ identity is a valid next hop under the identical credential format.
    an entitlement, enrollment fails with instructions rather than quietly minting
    a software key.
 3. **Trust-on-first-use confirmation.** Displays the key fingerprint and, unless
-   `--yes`, requires the operator to confirm it — the same ceremony `ssh` uses for
+   `--yes`, requires the operator to confirm it: the same ceremony `ssh` uses for
    a new host key. No secret crosses between two parties. This is the pluggable
    [enrollment backend](#enrollment-backends) seam; the default is `local-tofu`.
 4. **Publish the device DID document** (public key only) into the publication root.
@@ -92,7 +92,7 @@ It is WebAuthn-shaped: one durable employee **identity** owns N device
 **credentials**, each with its own DID and its own status bit. A DID is unique
 across the whole map, so:
 
-- **Adding a device** (multi-device, or replacing a lost one) — enroll again with
+- **Adding a device** (multi-device, or replacing a lost one): enroll again with
   the same `--identity` and a **new** `--did`; it appends, no collision.
 - **A duplicate `--did`** is refused as the real error it is.
 
@@ -107,7 +107,7 @@ Symmetric with initial enrollment, with no new mechanism:
 ## Enrollment backends
 
 Enrollment is a pluggable seam (`internal/enroll.Backend`). The default,
-`local-tofu`, is self-administered trust-on-first-use — honest and sufficient
+`local-tofu`, is self-administered trust-on-first-use: honest and sufficient
 wherever there is no organizational gap between "admin" and "employee" (solo,
 home lab, small team). A stronger backend that binds enrollment to a live
 corporate IdP session (Okta/Azure AD) satisfies the same interface and drops in
@@ -123,7 +123,7 @@ entitlement, `enroll` generates a **persistent** Enclave key under a keychain ta
 (`--tag`, default derived from the DID) and records the tag + `keyBackend:
 "secure-enclave"` in the mapping. The [signing daemon](daemon.md) then loads that
 key by tag with `--mapping`, brokering it as an **approval-capable** key across
-restarts — the generate-once / load-by-tag property that makes the device identity
+restarts: the generate-once / load-by-tag property that makes the device identity
 durable. The daemon refuses to broker a software-enrolled key for that role, so
 the human-approval control is only ever backed by hardware (R4-02). The
 signing-identity setup and the signed persistence tests are covered in the

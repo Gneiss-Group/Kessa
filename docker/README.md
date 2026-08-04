@@ -14,7 +14,7 @@ Three images, split along the licence boundary, each built `FROM` source into
 | `kessa-proxy` | `kessa-proxy` (enforcement) | AGPL-3.0-only | [`proxy.Dockerfile`](proxy.Dockerfile) |
 | `kessa-issuer` | `kessa-issuer` (issue/publish/enroll/daemon) | AGPL-3.0-only | [`issuer.Dockerfile`](issuer.Dockerfile) |
 
-The verifier image is licence-tier pure on purpose — it contains **only** the
+The verifier image is licence-tier pure on purpose, it contains **only** the
 Apache verifier, so an evaluator can run it without touching copyleft code.
 
 ## Scope: this is the software path
@@ -29,7 +29,7 @@ Enclave; TPM is [upcoming](../UPCOMING.md)) runs on the host, not in a container
 ## The end-to-end demo
 
 [`demo.sh`](demo.sh) builds all three images and composes them over one shared
-volume — the containerized version of `make demo`:
+volume: the containerized version of `make demo`:
 
 ```sh
 docker/demo.sh
@@ -40,7 +40,7 @@ docker/demo.sh
 2. **proxy** enforces a batch of action requests ([`demo/requests.json`](demo/requests.json))
    against `/pub` and writes a signed audit export.
 3. **verifier** (the Apache image, on its own) re-derives every verdict from the
-   files in `/pub` alone — the whole point: trust nothing that is running.
+   files in `/pub` alone: the whole point: trust nothing that is running.
 
 Expect two allows verified and two denies with intact evidence. The demo runs its
 containers as root for shared-volume writability; the **published images default
@@ -49,15 +49,15 @@ to nonroot** (uid 65532).
 ## Running an image directly
 
 ```sh
-# Verifier (Apache) — offline, against mounted files.
+# Verifier (Apache): offline, against mounted files.
 docker run --rm -v "$PWD:/data:ro" kessa verify \
   --export /data/export.json --dids /data/public --status "URL=/data/status.json"
 
-# Issuer (AGPL) — publish a chain's public artifacts into a mounted directory.
+# Issuer (AGPL): publish a chain's public artifacts into a mounted directory.
 docker run --rm -v "$PWD/out:/pub" -v "$PWD/scripts/demo:/in:ro" kessa-issuer \
   publish --spec /in/spec.json --keystore /in/keystore.json --root /pub --out /pub/chain.json
 
-# Proxy (AGPL) — the sidecar; two listeners by default (8181 HTTP, 8182 MCP).
+# Proxy (AGPL): the sidecar; two listeners by default (8181 HTTP, 8182 MCP).
 docker run --rm -p 8181:8181 -p 8182:8182 kessa-proxy serve --help
 ```
 

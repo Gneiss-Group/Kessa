@@ -3,12 +3,12 @@
 # SPDX-FileCopyrightText: 2026 Gneiss Group Inc.
 # SPDX-License-Identifier: Apache-2.0
 #
-# secret-scan.sh — scan the tree for committed credentials.
+# secret-scan.sh: scan the tree for committed credentials.
 #
 # This is the portable half of Kessa's secret-scanning posture. It depends only
 # on the Go toolchain (already required to build Kessa) and the version-controlled
 # .gitleaks.toml, so it runs identically in GitHub Actions and in the Codeberg
-# mirror's CI — neither of which can rely on the other forge's built-in scanner.
+# mirror's CI, neither of which can rely on the other forge's built-in scanner.
 # The forge-native scanners (GitHub secret scanning, configured in
 # .github/secret_scanning.yml) are a second layer on top of this one, not a
 # substitute for it.
@@ -58,7 +58,7 @@ trap 'rm -f "$report"' EXIT
 echo "secret-scan: scanning the working tree with .gitleaks.toml"
 # --redact keeps any hit out of the CI log (these are demo values, but printing a
 # matched "secret" into a public build log is a habit worth never forming).
-# `dir` scans the tree as it stands — the state a merge would produce — rather
+# `dir` scans the tree as it stands (the state a merge would produce) rather
 # than walking history, which keeps the gate deterministic and clone-depth
 # independent. A one-time full-history sweep (`gitleaks git`) is worth running
 # before the repository is first made public.
@@ -68,7 +68,7 @@ if "$GL" dir . \
   --no-banner \
   --report-format json \
   --report-path "$report"; then
-  echo "secret-scan: OK — no non-allowlisted secrets"
+  echo "secret-scan: OK: no non-allowlisted secrets"
   exit 0
 fi
 

@@ -84,7 +84,7 @@ each backend does and does not prove is stated bluntly in
 
 **Prerequisites:** Go **1.26 or newer** (the version in [`go.mod`](go.mod); an
 older toolchain will try to download 1.26 and fail if it cannot), plus `make` and
-`bash`. There is nothing else to install — Kessa has no third-party Go
+`bash`. There is nothing else to install: Kessa has no third-party Go
 dependencies, so `make demo` builds and runs with the network off. The
 [container images](#container-images) additionally need a running Docker daemon,
 and the provenance check needs the [GitHub CLI](https://cli.github.com).
@@ -127,21 +127,21 @@ published to GHCR. All are multi-arch (linux/amd64 + arm64), built `FROM`
 distroless/static as a nonroot user, and signed with build provenance.
 
 ```sh
-# The independent verifier (Apache-2.0) — offline, runs against mounted files.
+# The independent verifier (Apache-2.0): offline, runs against mounted files.
 docker run --rm -v "$PWD:/data:ro" ghcr.io/gneiss-group/kessa:latest \
   verify --export /data/export.json --dids /data/public
 
-# The enforcement proxy (AGPL-3.0-only) — the sidecar. By default it serves two
+# The enforcement proxy (AGPL-3.0-only): the sidecar. By default it serves two
 # listeners into one enforcement engine: generic HTTP (8181) and MCP-native
 # Streamable HTTP (8182). Close either with an empty address (e.g. --mcp-addr "").
 docker run --rm -p 8181:8181 -p 8182:8182 ghcr.io/gneiss-group/kessa-proxy:latest serve --help
 
 # Serving from a container binds a non-loopback address, which is refused unless you
-# say so: the listeners have no caller authentication. The flag adds none — it
+# say so: the listeners have no caller authentication. The flag adds none, it
 # records that you accepted its absence.
 #   ... serve --http-addr 0.0.0.0:8181 --allow-unauthenticated-remote
 
-# The issuer (AGPL-3.0-only) — mint/publish/enroll/daemon. Publishes a chain's
+# The issuer (AGPL-3.0-only): mint/publish/enroll/daemon. Publishes a chain's
 # public artifacts into a mounted directory (software-key path; see docker/README).
 docker run --rm -v "$PWD/out:/pub" -v "$PWD/scripts/demo:/in:ro" \
   ghcr.io/gneiss-group/kessa-issuer:latest \
@@ -228,8 +228,8 @@ Works](docs/how-it-works.md#what-a-clean-verdict-actually-proves).
 - **The log records only *attributable* decisions**, and that is a deliberate
   property rather than an accident of implementation. An entry exists only for a
   request whose proof of possession verified, so every entry is bound to a
-  principal who demonstrably held the key. A request nobody can be tied to — a
-  chain that does not verify, or a possession proof that does not — produces no
+  principal who demonstrably held the key. A request nobody can be tied to: a
+  chain that does not verify, or a possession proof that does not: produces no
   decision and no entry; it is refused, and reported to the audit sink as
   telemetry instead.
 
@@ -240,7 +240,7 @@ Works](docs/how-it-works.md#what-a-clean-verdict-actually-proves).
 
   **A standing characteristic, which the fix does not change and is not meant to:**
   an export carries each credential with its issuer proof, so **anyone holding one
-  can re-derive a delegation chain that verifies.** That is deliberate — it is what
+  can re-derive a delegation chain that verifies.** That is deliberate, it is what
   lets the verifier re-check a chain offline against public keys with no shared
   secret, and it is the product's central claim. A chain proves *issuance*, which
   is public; it never proved *possession*. Design anything that consumes a chain
@@ -248,7 +248,7 @@ Works](docs/how-it-works.md#what-a-clean-verdict-actually-proves).
   than it does.
 
   What this does **not** close: the endpoint still has no caller authentication, so
-  anyone who can reach it may *submit* — they simply cannot make it record
+  anyone who can reach it may *submit*, they simply cannot make it record
   anything. Non-loopback binds are refused unless you pass
   `--allow-unauthenticated-remote`. See [`UPCOMING.md`](UPCOMING.md).
 

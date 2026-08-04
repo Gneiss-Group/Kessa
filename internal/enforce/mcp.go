@@ -29,7 +29,7 @@ import (
 //
 // Why the isolation matters operationally: the MCP spec is under fast revision
 // (new routing headers, reworked session semantics), so the real risk here is
-// spec-drift, not dependency risk (there is no dependency — stdlib only). Keeping
+// spec-drift, not dependency risk (there is no dependency: stdlib only). Keeping
 // the whole MCP surface in one file behind a stable internal call means "update
 // fast when MCP changes" is a bounded edit to this file, never a change to core
 // enforcement.
@@ -71,7 +71,7 @@ const (
 
 	// Request-metadata headers. All are REQUIRED on a request POST; Mcp-Name only
 	// on a request that names a tool. They mirror body fields so intermediaries
-	// can route without parsing the body — which is exactly why a header that
+	// can route without parsing the body, which is exactly why a header that
 	// disagrees with the body is refused rather than ignored.
 	hdrMCPProtocolVersion = "MCP-Protocol-Version"
 	hdrMCPMethod          = "Mcp-Method"
@@ -179,7 +179,7 @@ type toolResult struct {
 }
 
 // mcpServer holds no state of its own. The protocol is stateless by
-// specification — nothing may be inferred from a previous request — and the
+// specification (nothing may be inferred from a previous request), and the
 // enforcement state lives entirely in px, so there is nothing here to guard.
 type mcpServer struct {
 	px *Proxy
@@ -259,7 +259,7 @@ func (s *mcpServer) handlePost(w http.ResponseWriter, r *http.Request) {
 
 	// An explicit null id is neither a request nor a notification. The spec says
 	// the id MUST NOT be null, and testing only for an ABSENT id would let null
-	// through as a request — a third state the rest of this file does not model.
+	// through as a request: a third state the rest of this file does not model.
 	if bytes.Equal(bytes.TrimSpace(req.ID), []byte("null")) {
 		writeRPCErrorStatus(w, nil, http.StatusBadRequest, rpcInvalidRequest, `"id" must not be null`)
 		return
@@ -314,7 +314,7 @@ func (s *mcpServer) validateRequestMetadata(w http.ResponseWriter, r *http.Reque
 
 	// protocolVersion and clientCapabilities are required on every request; a
 	// request missing either is malformed, which is -32602 with a 400, NOT a
-	// header mismatch — the headers may be perfectly consistent with a body that
+	// header mismatch: the headers may be perfectly consistent with a body that
 	// is simply incomplete.
 	bodyVersion, ok := metaString(pe.Meta, metaProtocolVersion)
 	if !ok {
@@ -324,7 +324,7 @@ func (s *mcpServer) validateRequestMetadata(w http.ResponseWriter, r *http.Reque
 	}
 	// clientCapabilities must be an OBJECT, not merely present. Checking presence
 	// alone accepts a JSON null, which satisfies the letter of "required field"
-	// while supplying nothing — the same shape as a check that fires only when a
+	// while supplying nothing: the same shape as a check that fires only when a
 	// field happens to be there.
 	if !metaIsObject(pe.Meta, metaClientCapabilities) {
 		writeRPCErrorStatus(w, req.ID, http.StatusBadRequest, rpcInvalidParams,
@@ -415,7 +415,7 @@ func (s *mcpServer) dispatch(w http.ResponseWriter, r *http.Request, req rpcRequ
 		// An unimplemented method is 404 with -32601, not a 200 carrying an error.
 		// The status is load-bearing: it is how a client distinguishes a modern
 		// server that does not implement a method from a legacy server that does
-		// not host this endpoint at all. "initialize" lands here by design — this
+		// not host this endpoint at all. "initialize" lands here by design: this
 		// revision has no handshake.
 		writeRPCErrorStatus(w, req.ID, http.StatusNotFound, rpcMethodNotFound, "unknown method: "+req.Method)
 	}
@@ -430,7 +430,7 @@ func (s *mcpServer) handleToolsCall(w http.ResponseWriter, r *http.Request, req 
 
 	// Mcp-Name is required on a request that names a tool, and must name the tool
 	// the body's params do. It may arrive Base64-encoded, and MUST be decoded
-	// before the comparison — comparing the encoded form would reject a
+	// before the comparison: comparing the encoded form would reject a
 	// conforming client.
 	h, ok := requireSingleHeader(w, r, req.ID, hdrMCPName)
 	if !ok {
@@ -463,7 +463,7 @@ func (s *mcpServer) handleToolsCall(w http.ResponseWriter, r *http.Request, req 
 		if err != nil {
 			// An unattributable request never became an audit entry (Handle's
 			// contract). It is not a decision, so it is surfaced as a tool-level
-			// error the MCP host sees in-band — the same meaning the HTTP listener
+			// error the MCP host sees in-band: the same meaning the HTTP listener
 			// conveys with 422, without importing HTTP status onto this surface.
 			// A plain DENY is NOT this: a deny is a real decision and comes back
 			// below with isError:false.
@@ -523,7 +523,7 @@ func writeToolError(w http.ResponseWriter, id json.RawMessage, msg string) {
 }
 
 // writeRPCResult writes a successful reply. Every result carries a resultType
-// ("complete" — this adapter never needs a client round-trip, so it has no
+// ("complete": this adapter never needs a client round-trip, so it has no
 // "input_required" case) and the server's identity in _meta, which is how a
 // stateless client learns who answered without an initialize handshake.
 func writeRPCResult(w http.ResponseWriter, id json.RawMessage, result any) {
@@ -556,7 +556,7 @@ func resultObject(result any) (map[string]any, error) {
 }
 
 // writeRPCError writes a JSON-RPC error on a 200. This is for errors that are
-// about the CALL rather than the protocol envelope — an unknown tool, or
+// about the CALL rather than the protocol envelope: an unknown tool, or
 // arguments that will not parse. Envelope faults use writeRPCErrorStatus, since
 // the spec makes their HTTP status part of the contract.
 func writeRPCError(w http.ResponseWriter, id json.RawMessage, code int, msg string) {
@@ -577,7 +577,7 @@ func writeRPCErrorData(w http.ResponseWriter, id json.RawMessage, status, code i
 }
 
 // writeHeaderMismatch refuses a request whose mirrored headers are missing or
-// disagree with the body: HTTP 400 with -32020. Both halves matter — an
+// disagree with the body: HTTP 400 with -32020. Both halves matter: an
 // intermediary may act on the status without parsing the body.
 func writeHeaderMismatch(w http.ResponseWriter, id json.RawMessage, msg string) {
 	writeRPCErrorStatus(w, id, http.StatusBadRequest, rpcHeaderMismatch, "header mismatch: "+msg)

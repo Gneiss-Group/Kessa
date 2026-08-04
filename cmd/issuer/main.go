@@ -176,7 +176,7 @@ func cmdRevoke(args []string, stdout, stderr io.Writer) int {
 		verb = "un-revoked"
 	}
 	fmt.Fprintf(stdout, "%s index %d; re-signed and republished %s\n", verb, *index, path)
-	fmt.Fprintf(stdout, "propagation is your static host's cache policy — nothing calls home\n")
+	fmt.Fprintf(stdout, "propagation is your static host's cache policy: nothing calls home\n")
 	return exitOK
 }
 

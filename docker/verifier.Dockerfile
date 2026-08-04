@@ -3,11 +3,11 @@
 #
 # Container image for the independent verifier (`kessa`), the Apache-2.0 tier.
 #
-# Builds from source, so the binary in the image is provably this repository's —
+# Builds from source, so the binary in the image is provably this repository's:
 # no "trust a prebuilt binary" step. The build stage cross-compiles (Go needs no
 # emulation to target another arch), so a single amd64 runner produces both
 # linux/amd64 and linux/arm64 with no QEMU. The final stage is distroless/static
-# (nonroot): CA certificates, a nonroot user, and tzdata, and nothing else — no
+# (nonroot): CA certificates, a nonroot user, and tzdata, and nothing else: no
 # shell, no package manager. Bases are pinned by digest and bumped by Dependabot,
 # the same discipline as the pinned Actions.
 #

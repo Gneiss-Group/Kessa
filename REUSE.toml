@@ -13,6 +13,7 @@ path = [
   "PLUGIN_LICENSING.md",
   "CLA.md",
   "UPCOMING.md",
+  "CLAUDE.md",
   "Makefile",
   ".gitignore",
   "go.mod",

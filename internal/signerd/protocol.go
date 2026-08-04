@@ -7,7 +7,7 @@
 // and brokers Sign/Public over a local Unix domain socket; a client (Signer)
 // dials that socket and satisfies signer.Signer itself, so a process like
 // cmd/agent gets its key from the daemon without the private key ever crossing
-// the socket. The key material stays wherever the held signer keeps it — in
+// the socket. The key material stays wherever the held signer keeps it: in
 // process memory for a software signer, or inside the Secure Enclave for an
 // enclave signer, which the daemon holds without ever seeing the private key.
 //

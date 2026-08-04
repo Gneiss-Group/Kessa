@@ -285,7 +285,7 @@ func TestScenario5_TokenLoan(t *testing.T) {
 	stranger := types.DID("did:web:localhost:agents:stranger")
 	seeds[stranger] = 0x77
 	res, err := w.attempt(t, stranger, "", act("10"), "s5")
-	// The token loan is REFUSED, not denied — and that is the stronger outcome.
+	// The token loan is REFUSED, not denied, and that is the stronger outcome.
 	// A denial is a judgement about someone we identified; this request could not
 	// be attributed to anyone, so it produces no decision and no audit entry. The
 	// copied blob never enters the record (R5-06).
@@ -400,7 +400,7 @@ func (w *world) verifyClean(t *testing.T) {
 	}
 	if !res.Pass() {
 		for _, e := range res.Entries {
-			t.Logf("  entry %d: %s — %s", e.Seq, e.Outcome, e.Reason)
+			t.Logf("  entry %d: %s: %s", e.Seq, e.Outcome, e.Reason)
 		}
 		t.Fatal("the agent's export must verify clean")
 	}

@@ -19,7 +19,7 @@ import (
 // The MCP-native listener is a thin adapter over the same Proxy.Handle the HTTP
 // listener uses. These tests drive it with genuinely-verifiable requests (via the
 // shared harness in enforce_test.go), so an allow here is the same allow the
-// independent verifier accepts — proving the adapter adds a transport, not a
+// independent verifier accepts: proving the adapter adds a transport, not a
 // second, weaker enforcement path.
 
 // mcpResp is the decoded JSON-RPC reply the client reads back.
@@ -210,7 +210,7 @@ func TestMCPEnforceEnvelope(t *testing.T) {
 }
 
 // TestMCPDenyIsNotToolError confirms a real DENY comes back as a decision
-// (isError:false), not a tool failure — only unattributable requests are errors.
+// (isError:false), not a tool failure: only unattributable requests are errors.
 func TestMCPDenyIsNotToolError(t *testing.T) {
 	h := newHarness(t)
 	url := mcpServerURL(t, h.proxy(t))
@@ -329,7 +329,7 @@ func TestMCPRequiredHeadersAreRequired(t *testing.T) {
 
 // TestMCPRequiredMetaFields: protocolVersion and clientCapabilities ride every
 // request. A body missing one is malformed (-32602), which is deliberately NOT a
-// header mismatch — the headers may be perfectly consistent with an incomplete
+// header mismatch: the headers may be perfectly consistent with an incomplete
 // body, and saying "header mismatch" would send a client looking in the wrong
 // place.
 func TestMCPRequiredMetaFields(t *testing.T) {
@@ -403,7 +403,7 @@ func TestMCPSessionHeaderIgnored(t *testing.T) {
 }
 
 // TestMCPInitializeIsNotFound: there is no handshake in this revision, so the
-// legacy initialize call is simply an unimplemented method — and answering 404
+// legacy initialize call is simply an unimplemented method, and answering 404
 // with a recognized JSON-RPC error is exactly how a dual-era client detects that
 // this server is modern and should not fall back.
 func TestMCPInitializeIsNotFound(t *testing.T) {

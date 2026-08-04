@@ -60,7 +60,7 @@ func TestIngress_FlagSurfaceIsExactlyAsExpected(t *testing.T) {
 	want := append([]string(nil), wantFlags...)
 	sort.Strings(want)
 	if strings.Join(got, ",") != strings.Join(want, ",") {
-		t.Fatalf("flag surface changed.\n got: %v\nwant: %v\n\nIf this is intentional, update wantFlags — "+
+		t.Fatalf("flag surface changed.\n got: %v\nwant: %v\n\nIf this is intentional, update wantFlags: "+
 			"and satisfy yourself the new flag cannot influence which policy a verdict is derived from.\nusage:\n%s",
 			got, want, usage)
 	}
@@ -85,7 +85,7 @@ func TestIngress_NoPolicyOverrideFlagIsAccepted(t *testing.T) {
 		code, out, errb := invoke(t, "verify", "--export", v2Golden, "--dids", didsRoot,
 			"--status", statusArg(), f, "/nonexistent/policy.json")
 		if code != exitUsage {
-			t.Fatalf("%s: exit=%d, want %d — the flag appears to be ACCEPTED\nstdout:\n%s\nstderr:\n%s",
+			t.Fatalf("%s: exit=%d, want %d: the flag appears to be ACCEPTED\nstdout:\n%s\nstderr:\n%s",
 				f, code, exitUsage, out, errb)
 		}
 		if !strings.Contains(errb, "flag provided but not defined") {

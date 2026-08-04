@@ -86,7 +86,7 @@ func Handler(px *Proxy) http.Handler {
 
 	// The read endpoints are guarded too, and /export especially. CORS stops a
 	// foreign page READING an ordinary cross-origin response, but under DNS
-	// rebinding the page is same-origin and reads it fine — and this response is
+	// rebinding the page is same-origin and reads it fine, and this response is
 	// the entire signed audit history.
 	mux.HandleFunc("GET /export", func(w http.ResponseWriter, r *http.Request) {
 		if !checkIngress(w, r, false) {

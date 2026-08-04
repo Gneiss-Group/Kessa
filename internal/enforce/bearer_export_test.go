@@ -11,7 +11,7 @@ package enforce
 // the second one is the surprising half.
 //
 // The property: a v2 export carries each credential AND its issuer proof, so the
-// delegation chain can be re-derived from the export alone. That is not a leak —
+// delegation chain can be re-derived from the export alone. That is not a leak,
 // it is the point. It is what lets the independent verifier re-check a chain
 // offline against public DID documents with no shared secret and nothing of ours
 // running. Take it away and the central claim of the product goes with it.
@@ -19,13 +19,13 @@ package enforce
 // The consequence: chain verification is the only gate before an audit entry is
 // written (Gate 0, enforce.go). A chain proves ISSUANCE, which is public; it does
 // not prove POSSESSION, which is what a private key is for. So anyone holding an
-// export holds enough to make a reachable enforcement endpoint write entries —
+// export holds enough to make a reachable enforcement endpoint write entries:
 // no key, no browser, no insider access. The entries are denials, and they are
 // genuine: correctly signed, correctly chained, and the verifier re-derives them
 // as PASS, because it is faithfully re-deriving what the enforcement point saw.
 //
 // The fix is NOT to stop carrying credentials, and NOT to stop logging denials (a
-// denial is a real decision — R2, and scenario 5 of the demo turns on exactly
+// denial is a real decision: R2, and scenario 5 of the demo turns on exactly
 // that). The fix is that the enforcement endpoint needs CALLER AUTHENTICATION,
 // which it does not have; see the README's Known limits and UPCOMING.md. Until it
 // does, an export must be treated as a write credential for the proxy that
@@ -75,13 +75,13 @@ func TestExportIsSufficientToReDeriveTheChain(t *testing.T) {
 
 	// Self-containment: this is the property the verifier depends on.
 	if err := rebuilt.Verify(h.resolver); err != nil {
-		t.Fatalf("export is not self-contained — the verifier's offline guarantee is broken: %v", err)
+		t.Fatalf("export is not self-contained: the verifier's offline guarantee is broken: %v", err)
 	}
 }
 
 // TestBearerChainCanWriteToTheLog states the consequence as an executable fact:
 // the re-derived chain, with a signature the holder never produced, still causes
-// an entry — and advances the tip out from under an honest caller.
+// an entry, and advances the tip out from under an honest caller.
 func TestBearerChainCanWriteToTheLog(t *testing.T) {
 	h := newHarness(t)
 	px := h.proxy(t)
@@ -104,7 +104,7 @@ func TestBearerChainCanWriteToTheLog(t *testing.T) {
 	honestAction := action("10")
 	honestPoP := h.pop(t, honestTip, honestAction, "honest-inflight")
 
-	// The bearer submits over plain HTTP. No browser, so no Origin — which the
+	// The bearer submits over plain HTTP. No browser, so no Origin, which the
 	// ingress guard correctly treats as a non-browser client. The PoP is worthless.
 	bad := h.pop(t, honestTip, a, "bearer")
 	bad.Signature = append([]byte(nil), bad.Signature...)
@@ -125,8 +125,8 @@ func TestBearerChainCanWriteToTheLog(t *testing.T) {
 	}
 	defer resp.Body.Close()
 
-	// R5-06 CLOSED. Possession is an attribution gate now, so the bearer chain —
-	// which proves issuance but not possession — is refused before anything is
+	// R5-06 CLOSED. Possession is an attribution gate now, so the bearer chain,
+	// which proves issuance but not possession, is refused before anything is
 	// appended.
 	if resp.StatusCode != http.StatusUnprocessableEntity {
 		t.Fatalf("bearer write should be refused as unattributable (422), got %d", resp.StatusCode)
@@ -172,12 +172,12 @@ func rebuildChain(t *testing.T, e export.Export, entry int) *chain.Chain {
 // is the difference between "your auditor can pollute your log" and "anyone can".
 //
 // A proxy resolves DIDs with did.FileResolver over its --dids directory and has
-// NO network resolution — there is no --fetch-dids on the proxy, unlike the
+// NO network resolution, there is no --fetch-dids on the proxy, unlike the
 // verifier. So a chain is only usable against a proxy whose trust root can
 // resolve EVERY hop of it. That confines an export to:
 //
 //  1. the deployment that issued it (which necessarily resolves its own DIDs), and
-//  2. any proxy deliberately configured to trust that org — which is the cross-org
+//  2. any proxy deliberately configured to trust that org, which is the cross-org
 //     feature working as designed (demo scenario 6), not a leak.
 //
 // It does NOT reach an arbitrary third party. If the proxy ever gains network DID

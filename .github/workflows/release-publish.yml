@@ -1,19 +1,19 @@
 # SPDX-FileCopyrightText: 2026 Gneiss Group Inc.
 # SPDX-License-Identifier: Apache-2.0
 #
-# Release, phase 2 of 2 — PUBLISH.
+# Release, phase 2 of 2: PUBLISH.
 #
 # Fires when a release PR (prepared by release.yml) is squash-merged to main. It
 # tags the merged commit, cross-compiles and signs the artifacts, and publishes
-# the GitHub release — all off the commit that is actually on main, so the commit
+# the GitHub release: all off the commit that is actually on main, so the commit
 # each binary stamps into its `--version` is the real released commit.
 #
 # How it knows a push is a release, without a bypass, a label, or a bot pushing a
 # tag: the release commit's subject is `build(release): vX.Y.Z` (release.yml sets
 # it, and pre-fills the PR title with it so the squash-merge carries it onto
 # main). Phase 2 reads that subject, confirms the version matches the source
-# constant, and confirms no such tag exists yet. An ordinary push to main — a
-# normal merge, a docs fix — has neither the subject nor a missing tag, so this
+# constant, and confirms no such tag exists yet. An ordinary push to main: a
+# normal merge, a docs fix, has neither the subject nor a missing tag, so this
 # is a no-op on everything except an actual release merge. `workflow_dispatch`
 # with an explicit version is the manual recovery path if the marker was edited
 # off the squash commit.
@@ -29,7 +29,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Publish this version (X.Y.Z) manually — recovery path if the release commit's marker was lost"
+        description: "Publish this version (X.Y.Z) manually: recovery path if the release commit's marker was lost"
         type: string
         required: true
 
@@ -82,13 +82,13 @@ jobs:
           # The marker/input is only a trigger; the source constant is the truth.
           constant="$(bash scripts/release/version.sh)"
           if [ "$version" != "$constant" ]; then
-            echo "::error::version mismatch — commit/input says $version but the source constant is $constant. Refusing to publish."
+            echo "::error::version mismatch: commit/input says $version but the source constant is $constant. Refusing to publish."
             echo "publish=false" >>"$GITHUB_OUTPUT"
             exit 1
           fi
 
           if git rev-parse -q --verify "refs/tags/v$version" >/dev/null; then
-            echo "tag v$version already exists — already published, nothing to do."
+            echo "tag v$version already exists: already published, nothing to do."
             echo "publish=false" >>"$GITHUB_OUTPUT"
             exit 0
           fi

@@ -20,7 +20,7 @@ import (
 )
 
 // backend names recorded in the mapping and shown at enrollment. Exported aliases
-// (BackendSecureEnclave/BackendSoftware) let external callers — the daemon — branch
+// (BackendSecureEnclave/BackendSoftware) let external callers (the daemon) branch
 // on Credential.KeyBackend without hardcoding the string.
 const (
 	backendSecureEnclave = "secure-enclave"
@@ -63,7 +63,7 @@ type KeyInfo struct {
 //
 // It prefers a real secure element when one is present and not overridden. The
 // key it mints there is the human/employee ISSUANCE-and-approval key, so it is
-// generated under the Biometric use-gate (a fresh gesture per signature) — the
+// generated under the Biometric use-gate (a fresh gesture per signature): the
 // deliberate-act convention decided for the human key, distinct from the agent's
 // device-unlock PoP key. Non-extractability holds regardless of that gate.
 //
@@ -148,8 +148,8 @@ func cleanupDeviceKey(sg signer.Signer, info KeyInfo) {
 }
 
 // Fingerprint is the stable identifier an operator confirms at trust-on-first-use.
-// It is SHA-256 over the key's canonical JWK JSON — the same self-describing
-// encoding the credential binds and the DID document publishes — so the value an
+// It is SHA-256 over the key's canonical JWK JSON: the same self-describing
+// encoding the credential binds and the DID document publishes, so the value an
 // operator sees at enrollment is reproducible from the published DID document
 // alone, and an Ed25519 and a P-256 key can never collide. Rendered "SHA256:<b64url>"
 // to match the shape ssh prints for a host key.

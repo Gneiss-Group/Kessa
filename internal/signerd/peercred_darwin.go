@@ -28,7 +28,7 @@ const (
 )
 
 // peerUID returns the uid of the process on the other end of a Unix socket via
-// getsockopt(LOCAL_PEERCRED). Stdlib-only (raw getsockopt); no cgo — confirmed
+// getsockopt(LOCAL_PEERCRED). Stdlib-only (raw getsockopt); no cgo: confirmed
 // working on darwin/arm64. errno != 0 (e.g. an unconnected socket) is surfaced as
 // an error, so the caller fails closed rather than trusting a zero uid.
 func peerUID(conn net.Conn) (uint32, error) {

@@ -1,12 +1,12 @@
 # SPDX-FileCopyrightText: 2026 Gneiss Group Inc.
 # SPDX-License-Identifier: Apache-2.0
 #
-# CodeQL — static security analysis of the Go code.
+# CodeQL: static security analysis of the Go code.
 #
 # `go vet` catches correctness mistakes; CodeQL is the security-focused layer a
 # project that IS security infrastructure is expected to run. It scans the whole
 # module (verifier tier and server tier alike) for the vulnerability classes
-# CodeQL models — injection, path traversal, unsafe crypto usage, tainted flow —
+# CodeQL models (injection, path traversal, unsafe crypto usage, tainted flow)
 # and reports into the repository's Code scanning tab.
 #
 # Actions are pinned to commit SHAs (see .github/dependabot.yml, which keeps them

@@ -32,8 +32,8 @@ const mappingVersion = 1
 // The identity model is WebAuthn-shaped: one durable employee identity (the map
 // key) owns N device credentials (one per registered device key), each with its
 // own DID and its own independently-revocable status bit. Device loss/replacement
-// is therefore symmetric with initial enrollment — enroll a new device (a new
-// credential appended under the same identity) and revoke the old one — with no
+// is therefore symmetric with initial enrollment: enroll a new device (a new
+// credential appended under the same identity) and revoke the old one, with no
 // new mechanism. A DID identifies exactly one device key and is unique across the
 // whole map (see AddCredential), so re-enrolling the same identity on a new
 // device never collides, while a duplicate DID is refused as the real error it is.
@@ -113,7 +113,7 @@ func (m *Mapping) findByDID(did types.DID) (string, bool) {
 // The one hard rule is DID uniqueness across the whole map. A DID names one
 // device key; the same DID appearing twice would mean two device keys claim one
 // identifier, which the chain's holder-key binding could not disambiguate. So a
-// duplicate DID is refused — this is what lets re-enrolling an existing identity
+// duplicate DID is refused: this is what lets re-enrolling an existing identity
 // on a NEW device be a safe no-collision append, while catching an accidental
 // re-use of a device DID as the genuine error it is.
 func (m *Mapping) AddCredential(identity string, cred Credential) error {

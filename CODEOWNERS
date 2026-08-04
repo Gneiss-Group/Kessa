@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 Gneiss Group Inc.
 # SPDX-License-Identifier: Apache-2.0
 #
-# Code owners — reviewers auto-requested for matching paths.
+# Code owners: reviewers auto-requested for matching paths.
 #
 # The verifier and its dependency closure are the trust anchor; changes there
 # require owner review. NOTE: this file only *declares* owners. Enforcement needs
@@ -11,7 +11,7 @@
 #
 # Usernames below must be GitHub handles for this file to resolve.
 
-# The independent verifier — the crown jewel
+# The independent verifier: the crown jewel
 /cmd/verify/              @raphaelGneiss
 
 # The verifier's Apache-tier dependency closure + the plug-point seam

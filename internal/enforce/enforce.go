@@ -269,7 +269,7 @@ func (p *Proxy) Handle(req Request) (*Result, error) {
 
 	entry, dec, err := p.decideAndAppend(req)
 	if err != nil {
-		// An attribution failure is not a decision, so it produced no entry — but
+		// An attribution failure is not a decision, so it produced no entry, but
 		// an operator still needs to see it, because a refused attempt is what an
 		// attack looks like. Telemetry, not evidence.
 		var ue *UnattributableError
@@ -323,7 +323,7 @@ func (p *Proxy) decideAndAppend(req Request) (audit.Entry, types.Decision, error
 	// cannot attribute to anyone must not be logged at all. A chain names who
 	// CLAIMS to be acting; the proof of possession is what establishes they
 	// actually are. Both are attribution, so they belong on the same side of the
-	// line — and before this gate existed they were not: an unverifiable chain
+	// line, and before this gate existed they were not: an unverifiable chain
 	// was refused unlogged while an unverifiable possession was recorded as a
 	// decision about the holder, when the one thing established was that it was
 	// not the holder (R5-06).
@@ -335,7 +335,7 @@ func (p *Proxy) decideAndAppend(req Request) (audit.Entry, types.Decision, error
 	//
 	// It cannot be hoisted above the lock. The proof binds to (Seq, PrevHash), so
 	// verifying it outside the critical section validates a position the entry
-	// will not occupy — the R2-04 trap in a new place.
+	// will not occupy: the R2-04 trap in a new place.
 	if err := terminal.VerifyPossession(req.PoP, req.Action, seq, prevHash); err != nil {
 		return audit.Entry{}, types.Decision{}, &UnattributableError{
 			Stage:  "possession",
@@ -362,7 +362,7 @@ func (p *Proxy) decideAndAppend(req Request) (audit.Entry, types.Decision, error
 	// it is what attributed the request, so it is the evidence that this entry is
 	// about the principal it names. Previously it was recorded only when the
 	// possession check had been reached, which meant a policy or authority denial
-	// carried none — a gap that no longer exists, because nothing reaches here
+	// carried none: a gap that no longer exists, because nothing reaches here
 	// without proving possession first.
 	rec.PoPNonce = req.PoP.Nonce
 	rec.PoPSignature = req.PoP.Signature
@@ -411,7 +411,7 @@ func (p *Proxy) decideAndAppend(req Request) (audit.Entry, types.Decision, error
 // serve both. Either the signature was not produced by the holder's key at all
 // (an impostor), or it was produced correctly but bound to an EARLIER tip and
 // another request took the slot first (an honest caller that lost a race). The
-// proof covers the position, so both present identically as "does not verify" —
+// proof covers the position, so both present identically as "does not verify":
 // the proxy cannot tell them apart and does not pretend to. The message therefore
 // states the position and names the retry, because for the honest case that is
 // the whole remedy.
@@ -437,7 +437,7 @@ func (e *UnattributableError) Unwrap() error { return e.Err }
 //
 // It uses its OWN slot budget rather than sinkSlots, and that is deliberate. The
 // sink drops under saturation so a slow consumer cannot backpressure enforcement
-// (R2-03), which is right for ordinary records — but here the ATTACKER CHOOSES THE
+// (R2-03), which is right for ordinary records, but here the ATTACKER CHOOSES THE
 // VOLUME. Sharing one budget would let a flood evict exactly the records that
 // reveal the flood, converting a loud attack into a silent one at the moment it
 // matters. A separate reserve means ordinary traffic and refused attempts cannot

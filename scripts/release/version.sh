@@ -3,7 +3,7 @@
 # SPDX-FileCopyrightText: 2026 Gneiss Group Inc.
 # SPDX-License-Identifier: Apache-2.0
 #
-# version.sh — read or set the single source of truth for Kessa's version.
+# version.sh: read or set the single source of truth for Kessa's version.
 #
 # That source is the `Version` constant in internal/version/version.go, and it is
 # a constant on purpose (see the package doc): the version a binary prints is the

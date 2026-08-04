@@ -13,8 +13,8 @@ package enforce
 //
 // The class under test is "a check that does not fire". R5 was scoped to the
 // ingress surface after the MCP listener was rewritten for revision 2026-07-28,
-// on the theory that the header-mirroring rule — which the rewrite had
-// implemented as validate-only-when-present — would not be the only instance.
+// on the theory that the header-mirroring rule, which the rewrite had
+// implemented as validate-only-when-present, would not be the only instance.
 // It was not. Two of the findings below are checks that fired only under some
 // inputs (a repeated header, a null-valued required field), and two are checks
 // that were absent entirely (Origin, request Content-Type).
@@ -119,7 +119,7 @@ func TestIngressLoopbackAndAbsentOriginAllowed(t *testing.T) {
 
 // R5-02. The header-mirroring bypass reached by REPETITION rather than absence.
 // http.Header.Get returns the first value, so a second, contradictory value was
-// simply unread — and an intermediary routing on the last would act on a value
+// simply unread, and an intermediary routing on the last would act on a value
 // this server never validated. That is the same split-brain between router and
 // enforcer the header rules exist to prevent.
 func TestIngressDuplicateMirroredHeaderRefused(t *testing.T) {
@@ -180,7 +180,7 @@ func TestIngressDuplicateOriginRefused(t *testing.T) {
 }
 
 // R5-03. A null id is neither a request nor a notification. Testing only for an
-// ABSENT id let null through as a request — a third state the dispatcher does
+// ABSENT id let null through as a request: a third state the dispatcher does
 // not model.
 func TestIngressNullIDRefused(t *testing.T) {
 	url := mcpServerURL(t, newHarness(t).proxy(t))
@@ -197,7 +197,7 @@ func TestIngressNullIDRefused(t *testing.T) {
 }
 
 // R5-04. clientCapabilities was checked for PRESENCE only, so a JSON null
-// satisfied a required field while supplying nothing — the same shape as a check
+// satisfied a required field while supplying nothing: the same shape as a check
 // that fires only when a field happens to be there.
 func TestIngressNullClientCapabilitiesRefused(t *testing.T) {
 	url := mcpServerURL(t, newHarness(t).proxy(t))
@@ -221,7 +221,7 @@ func TestIngressNullClientCapabilitiesRefused(t *testing.T) {
 }
 
 // R5-05. A browser may issue a cross-origin POST with no preflight only when the
-// Content-Type is one of three "simple" values — none of which is
+// Content-Type is one of three "simple" values: none of which is
 // application/json. Requiring application/json is what makes the forgery defense
 // deliberate instead of a side effect of whichever custom headers an endpoint
 // happens to need.

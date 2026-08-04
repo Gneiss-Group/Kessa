@@ -1,4 +1,4 @@
-# Kessa — performance / concurrency findings
+# Kessa: performance / concurrency findings
 
 Measurement-only harness for the proxy decision path (`enforce.Proxy.Handle`).
 **Ground rule: measure, don't optimize.** Where a benchmark finds a cliff, this
@@ -56,7 +56,7 @@ go test ./perf/ -run '^$' -bench 'BenchmarkProxyLoad' -benchtime=3000x -benchmem
 
 ---
 
-## Task A — whole-path decision cost
+## Task A: whole-path decision cost
 
 ### Per-decision service time (sequential, the true single-thread ceiling)
 
@@ -70,7 +70,7 @@ The +263 µs is the consequential-only work: one live status re-read (~196 µs,
 below) plus human-approval verification (~60 µs: resolve approver DID + Ed25519
 verify) plus the extra ~90 KB is the re-read + parse of the 16 KiB bitstring.
 
-### Concurrency sweep — serialized (real proxy) vs parallel (unlocked ceiling)
+### Concurrency sweep: serialized (real proxy) vs parallel (unlocked ceiling)
 
 Throughput (req/s) and end-to-end latency percentiles, 3000 ops per level:
 
@@ -106,7 +106,7 @@ concurrency, not remove it blindly.)
 
 ---
 
-## Task B — live status re-read, in isolation
+## Task B: live status re-read, in isolation
 
 Per consequential request, `enforce.anyHopRevoked` re-reads and re-verifies the
 signed bitstring for each hop with a `StatusRef` (one hop in the demo chain).
@@ -138,7 +138,7 @@ read/parse dominates at every size.
 
 ---
 
-## Task C — chain-depth cost
+## Task C: chain-depth cost
 
 `chain.Verify` per depth (2 DID resolves + 1 Ed25519 verify + attenuation check
 per hop):
@@ -154,7 +154,7 @@ per hop):
 | 7 | 584 µs | 551 |
 | 8 | 676 µs | 630 |
 
-**Linear**, ~85 µs/hop, no worse-than-linear behavior across the 1–8 range. The
+**Linear**, ~85 µs/hop, no worse-than-linear behavior across the 1-8 range. The
 `MaxDepth = 8` cap keeps a worst-case verify under 1 ms. Cost is dominated by the
 two DID-document file reads per hop, the same file-I/O term that dominates
 routine request cost above.

@@ -358,7 +358,7 @@ func cmdServe(args []string, stdout, stderr io.Writer) int {
 	}
 	// A non-loopback bind is refused unless the operator explicitly accepts what it
 	// means. The listeners have no caller authentication, so binding a reachable
-	// address publishes the enforcement endpoint to anyone who can route to it —
+	// address publishes the enforcement endpoint to anyone who can route to it,
 	// and while a request still cannot become an ALLOW without a valid proof of
 	// possession, that is a different property from who may submit at all.
 	//

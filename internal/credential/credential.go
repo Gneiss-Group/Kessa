@@ -132,7 +132,7 @@ func New(o Options) (*Credential, error) {
 // encodes it as a JWK. It is the CONSTRUCTION-TIME boundary check: a credential
 // returned by New always carries a well-formed holder key, so a malformed one is
 // refused here rather than travelling on to be rejected only at verify time
-// (R3-01 — the "validation moved from construction to deferred verify" regression
+// (R3-01: the "validation moved from construction to deferred verify" regression
 // this restores; see also R2-01, the same shape).
 //
 // It pre-validates the concrete type and curve so it can return an ERROR for bad

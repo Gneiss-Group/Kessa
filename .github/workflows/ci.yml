@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 Gneiss Group Inc.
 # SPDX-License-Identifier: Apache-2.0
 #
-# CI — the gate every change passes before it can be merged, and the same gate
+# CI: the gate every change passes before it can be merged, and the same gate
 # the release workflow runs again before it tags anything.
 #
 # The checks are the ones CONTRIBUTING.md already names as the ground rules, run
@@ -36,7 +36,7 @@ jobs:
   # check: a green build must never be able to carry a committed secret. The scan
   # logic lives in scripts/ci/secret-scan.sh and is driven by the
   # version-controlled .gitleaks.toml, so the Codeberg mirror runs the exact same
-  # gate by calling the same script — nothing here depends on a GitHub-only
+  # gate by calling the same script: nothing here depends on a GitHub-only
   # scanning feature.
   secret-scan:
     name: secret scan (gitleaks)
@@ -48,7 +48,7 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           # gitleaks is built from source at a pinned version by the script,
-          # using this toolchain — no prebuilt scanner binary is trusted.
+          # using this toolchain: no prebuilt scanner binary is trusted.
           go-version-file: go.mod
           cache: true
 
@@ -71,7 +71,7 @@ jobs:
           cache: true
 
       - name: gate (fmt, SPDX, vet, licence boundary, race tests, demo)
-        # The shared gate — the same script the two release phases run, so CI and
+        # The shared gate: the same script the two release phases run, so CI and
         # release cannot check different things. See scripts/ci/gate.sh.
         run: scripts/ci/gate.sh
 

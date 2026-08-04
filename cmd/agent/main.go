@@ -70,7 +70,7 @@ func cmdAttempt(args []string, stdout, stderr io.Writer) int {
 	chainPath := fs.String("chain", "", "delegation chain file (the credential this agent holds) (required)")
 	ksPath := fs.String("keystore", "", "MOCK keystore JSON: DID -> hex seed (required unless --agent-sock is set)")
 	agentSock := fs.String("agent-sock", "", "path to a running kessa-issuer daemon socket; fetch signing keys from it instead of a keystore")
-	as := fs.String("as", "", "sign proof-of-possession as this DID (default: the chain's actor). Use a different DID to impersonate — it will be denied.")
+	as := fs.String("as", "", "sign proof-of-possession as this DID (default: the chain's actor). Use a different DID to impersonate, it will be denied.")
 	approver := fs.String("approver", "", "human DID to sign an approval (needed for consequential actions)")
 	actionType := fs.String("type", "", "action type, e.g. payment.transfer (required)")
 	target := fs.String("target", "", "action target, e.g. acct/999")
@@ -98,7 +98,7 @@ func cmdAttempt(args []string, stdout, stderr io.Writer) int {
 	}
 	// signerFor resolves a DID to a signer either from the on-device daemon
 	// (--agent-sock, the ssh-agent shape: the private key never leaves the daemon)
-	// or from the mock keystore. The rest of the agent is identical either way —
+	// or from the mock keystore. The rest of the agent is identical either way,
 	// both return a signer.Signer, which is the whole point of the seam.
 	var ks keystore.Keystore
 	if *agentSock == "" {

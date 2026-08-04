@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 Gneiss Group Inc.
 # SPDX-License-Identifier: Apache-2.0
 #
-# OpenSSF Scorecard — an automated, external read on this repository's security
+# OpenSSF Scorecard: an automated, external read on this repository's security
 # posture: branch protection, pinned dependencies, token permissions, dangerous
 # workflow patterns, release signing, and more. For a project asking people to
 # trust what it produces, a public Scorecard is exactly the kind of independent
@@ -10,7 +10,7 @@
 # Results upload to the Code scanning tab, and (with publish_results: true) to
 # the public OpenSSF API that backs the README badge. Scorecard needs to read
 # repository settings a normal token cannot, so it runs on a schedule and on
-# pushes to the default branch — never on pull_request, where it would neither
+# pushes to the default branch, never on pull_request, where it would neither
 # have the permissions nor make sense.
 
 name: Scorecard
@@ -46,8 +46,8 @@ jobs:
           results_file: scorecard-results.sarif
           results_format: sarif
           # Publishing is what makes the badge live and the score public. It is
-          # a deliberate disclosure — appropriate here, since the whole point is
-          # an outside-verifiable posture — but flip to false to keep it private.
+          # a deliberate disclosure: appropriate here, since the whole point is
+          # an outside-verifiable posture, but flip to false to keep it private.
           publish_results: true
 
       - name: upload the SARIF result

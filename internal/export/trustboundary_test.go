@@ -385,7 +385,7 @@ func TestTrustBoundary_DIDRootIsTheAnchor(t *testing.T) {
 	}
 	if !res2.Pass() {
 		t.Fatalf("BOUNDARY MOVED: a forgery under a fabricated DID root no longer passes. "+
-			"This may be an improvement, but it changes a documented boundary — update this test "+
+			"This may be an improvement, but it changes a documented boundary: update this test "+
 			"and the --dids provenance docs deliberately. Detail: fatal=%q entries=%+v",
 			res2.FatalReason, res2.Entries)
 	}

@@ -42,12 +42,12 @@ var KnownCaveats = []string{
 	"The verdict is RELATIVE TO THE DID DOCUMENTS YOU SUPPLIED. Every signature this tool checks is " +
 		"checked against a key read from --dids (or fetched with --fetch-dids). That directory is the " +
 		"trust root and its provenance is YOUR problem: a fully fabricated export passes clean when the " +
-		"DID documents it names are fabricated to match. This is by design — anchoring to a Kessa " +
-		"service would defeat the point — but it means a PASS says 'consistent with these keys', not " +
+		"DID documents it names are fabricated to match. This is by design: anchoring to a Kessa " +
+		"service would defeat the point, but it means a PASS says 'consistent with these keys', not " +
 		"'genuine'. If the export and the DID documents came from the same party, you have verified " +
 		"that party's internal consistency and nothing more. Obtain the DID documents independently.",
 	"Consequentiality is re-derived from the policy CARRIED in the export (F1), not trusted as a bare " +
-		"bit — but that policy is an environment-defined, disclosed artifact. The verifier proves the " +
+		"bit, but that policy is an environment-defined, disclosed artifact. The verifier proves the " +
 		"allows are consistent with the policy the enforcement point published and signed; it cannot " +
 		"prove that policy is the 'right' one for the environment. Inspect the carried policy to judge that.",
 	"Status is checked against the CURRENT status list, not the list as of action time (S1, deferred). " +
@@ -70,8 +70,8 @@ type Outcome string
 
 const (
 	OutcomePass          Outcome = "PASS"
-	OutcomePassDeny      Outcome = "PASS (deny — evidence intact)"
-	OutcomeIntegrityOnly Outcome = "PASS (integrity-only, no evidence — NOT an evidence-backed pass)"
+	OutcomePassDeny      Outcome = "PASS (deny: evidence intact)"
+	OutcomeIntegrityOnly Outcome = "PASS (integrity-only, no evidence, NOT an evidence-backed pass)"
 	OutcomeFail          Outcome = "FAIL"
 	OutcomeUnverified    Outcome = "UNVERIFIED (hash chain broken at an earlier entry)"
 )
@@ -457,7 +457,7 @@ func verifyEnvelope(exp *Export, pub crypto.PublicKey) error {
 	}
 	input := envelopeSigningInput(exp.Version, exp.Signer, pid, uint64(len(exp.Entries)), logTip(exp.Entries))
 	if !signer.Verify(pub, input, exp.EnvelopeSignature) {
-		return fmt.Errorf("envelope signature invalid (version, signer, policy, or the log's length/tip tampered — entries may have been removed)")
+		return fmt.Errorf("envelope signature invalid (version, signer, policy, or the log's length/tip tampered: entries may have been removed)")
 	}
 	return nil
 }

@@ -5,8 +5,8 @@
 
 `kessa-issuer daemon` is the on-device key custodian (§2a, B3): it holds the
 device's signing key(s) and brokers signatures over a local Unix domain socket,
-the same shape as `ssh-agent`/`gpg-agent`. A client — `kessa-agent`, or anything
-that needs to sign as an on-device principal — connects to the socket and gets a
+the same shape as `ssh-agent`/`gpg-agent`. A client: `kessa-agent`, or anything
+that needs to sign as an on-device principal: connects to the socket and gets a
 `signer.Signer` whose private key **never leaves the daemon**.
 
 The daemon is backend-agnostic: it brokers whatever `signer.Signer` it holds. It
@@ -62,14 +62,14 @@ kessa-agent attempt --agent-sock ~/.kessa/issuer.sock \
 
 With `--agent-sock`, the agent fetches its actor (and approver) key from the
 daemon instead of a local keystore; `--keystore` is not needed. Everything
-downstream is identical — the socket-backed signer is a drop-in `signer.Signer`.
+downstream is identical: the socket-backed signer is a drop-in `signer.Signer`.
 
 ## Access control
 
 Two independent gates protect the socket, both enforced without any shared secret:
 
-1. **Filesystem** — `0700` directory + `0600` socket, so only the owner can open it.
-2. **Peer credential** — every connection's peer uid is checked (`SO_PEERCRED` on
+1. **Filesystem**: `0700` directory + `0600` socket, so only the owner can open it.
+2. **Peer credential**: every connection's peer uid is checked (`SO_PEERCRED` on
    Linux, `LOCAL_PEERCRED` on macOS) and refused unless it matches the daemon
    owner. If the peer's identity cannot be established, the connection is refused
    (fail closed).

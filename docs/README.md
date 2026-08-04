@@ -42,6 +42,6 @@ limits](../README.md#known-limits) in the top-level README.
 | [Stories](stories.md) | The corporate-workflow user stories, driven end to end through the real binaries. |
 
 One clarification worth keeping in view: the policy layer is a **hand-rolled,
-standard-library rule evaluator** behind an `Evaluator` interface — not OPA, Rego,
+standard-library rule evaluator** behind an `Evaluator` interface, not OPA, Rego,
 or Cedar. Adopting one of those is an open question, not a shipped feature; see
 [`UPCOMING.md`](../UPCOMING.md).

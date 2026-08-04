@@ -15,8 +15,8 @@ import (
 //
 // Both the generic HTTP listener and the MCP-native one default to a loopback
 // bind, and a loopback bind is not an authentication boundary: any process on
-// the host reaches it, and — the case these guards exist for — so does any WEB
-// PAGE the operator happens to visit.
+// the host reaches it, and so does any WEB PAGE the operator happens to visit,
+// which is the case these guards exist for.
 //
 // Two distinct attacks, which is why there are two guards:
 //
@@ -28,7 +28,7 @@ import (
 //   - DNS rebinding. Here CORS does not help: the attacker's name resolves to
 //     127.0.0.1, so the browser treats the page as same-origin, permits custom
 //     headers, and lets it read every reply. The Origin header still names the
-//     attacker's site, which is exactly why checking it is the defense — and why
+//     attacker's site, which is exactly why checking it is the defense, and why
 //     the MCP transport spec makes it a MUST.
 //
 // Neither guard protects a secret: a request still needs a verifiable delegation
@@ -64,21 +64,21 @@ func checkIngress(w http.ResponseWriter, r *http.Request, bodyExpected bool) boo
 // information: omitting one is free, and a check that only runs when the field
 // is there is a check the caller can decline. Origin is written by the BROWSER,
 // and a page cannot suppress it on a cross-origin request. Within this guard's
-// threat model — a web page the operator visits — absence is therefore positive
+// threat model (a web page the operator visits), absence is therefore positive
 // evidence that the caller is not a cross-origin browser request, which is the
 // entire population being excluded.
 //
 // The corollary is the limit: this is sound only because the threat model stops
 // at the browser. Any non-browser client (curl, a local process, a scripted HTTP
 // call) can set or omit Origin at will, so this guard is worth nothing against
-// one — deliberately, since an attacker with local code execution has better
+// one: deliberately, since an attacker with local code execution has better
 // targets than the chokepoint's front door. If the model ever widens to "any
 // network client", Origin stops being evidence and the answer is authentication,
 // not a stricter rule here. It is a browser-scoped defence and only that.
 //
 // Deliberately a fixed policy rather than a configurable allowlist. A
-// cross-origin browser caller is not a use case this transport has — the
-// documented deployments are a local sidecar and an in-process host — so an
+// cross-origin browser caller is not a use case this transport has: the
+// documented deployments are a local sidecar and an in-process host, so an
 // allowlist would be a knob whose only settings are "as now" and "less safe".
 // A deployment that genuinely needs one should terminate TLS and CORS in front
 // of the chokepoint rather than widening it here.

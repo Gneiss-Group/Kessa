@@ -148,7 +148,7 @@ func TestEnroll_DeviceLoss_SecondDeviceAppends(t *testing.T) {
 // credential file is never written. A test that only checked "the second enroll
 // returns an error" would pass even with the gate firing too late, which is
 // exactly the failure shape (R2-01/R3-01/R4-03) this codebase keeps regressing to
-// — so the assertion is specifically on the absence of the side effect.
+// , so the assertion is specifically on the absence of the side effect.
 func TestEnroll_DuplicateDID_RejectedBeforeSideEffect(t *testing.T) {
 	root := t.TempDir()
 	mapPath := filepath.Join(root, "map.json")

@@ -8,7 +8,7 @@
 // `darwin && cgo`); every other platform/build gets the stub in enclave_stub.go,
 // so this package compiles everywhere and the verifier and Linux builds stay
 // pure-Go. It satisfies the same signer.Signer seam the software signers do, so
-// nothing above it changes — the Enclave signature is SHA-256 + ECDSA-P256 +
+// nothing above it changes: the Enclave signature is SHA-256 + ECDSA-P256 +
 // ASN.1 DER, exactly what signer.Verify's P-256 branch already checks.
 //
 // Two guarantees are deliberately kept separate (they are not the same knob):
@@ -18,7 +18,7 @@
 //   - The USE gate is a per-key POLICY chosen at generation by the key's role,
 //     because the right answer differs by signature type. An agent's PoP key signs
 //     as the agent operates (potentially often) and must not demand a fresh user
-//     gesture per call — that would break the background-resident daemon model
+//     gesture per call, that would break the background-resident daemon model
 //     (§2, ssh-agent shape). A human's approval/issuance key signs only on
 //     deliberate acts and SHOULD demand a fresh biometric each time, matching the
 //     passkey "approve" convention. See Policy.
@@ -52,7 +52,7 @@ const (
 
 	// Biometric additionally requires a fresh biometric match for every signature
 	// (kSecAccessControlBiometryCurrentSet). This is the HUMAN key policy, for
-	// approval and root-issuance signing — deliberate, infrequent acts where a
+	// approval and root-issuance signing: deliberate, infrequent acts where a
 	// per-use gesture is the intended UX. Cannot be used non-interactively.
 	Biometric
 )
@@ -80,7 +80,7 @@ var (
 
 	// ErrMissingEntitlement is wrapped into the error from Generate (the permanent
 	// path) when persisting a key failed for lack of a keychain-access-group
-	// entitlement — i.e. the binary is not code-signed with one. GenerateEphemeral
+	// entitlement: i.e. the binary is not code-signed with one. GenerateEphemeral
 	// avoids the keychain and never returns this. Callers/tests use errors.Is to
 	// distinguish "needs signing" from a genuine failure. See docs/enclave-runbook.md.
 	ErrMissingEntitlement = errors.New("enclave: keychain-access-group entitlement required (code-sign the binary)")

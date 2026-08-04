@@ -3,7 +3,7 @@
 # SPDX-FileCopyrightText: 2026 Gneiss Group Inc.
 # SPDX-License-Identifier: Apache-2.0
 #
-# next-version.sh — decide the version of the next release.
+# next-version.sh: decide the version of the next release.
 #
 # The input is the commit history since the last release tag, read as
 # Conventional Commits (docs/branching.md). The output, on stdout, is a bare
@@ -46,7 +46,7 @@ CURRENT="$(scripts/release/version.sh)"
 LAST_TAG="$(git tag --list 'v[0-9]*' --sort=-v:refname | head -n1)"
 
 if [ -z "$LAST_TAG" ]; then
-  echo "next-version.sh: no release tag exists yet — this is the first release." >&2
+  echo "next-version.sh: no release tag exists yet: this is the first release." >&2
   echo "                 shipping the version the source carries: $CURRENT" >&2
   printf '%s\n' "$CURRENT"
   exit 0
@@ -64,7 +64,7 @@ fi
 RANGE="$LAST_TAG..HEAD"
 COUNT="$(git rev-list --count "$RANGE")"
 if [ "$COUNT" -eq 0 ]; then
-  echo "next-version.sh: no commits since $LAST_TAG — there is nothing to release." >&2
+  echo "next-version.sh: no commits since $LAST_TAG, there is nothing to release." >&2
   exit 1
 fi
 echo "next-version.sh: $COUNT commit(s) in $RANGE" >&2

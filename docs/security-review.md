@@ -2,7 +2,7 @@
 
 This is the public index of Kessa's adversarial review rounds: what was reviewed,
 when, which findings were raised, and where each one stands. It is deliberately a
-**register, not a report** — it records that a finding existed and was closed,
+**register, not a report**, it records that a finding existed and was closed,
 without reproducing the mechanism.
 
 **What this is not.** Every round was a **self-run AI red-team pass, not a
@@ -22,7 +22,7 @@ merges; each fix lands with a regression test, on the principle that a fix witho
 a test is a fix with an expiry date.
 
 Two rules in [Go standards](go-standards.md) exist because a round produced them
-rather than because they were designed in advance — most notably *validate before
+rather than because they were designed in advance: most notably *validate before
 the side effect*, which was escalated to a standing rule after recurring across
 rounds.
 
@@ -30,12 +30,12 @@ rounds.
 
 | Round | When | Scope | Outcome |
 |---|---|---|---|
-| **R1** | before first publication | Core delegation, enforcement, audit chain, and verifier | Ten findings (F1–F10), highest severity High. All closed or accepted as documented boundaries before any code was published |
-| **R2** | 2026-07-22 | Second adversarial pass over the same core, plus the export envelope and audit-sink path | Seven findings (R2-01–R2-07), one Critical. All closed before any code was published |
+| **R1** | before first publication | Core delegation, enforcement, audit chain, and verifier | Ten findings (F1 to F10), highest severity High. All closed or accepted as documented boundaries before any code was published |
+| **R2** | 2026-07-22 | Second adversarial pass over the same core, plus the export envelope and audit-sink path | Seven findings (R2-01 to R2-07), one Critical. All closed before any code was published |
 | **R3** | 2026-07-26 | Scoped P-256 employee key and algorithm-agile verification (`feat/scoped-p256-employee-key`, merged 2026-07-27) | No critical or high. No false-PASS path. Four findings, all closed |
 | **R4** | 2026-08-01 | The whole on-device issuer surface: enrollment, Secure Enclave backend, signing daemon, agent wiring (`feat/issuer-enrollment`, merged 2026-08-01) | No critical or high. No false-PASS path in the verifier. Four findings plus two scope observations, all closed |
-| *(spec alignment)* | 2026-08-03 | Not a review round — see below. Conformance work bringing the MCP listener to revision 2026-07-28 | Surfaced one security-relevant defect (SA-01) as a by-product |
-| **R5** | 2026-08-03 | The ingress surface of both listeners, reviewed because it had just changed | Six findings. Five closed (R5-01–R5-05, no critical or high). **R5-06 was High** and is closed *as to the attack* — possession became an attribution gate, so the harm is unreachable — while the property it rests on is unchanged by design. No false-ALLOW path in any of them |
+| *(spec alignment)* | 2026-08-03 | Not a review round: see below. Conformance work bringing the MCP listener to revision 2026-07-28 | Surfaced one security-relevant defect (SA-01) as a by-product |
+| **R5** | 2026-08-03 | The ingress surface of both listeners, reviewed because it had just changed | Six findings. Five closed (R5-01 to R5-05, no critical or high). **R5-06 was High** and is closed *as to the attack* (possession became an attribution gate, so the harm is unreachable) while the property it rests on is unchanged by design. No false-ALLOW path in any of them |
 
 **R1 and R2 predate this repository's first commit** (2026-07-23). Their fixes are
 contained in the initial publication, so no released or published version of Kessa
@@ -44,7 +44,7 @@ ever carried them unfixed.
 ### Why the spec-alignment row is marked differently
 
 SA-01 was **not found by looking for it.** It surfaced while reconciling the MCP
-listener against a published specification — the defect was noticed because the
+listener against a published specification: the defect was noticed because the
 spec said a header was required and the code treated it as optional, not because
 anyone was hunting for a bypass.
 
@@ -69,9 +69,9 @@ Severity is as each round rated it. Identifiers appear throughout the source as
 
 ### R1
 
-Round 1 raised ten findings. F1–F4 were four instances of a single class — a
-verdict-relevant field left outside the signed material — which became the
-project's central coding rule. F5–F6 were low-severity hardening. F7–F10 were
+Round 1 raised ten findings. F1 to F4 were four instances of a single class: a
+verdict-relevant field left outside the signed material, which became the
+project's central coding rule. F5 to F6 were low-severity hardening. F7 to F10 were
 informational: they were resolved by deciding and documenting a boundary rather
 than by changing behaviour, and they are the origin of the *Accepted, documented
 risks* list in the [README](../README.md#known-limits).
@@ -84,29 +84,29 @@ risks* list in the [README](../README.md#known-limits).
 | F4 | Medium | Binding of possession and approval to an entry's position in the log | Closed |
 | F5 | Low | Host validation on the status publication path | Closed |
 | F6 | Low | Inbound request size limit on the enforcement endpoint | Closed |
-| F7 | Info | Role of the VC wrapper in cross-org trust | Closed — documented as not load-bearing |
+| F7 | Info | Role of the VC wrapper in cross-org trust | Closed: documented as not load-bearing |
 | F8 | Info | Clock trust for expiry caveats (no independent clock) | Accepted, documented boundary |
 | F9 | Info | Surface of the opt-in `--fetch-dids` mode | Accepted, documented boundary |
 | F10 | Info | Committed demo key material | Accepted, documented boundary |
 
-### R2 — 2026-07-22
+### R2: 2026-07-22
 
 Seven findings, plus one item on `macaroon.Verify`. Two were further instances of
 the round-1 class; the rest included one class the round-1 principle did not
-cover. The round also recorded negative results — attacks attempted that did not
-work — against the round-1 open items.
+cover. The round also recorded negative results: attacks attempted that did not
+work: against the round-1 open items.
 
 | ID | Sev | Area | Status |
 |---|---|---|---|
 | R2-01 | **Critical** | Coverage of credential and status references by the issuance signature | Closed |
-| R2-02 | High | Export envelope completeness — entry count and log tip | Closed |
+| R2-02 | High | Export envelope completeness: entry count and log tip | Closed |
 | R2-03 | High | Audit-sink dispatch behaviour under a slow or hung sink | Closed |
 | R2-04 | Medium | Concurrency on the hash-chained audit log | Closed |
 | R2-05 | Low | Disclosure of the verifier's trust root in its own output | Closed |
 | R2-06 | Low | An overclaiming statement in the documented guarantees | Closed |
 | R2-07 | Low | Policy rule and version handling in re-derivation | Closed |
 
-### R3 — scoped P-256 employee key (2026-07-26)
+### R3: scoped P-256 employee key (2026-07-26)
 
 | ID | Sev | Area | Status |
 |---|---|---|---|
@@ -115,18 +115,18 @@ work — against the round-1 open items.
 | R3-03 | Low | ECDSA signature malleability on the employee-key path | Closed (recorded judgment) |
 | R3-04 | Low | End-to-end verifier coverage with a P-256 employee key | Closed |
 
-### R4 — on-device issuer (2026-08-01)
+### R4: on-device issuer (2026-08-01)
 
 | ID | Sev | Area | Status |
 |---|---|---|---|
 | R4-01 | Low | Per-connection deadline on the signing daemon | Closed |
 | R4-02 | Medium | Hardware backing required for approval keys in the daemon | Closed; op-level policy deferred |
-| R4-03 | Medium | Enrollment ordering — validation before any side effect | Closed; escalated to a standing rule |
+| R4-03 | Medium | Enrollment ordering: validation before any side effect | Closed; escalated to a standing rule |
 | R4-04 | Low | Org root key passed on the command line | Closed |
-| SO-1 | — | Org-DID preflight limited to local files | Closed |
-| SO-2 | — | Enrolled Enclave key not loadable by the daemon | Closed |
+| SO-1 |: | Org-DID preflight limited to local files | Closed |
+| SO-2 |: | Enrolled Enclave key not loadable by the daemon | Closed |
 
-### SA-01 — surfaced by spec alignment, not by review (2026-08-03)
+### SA-01: surfaced by spec alignment, not by review (2026-08-03)
 
 | ID | Sev | Area | Status |
 |---|---|---|---|
@@ -141,7 +141,7 @@ parsing the body, so a skippable check is a route-versus-enforce split.
 Recorded separately from the numbered rounds because of how it was found. See
 [Why the spec-alignment row is marked differently](#why-the-spec-alignment-row-is-marked-differently).
 
-### R5 — ingress surface (2026-08-03)
+### R5: ingress surface (2026-08-03)
 
 Scoped to ingress because that is what the spec-alignment work had just changed,
 and anchored on SA-01's defect class: **a check that does not fire.** Two findings
@@ -151,14 +151,14 @@ that fires correctly and still does not establish what the endpoint needed.
 
 | ID | Sev | Area | Status |
 |---|---|---|---|
-| R5-01 | Medium | No `Origin` validation on either listener — a DNS-rebinding path to the chokepoint and to the audit export | Closed |
+| R5-01 | Medium | No `Origin` validation on either listener: a DNS-rebinding path to the chokepoint and to the audit export | Closed |
 | R5-02 | Medium | Mirrored header validated only in its first occurrence, so a repeated, contradictory value went unread | Closed |
 | R5-03 | Low | An explicit null JSON-RPC id processed as a request | Closed |
 | R5-04 | Low | Required `clientCapabilities` checked for presence only, so a null satisfied it | Closed |
 | R5-05 | Low | No request `Content-Type` validation, leaving cross-origin forgery defence incidental rather than deliberate | Closed |
-| R5-06 | **High** | An export is a bearer artifact: the chain re-derives from it, and chain verification was the only gate before an audit entry was written, so an export doubled as a write credential for a reachable proxy | **Closed as to the attack** — unexploitable at `/enforce`. The bearer property itself is unchanged and is a standing characteristic; see below |
+| R5-06 | **High** | An export is a bearer artifact: the chain re-derives from it, and chain verification was the only gate before an audit entry was written, so an export doubled as a write credential for a reachable proxy | **Closed as to the attack**: unexploitable at `/enforce`. The bearer property itself is unchanged and is a standing characteristic; see below |
 
-R5-06 was the only High in this round and is not an ingress bug — following R5-05
+R5-06 was the only High in this round and is not an ingress bug: following R5-05
 to its root turned up an architectural property instead. It is stated in full
 below, including how it was closed, because it changes what the other five
 findings mean.
@@ -174,8 +174,8 @@ attacker obtained an authorization they did not hold.
 
 **2. An unauthorized party could write to the system of record.** This is the
 distinct property, and for a product whose claim *is* the audit trail it is the
-one that matters. The only gate before an entry is written is chain verification
-— and a delegation chain verifies against **public** DID documents, so it carries
+one that matters. The only gate before an entry is written is chain verification,
+and a delegation chain verifies against **public** DID documents, so it carries
 no secret. It is a bearer artifact: anyone holding a copy can present it. A
 request bearing a copied chain and a worthless proof of possession is *denied*,
 and **that denial is recorded**: a genuine entry, correctly signed, correctly
@@ -198,7 +198,7 @@ Two consequences follow, neither covered by "no false-ALLOW":
 Audit disclosure under rebinding (R5-01) compounds both: the same page that can
 write can also read the export.
 
-### R5-06 — the export is a bearer artifact (High, closed as to the attack)
+### R5-06: the export is a bearer artifact (High, closed as to the attack)
 
 Naming *what* the write gate actually is, rather than what it looks like:
 
@@ -209,7 +209,7 @@ shared secret and nothing of ours running. It is the property the product is bui
 on.
 
 A v2 export carries each credential together with its issuer proof, for the same
-reason. So **the chain can be re-derived from an export alone** — demonstrated, not
+reason. So **the chain can be re-derived from an export alone**: demonstrated, not
 inferred: a chain rebuilt from nothing but exported bytes verifies.
 
 Chain verification being the only pre-write gate therefore means a chain proves
@@ -219,7 +219,7 @@ design meeting an ingress path that assumed more than a chain provides.
 
 **The reach is wider than R5's browser framing.** R5-01 and R5-05 defend against a
 web page. This needs no browser: a plain HTTP POST with an export-derived chain and
-a worthless signature is enough. Observed end to end — the entry is written, the
+a worthless signature is enough. Observed end to end: the entry is written, the
 tip advances, and an honest caller whose proof was bound to the previous position
 is then denied. No key, no browser, no insider access; only an export, which is the
 artifact this system exists to hand out.
@@ -227,12 +227,12 @@ artifact this system exists to hand out.
 **The customer-facing statement.** "Treat an export as a write credential" is
 accurate and too soft. An export exists to be handed to parties who do not trust
 you and whom you need not trust. So: **anyone you give an export to gains the
-ability to write to the log they are auditing** — auditor, regulator,
+ability to write to the log they are auditing**: auditor, regulator,
 counterparty, opposing counsel. That is a property of the distribution model the
 product is built on, not a deployment caveat, and it is where a reader lands
 within a minute of the limitation anyway.
 
-**How far it reaches — bounded, and the bound was checked rather than assumed.**
+**How far it reaches: bounded, and the bound was checked rather than assumed.**
 A proxy resolves DIDs with `did.FileResolver` over its local `--dids` directory
 and has **no network resolution**; there is no `--fetch-dids` on the proxy as
 there is on the verifier. A chain is therefore only usable against a proxy whose
@@ -240,7 +240,7 @@ trust root resolves **every** hop of it. Verified: an unrelated org's root rejec
 the chain, and so does a partially-trusting root. The reach is:
 
 1. the deployment that issued the export, which necessarily resolves its own DIDs;
-2. any proxy deliberately configured to trust that org — the cross-org case,
+2. any proxy deliberately configured to trust that org: the cross-org case,
    working as designed.
 
 **It does not reach an arbitrary party on the internet.** The recipient of your
@@ -249,11 +249,11 @@ explicitly because a reader who cannot tell will assume the worse one, and the
 worse one would be disqualifying rather than merely bad.
 
 **Severity is High and gated on reachability.** The listeners bind to loopback by
-default, so the practical precondition is network reach to the endpoint — which a
+default, so the practical precondition is network reach to the endpoint, which a
 non-local bind, or the documented container command's published ports, grants.
 Loopback is the current mitigation and it is not authentication.
 
-**How it was closed — by moving the attribution boundary, not by adding
+**How it was closed: by moving the attribution boundary, not by adding
 authentication.** The two obvious ingress fixes are both wrong: carrying fewer
 credentials in the export breaks the offline verifier, and silently dropping a
 failed proof of possession erases the evidence of the attack. The third option was
@@ -266,7 +266,7 @@ Proof of possession is therefore now a **gate**, checked before anything is
 appended. A request that fails it is refused (HTTP 422) and produces no entry. The
 resulting property is stronger than the one it replaced: **the log records only
 attributable decisions**, so an entry from a party nobody can identify is not
-defended against — it is impossible.
+defended against, it is impossible.
 
 Refused attempts are reported to the audit sink as telemetry
 (`Outcome: "unattributable"`), with their own dispatch budget so a flood cannot
@@ -276,12 +276,12 @@ the hole would have converted a loud attack into a silent one.
 Two consequences worth recording. Every entry now carries the proof that
 attributed it, including denials, which previously carried none when the denial
 came from policy or authority. And a concurrent caller that loses the race for a
-slot is now refused rather than logged — its proof was bound to a position another
-request took — so honest races no longer leave denials in the record either. The
+slot is now refused rather than logged: its proof was bound to a position another
+request took, so honest races no longer leave denials in the record either. The
 refusal names the position and the retry, because the proxy cannot distinguish a
 stale proof from a forged one and does not pretend to.
 
-**What is closed, and what is not — stated separately, because "closed" alone
+**What is closed, and what is not: stated separately, because "closed" alone
 invites the wrong conclusion.**
 
 *Closed:* the harm. Pollution and tip-advance are unreachable at `/enforce`. An
@@ -289,7 +289,7 @@ export can no longer be turned into an audit entry in anyone's log.
 
 *Unchanged, by design:* the property underneath. **An export is still re-derivable
 into a verifying delegation chain by anyone holding it.** That was never a defect
-to fix — it is public verifiability, the thing that lets the offline verifier work
+to fix, it is public verifiability, the thing that lets the offline verifier work
 against public keys with no shared secret, and removing it would remove the
 product's central claim. It is recorded here as a **standing characteristic**, not
 as a resolved finding, so that a future ingress path is designed knowing a chain
@@ -309,13 +309,13 @@ They were fixed there too: a defence applied to one of two doors is not a defenc
 These are recorded as open rather than closed. All but the first are design
 decisions or scale-dependent work rather than unfixed defects:
 
-- **Caller authentication on the enforcement endpoint.** R5-06 is closed — an
-  unattributable request can no longer cause a write — but the endpoint still does
+- **Caller authentication on the enforcement endpoint.** R5-06 is closed: an
+  unattributable request can no longer cause a write, but the endpoint still does
   not establish *who may submit at all*. A non-loopback bind is refused unless
   `--allow-unauthenticated-remote` is passed, which is a fail-closed default rather
   than authentication. See [`UPCOMING.md`](../UPCOMING.md).
 
-- **S1 — status is checked against the current status list**, not the list as of
+- **S1: status is checked against the current status list**, not the list as of
   action time. Re-verifying an old export after a later revocation flips
   previously-legitimate entries to FAIL. An honest false-FAIL: current-list
   semantics cannot make a genuinely bad historical action pass.
@@ -340,7 +340,7 @@ channel, what is most in scope, and the expected response time are in
 ## How this record will work going forward
 
 Findings raised **before** Kessa's first tagged release are documented here, since
-no version carrying them was ever released — there is nothing in the field to
+no version carrying them was ever released, there is nothing in the field to
 attack.
 
 Findings raised **after** a public release are handled through GitHub's security

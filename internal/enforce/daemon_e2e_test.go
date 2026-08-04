@@ -57,8 +57,8 @@ func startSignerDaemon(t *testing.T, signers ...signer.Signer) string {
 
 // TestDaemonBrokeredAgent_EndToEnd is B3's closing-the-loop proof: the actor's
 // proof-of-possession AND the human's approval are both produced by keys the
-// on-device daemon holds — the agent side only ever holds a socket-backed
-// signer.Signer, never a private key — and the real proxy + independent verifier
+// on-device daemon holds: the agent side only ever holds a socket-backed
+// signer.Signer, never a private key, and the real proxy + independent verifier
 // accept the result. This is §2a's "ensure agent requests are funnelled through
 // it" demonstrated against the actual enforcement path.
 func TestDaemonBrokeredAgent_EndToEnd(t *testing.T) {
@@ -116,7 +116,7 @@ func TestDaemonBrokeredAgent_EndToEnd(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// The AGENT side: obtain the actor and approver signers from the daemon only —
+	// The AGENT side: obtain the actor and approver signers from the daemon only:
 	// no keystore, no private keys in this process.
 	actor, err := signerd.Dial(sock, worker.DID())
 	if err != nil {

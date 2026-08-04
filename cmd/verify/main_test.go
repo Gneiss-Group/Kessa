@@ -428,7 +428,7 @@ func TestR2_01_UnrevocableHopsAreStatedInOutput(t *testing.T) {
 
 // The point of --version is that an evaluator can ask "what did I download?"
 // before trusting it with anything: it must answer on stdout, exit 0, and reach
-// none of the machinery — no export read, no DID resolved, no verdict printed.
+// none of the machinery: no export read, no DID resolved, no verdict printed.
 func TestVersion_AnswersWithoutVerifying(t *testing.T) {
 	for _, arg := range []string{"--version", "-version", "version"} {
 		code, out, errb := invoke(t, arg)

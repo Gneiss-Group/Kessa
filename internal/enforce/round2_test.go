@@ -102,7 +102,7 @@ func TestR2_01_HolderCannotEditAnyCredentialField(t *testing.T) {
 			// chain.Verify must reject it outright. Before R2-01 the edited chain
 			// verified cleanly and the bypass flowed from there.
 			if err := tampered.Verify(h.resolver); err == nil {
-				t.Fatal("SECURITY: an edited credential still passes chain.Verify — the issuance signature does not cover this field")
+				t.Fatal("SECURITY: an edited credential still passes chain.Verify: the issuance signature does not cover this field")
 			}
 
 			// And so the proxy refuses to attribute the request at all: it never
@@ -156,7 +156,7 @@ func TestR2_01_RevocationSurvivesAStatusRefEdit(t *testing.T) {
 		Chain: tampered, Action: a, PoP: h.pop(t, tip0, a, "n1"),
 		Approver: didAlice, Approval: h.approval(t, tip0, didAlice, a),
 	}); err == nil {
-		t.Fatal("SECURITY: revocation bypassed — the proxy accepted a credential with statusRef stripped")
+		t.Fatal("SECURITY: revocation bypassed: the proxy accepted a credential with statusRef stripped")
 	}
 }
 
@@ -269,7 +269,7 @@ func TestR2_02_TruncatedExportIsRejected(t *testing.T) {
 
 	v := h.verifyBytes(t, dropEntries(t, full, func(i int) bool { return i < 1 }))
 	if v.Pass() {
-		t.Fatal("SECURITY: a truncated export still verifies clean — the deny vanished without a trace")
+		t.Fatal("SECURITY: a truncated export still verifies clean: the deny vanished without a trace")
 	}
 	if !strings.Contains(v.FatalReason, "entries may have been removed") {
 		t.Fatalf("truncation should fail at the envelope and say so, got fatal %q", v.FatalReason)
@@ -541,7 +541,7 @@ func TestR2_03_ErroringSinkChangesNothing(t *testing.T) {
 // so these tests still force the interleaving they were written for.
 //
 // Since possession became an attribution gate (R5-06), a proof bound to a slot
-// another request took is refused rather than logged — correctly, since it is
+// another request took is refused rather than logged: correctly, since it is
 // indistinguishable from a forgery. But a test whose goroutines all bind to the
 // same starting tip would then have exactly ONE request reach Append, and the
 // serialization property R2-04 exists to guard would go untested while the
@@ -619,7 +619,7 @@ func TestR2_04_OneApprovalAuthorizesOneAction(t *testing.T) {
 	// silently overwriting the other.
 	entries := px.Entries()
 	if len(entries) != goroutines {
-		t.Fatalf("SECURITY: %d requests produced %d audit entries — the log lost one", goroutines, len(entries))
+		t.Fatalf("SECURITY: %d requests produced %d audit entries: the log lost one", goroutines, len(entries))
 	}
 	for i := range errs {
 		if errs[i] != nil {

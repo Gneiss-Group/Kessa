@@ -26,13 +26,13 @@ import (
 // verification LOGIC (that is covered by TestP256EmployeeAndApprover_EndToEnd via
 // export.Verify), but the actual compiled `cmd/verify` BINARY re-deriving a P-256
 // export it reads off disk, with did:web documents resolved from a --dids
-// directory and a signed status list read from a file — exactly what an external
+// directory and a signed status list read from a file: exactly what an external
 // evaluator runs.
 //
 // The chain is the B4 reframe made concrete: org(Ed25519, root) -> employee(P-256
 // device key) -> agent(Ed25519). The employee's P-256 key does two things a human
 // key does in this model and that the binary must re-derive: it ISSUES the agent
-// credential (the on-device issuance act — a P-256 issuance signature at the
+// credential (the on-device issuance act: a P-256 issuance signature at the
 // employee->agent hop) and it APPROVES the consequential action (a P-256
 // approval). The agent does Ed25519 PoP; the proxy envelope and status list stay
 // Ed25519. One run therefore proves the compiled offline verifier handles a mixed
@@ -41,7 +41,7 @@ import (
 //
 // It is generate-fresh-then-verify, not a committed golden: ECDSA/P-256
 // signatures are non-deterministic (fresh nonce per signature) and each run also
-// re-signs the envelope, so there is no byte-stable artifact to check in — the
+// re-signs the envelope, so there is no byte-stable artifact to check in: the
 // same reason the P-256 fixtures verify rather than byte-compare.
 func TestP256_CompiledVerifyBinary_EndToEnd(t *testing.T) {
 	dir := t.TempDir()

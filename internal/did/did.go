@@ -83,7 +83,7 @@ const p256CoordSize = 32
 // unsupported key type OR an unsupported EC curve, which is a programming error
 // (the caller controls what it generates) and is never attacker-reachable: the
 // verifier only ever PARSES JWKs (JWK.PublicKey), it never encodes. Panicking
-// rather than returning an error is deliberate here — the alternative that this
+// rather than returning an error is deliberate here: the alternative that this
 // function must never do is what it used to: silently stamp a non-P-256 key as
 // crv:"P-256" and emit a JWK that lies about what it carries (R3-02). A loud
 // refusal to encode an unrepresentable key is strictly safer than a false label.

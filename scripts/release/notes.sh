@@ -3,7 +3,7 @@
 # SPDX-FileCopyrightText: 2026 Gneiss Group Inc.
 # SPDX-License-Identifier: Apache-2.0
 #
-# notes.sh — render the release notes for a version from the commit history.
+# notes.sh: render the release notes for a version from the commit history.
 #
 # Commits are read as Conventional Commits (docs/branching.md) and grouped by
 # what they mean to someone downstream, breaking changes first. A commit that
@@ -48,7 +48,7 @@ section() {
   fi
 }
 
-printf '## v%s — %s\n\n' "$VERSION" "$DATE"
+printf '## v%s: %s\n\n' "$VERSION" "$DATE"
 
 if [ -n "$PREV" ]; then
   printf '_Changes since %s._\n\n' "$PREV"

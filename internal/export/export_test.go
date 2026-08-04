@@ -1125,7 +1125,7 @@ func TestR2_02_EnvelopeCoversLengthAndTip(t *testing.T) {
 	shorter := envelopeSigningInput(exp.Version, exp.Signer, f.polID, uint64(len(exp.Entries)-1), logTip(exp.Entries))
 	otherTip := envelopeSigningInput(exp.Version, exp.Signer, f.polID, uint64(len(exp.Entries)), exp.Entries[0].EntryHash)
 	if bytes.Equal(base, shorter) {
-		t.Fatal("the envelope signing input does not distinguish log length — truncation is reopened")
+		t.Fatal("the envelope signing input does not distinguish log length: truncation is reopened")
 	}
 	if bytes.Equal(base, otherTip) {
 		t.Fatal("the envelope signing input does not distinguish the log tip")

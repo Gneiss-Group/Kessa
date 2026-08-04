@@ -56,8 +56,8 @@ type AuditRecord struct {
 //	                possession verified), a decision was made about it, and that
 //	                decision is in the signed export. Seq and EntryHash point at
 //	                it. This is a mirror of evidence.
-//	Unattributable  The request could not be attributed to anyone — the chain or
-//	                the proof of possession did not verify — so no decision was
+//	Unattributable  The request could not be attributed to anyone: the chain or
+//	                the proof of possession did not verify, so no decision was
 //	                made and NOTHING was appended. Seq is zero and EntryHash is
 //	                nil because there is no entry to point at. Actor is what the
 //	                caller CLAIMED to be. This is telemetry, not evidence.
@@ -65,7 +65,7 @@ type AuditRecord struct {
 // The second kind is deliberately not in the signed log: an entry there asserts
 // something about an identified principal, and an unattributable attempt asserts
 // nothing about anyone. But an operator still needs to see it, because a refused
-// attempt is exactly what an attack looks like — which is why it comes here.
+// attempt is exactly what an attack looks like, which is why it comes here.
 const (
 	OutcomeRecorded       = "recorded"
 	OutcomeUnattributable = "unattributable"
