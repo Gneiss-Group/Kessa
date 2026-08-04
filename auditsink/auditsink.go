@@ -32,16 +32,44 @@ import "time"
 // Every field is a standard-library type on purpose (see the package doc): a sink
 // implementation depends on this struct and nothing else.
 type AuditRecord struct {
-	Seq           uint64    `json:"seq"`           // entry position in the append-only log
+	Seq           uint64    `json:"seq"`           // entry position; ZERO when Outcome is Unattributable (no entry exists)
 	Timestamp     time.Time `json:"timestamp"`     // when the decision was recorded
-	Actor         string    `json:"actor"`         // terminal principal (the DID that acted)
+	Actor         string    `json:"actor"`         // terminal principal; CLAIMED, not established, when Unattributable
 	ActionType    string    `json:"actionType"`    // e.g. "payment.transfer"
 	ActionTarget  string    `json:"actionTarget"`  // resource identifier the action names
 	Allowed       bool      `json:"allowed"`       // did the proxy allow the action?
 	Consequential bool      `json:"consequential"` // was it classified consequential?
 	Reason        string    `json:"reason"`        // human-readable decision reason
-	EntryHash     []byte    `json:"entryHash"`     // hash of the signed audit entry this record mirrors
+	EntryHash     []byte    `json:"entryHash"`     // hash of the signed entry; NIL when Outcome is Unattributable
+	Outcome       string    `json:"outcome"`       // Recorded or Unattributable; see below
 }
+
+// Outcome values. This field is the one the package doc anticipated: added
+// rather than replacing anything, so a sink written before it existed still
+// compiles and still receives every record it used to.
+//
+// A sink that ignores Outcome sees exactly what it saw before, because every
+// record that used to exist is Recorded. What is NEW is Unattributable, and the
+// distinction matters for the reason the whole seam exists:
+//
+//	Recorded        The request was attributed to a principal (its proof of
+//	                possession verified), a decision was made about it, and that
+//	                decision is in the signed export. Seq and EntryHash point at
+//	                it. This is a mirror of evidence.
+//	Unattributable  The request could not be attributed to anyone: the chain or
+//	                the proof of possession did not verify, so no decision was
+//	                made and NOTHING was appended. Seq is zero and EntryHash is
+//	                nil because there is no entry to point at. Actor is what the
+//	                caller CLAIMED to be. This is telemetry, not evidence.
+//
+// The second kind is deliberately not in the signed log: an entry there asserts
+// something about an identified principal, and an unattributable attempt asserts
+// nothing about anyone. But an operator still needs to see it, because a refused
+// attempt is exactly what an attack looks like, which is why it comes here.
+const (
+	OutcomeRecorded       = "recorded"
+	OutcomeUnattributable = "unattributable"
+)
 
 // AuditSink receives audit records as an enforcement point produces them. It is
 // intentionally thin: one method, synchronous, returning an error the caller may

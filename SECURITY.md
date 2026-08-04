@@ -14,7 +14,7 @@ privately, before they are public.
 Report it privately to: **security@gneiss-group.com**
 
 GitHub's private vulnerability-reporting flow is the preferred channel **where
-this repository has it enabled** — check the *Security* tab. If you do not see it
+this repository has it enabled**: check the *Security* tab. If you do not see it
 there, it is not available on this repository yet; use the email address above.
 Do not fall back to a public issue.
 
@@ -64,11 +64,11 @@ The committed values, exhaustively:
 | `examples/issuer/keystore.json`, `scripts/demo/keystore.json`, `scripts/stories/keystore.json` | Ed25519 **seeds** (e.g. `1111…`, `3131…`, `dada…`) | Fixed 32-byte signing seeds. Low-entropy repeated bytes, chosen for reproducibility. Each file carries a `MOCK KEY MANAGEMENT` header comment. |
 | `examples/issuer/spec.json`, `scripts/demo/spec.json`, `scripts/stories/spec.json` | `rootKeyHex` (`00112233…`, `d0d0…`) | Fixed macaroon HMAC root keys. Each file's `_comment` marks it `NON-SECRET demo value`. |
 | `internal/enforce/enforce_test.go` | `macRootKeyHx = "00112233…"` | The same demo root key, used by the enforcement tests. Allowlisted only in test code, only for this exact constant. |
-| `testdata/dids/**/did.json` | `publicKeyJwk.x` | **Public** keys — published by design; a DID document is public key material. |
+| `testdata/dids/**/did.json` | `publicKeyJwk.x` | **Public** keys: published by design; a DID document is public key material. |
 | `testdata/audit_export_v2.golden.json` | `holderKey` | The holder's **public** key, the same value published in each DID document. High-entropy base64, so a scanner flags it, but it is public. |
 
-If you find committed key material that is **not** in this table — or a fixed seed
-reused by a shipping (non-test, non-demo) code path — that *is* worth reporting;
+If you find committed key material that is **not** in this table, or a fixed seed
+reused by a shipping (non-test, non-demo) code path, that *is* worth reporting;
 see the in-scope item on secrets above.
 
 ## Disclosure
@@ -77,7 +77,7 @@ We support coordinated disclosure: report privately, allow reasonable time for a
 fix, and we will credit you (if you wish) when it ships.
 
 Findings raised after a public release are published as a **GitHub security
-advisory** once a fixed version is available — not before. The advisory carries
+advisory** once a fixed version is available, not before. The advisory carries
 the detail; the [security review record](docs/security-review.md) links to it, so
 the public register stays complete without handing a working description of the
 flaw to anyone still running an unfixed version.

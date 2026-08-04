@@ -46,6 +46,13 @@ func Handler(px *Proxy) http.Handler {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("POST /enforce", func(w http.ResponseWriter, r *http.Request) {
+		// This endpoint is the one that MUTATES: it can append to the audit log.
+		// It also needs no custom header, which is what made it reachable by a
+		// plain cross-origin form-style POST with no CORS preflight. Both ingress
+		// guards run before the body is read.
+		if !checkIngress(w, r, true) {
+			return
+		}
 		// Cap the body before decoding. MaxBytesReader makes the decoder return an
 		// error (rather than allocate unboundedly) once the cap is exceeded.
 		r.Body = http.MaxBytesReader(w, r.Body, maxRequestBody)
@@ -68,13 +75,23 @@ func Handler(px *Proxy) http.Handler {
 		_ = json.NewEncoder(w).Encode(res)
 	})
 
-	mux.HandleFunc("GET /tip", func(w http.ResponseWriter, _ *http.Request) {
+	mux.HandleFunc("GET /tip", func(w http.ResponseWriter, r *http.Request) {
+		if !checkIngress(w, r, false) {
+			return
+		}
 		tip := px.Tip()
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(tip)
 	})
 
-	mux.HandleFunc("GET /export", func(w http.ResponseWriter, _ *http.Request) {
+	// The read endpoints are guarded too, and /export especially. CORS stops a
+	// foreign page READING an ordinary cross-origin response, but under DNS
+	// rebinding the page is same-origin and reads it fine, and this response is
+	// the entire signed audit history.
+	mux.HandleFunc("GET /export", func(w http.ResponseWriter, r *http.Request) {
+		if !checkIngress(w, r, false) {
+			return
+		}
 		exp, err := px.Export()
 		var data []byte
 		if err == nil {

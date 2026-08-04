@@ -168,7 +168,7 @@ func defaultSockPath() string {
 // loadEnrolledKeys reads the enrollment mapping and loads each non-revoked
 // enrolled key as an APPROVAL-capable key. Enrolled keys are the employee/device
 // keys that issue and approve, so they must be hardware-backed: a Secure Enclave
-// key is loaded by tag, and a key recorded as software is REFUSED here (R4-02) —
+// key is loaded by tag, and a key recorded as software is REFUSED here (R4-02):
 // the human-approval control cannot rest on a software key. Use --keystore for a
 // non-production routine-only daemon.
 func loadEnrolledKeys(mapPath string) ([]signerd.HeldKey, error) {

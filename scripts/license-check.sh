@@ -71,7 +71,7 @@ for p in "${APACHE_PKGS[@]}" "${AGPL_PKGS[@]}"; do
 done
 
 if [ "$fail" -eq 0 ]; then
-  echo "license-check: OK — no Apache-tier package imports an AGPL-tier package;"
+  echo "license-check: OK: no Apache-tier package imports an AGPL-tier package;"
   echo "               all $(printf '%s\n' $all_pkgs | wc -l | tr -d ' ') packages classified"
 fi
 exit "$fail"

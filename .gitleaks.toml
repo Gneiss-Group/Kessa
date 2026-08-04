@@ -10,8 +10,8 @@
 # of truth; the forge-native scanners are belt-and-suspenders on top.
 #
 # Everything allowlisted below is DELIBERATE, DETERMINISTIC, NON-SECRET demo or
-# fixture material — fixed Ed25519 seeds, a patterned macaroon root key, and
-# published public keys — enumerated in SECURITY.md under "Committed demo
+# fixture material: fixed Ed25519 seeds, a patterned macaroon root key, and
+# published public keys: enumerated in SECURITY.md under "Committed demo
 # material". None of it is a real credential, and none of it is referenced by any
 # non-test path. A real deployment generates fresh keys behind the signer.Signer
 # seam; see internal/keystore and the README's Known limits.
@@ -32,11 +32,11 @@ useDefault = true
 # These trees are, by definition, deterministic POC data: the issuer example, the
 # demo and story keystores/specs, and the testdata (DID documents, golden audit
 # exports, signed status lists). The golden exports carry base64 *public* keys
-# (the credential holderKey — the same value published in each DID document), and
+# (the credential holderKey: the same value published in each DID document), and
 # gitleaks' generic-api-key rule flags them as high-entropy strings next to a
 # "Key" field. They are public by design.
 [[allowlists]]
-description = "Deliberate demo/fixture data — deterministic POC values and published public keys, never real credentials (see SECURITY.md)"
+description = "Deliberate demo/fixture data: deterministic POC values and published public keys, never real credentials (see SECURITY.md)"
 targetRules = ["generic-api-key"]
 paths = [
   '''^examples/''',
@@ -48,7 +48,7 @@ paths = [
 # 2. The one demo macaroon root key that appears in TEST CODE.
 #
 # `00112233445566778899aabbccddeeff` is the fixed root key the enforcement tests
-# mint macaroons from. It is allowlisted only where it actually is — a *_test.go
+# mint macaroons from. It is allowlisted only where it actually is: a *_test.go
 # file AND exactly this constant (condition = AND). Any other high-entropy value
 # in any test file, including a real secret pasted by mistake, still fires.
 [[allowlists]]

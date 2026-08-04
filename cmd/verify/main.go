@@ -78,7 +78,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("kessa verify", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	exportPath := fs.String("export", "", "path to the audit export file (required)")
-	didsDir := fs.String("dids", "", "directory of published did:web documents — THIS IS THE TRUST ROOT: every signature is checked against a key from here, so a verdict is only as good as the directory's provenance (required unless -fetch-dids)")
+	didsDir := fs.String("dids", "", "directory of published did:web documents: THIS IS THE TRUST ROOT: every signature is checked against a key from here, so a verdict is only as good as the directory's provenance (required unless -fetch-dids)")
 	fetchDIDs := fs.Bool("fetch-dids", false, "resolve did:web documents over HTTPS instead of from -dids, making web PKI the trust root instead of the local directory; the only network access this tool can ever make, and it is off by default")
 	quiet := fs.Bool("quiet", false, "print only the final verdict")
 	colorMode := fs.String("color", "auto", "colorize the PASS/FAIL outcomes: auto (only on a terminal), always, or never")
@@ -146,10 +146,10 @@ func report(w io.Writer, path, trustRoot string, exp *export.Export, res *export
 	// envelope failure, or an integrity-only downgrade, must never be masked by a
 	// low verbosity flag. Quiet may drop cosmetic output, never a security notice.
 	if res.FatalReason != "" {
-		fmt.Fprintf(w, "  SECURITY: envelope rejected — %s\n", res.FatalReason)
+		fmt.Fprintf(w, "  SECURITY: envelope rejected: %s\n", res.FatalReason)
 	}
 	if !res.EvidenceCarried {
-		fmt.Fprintf(w, "  SECURITY: evidence NONE — this is a v1 export. Integrity can be checked; delegated\n")
+		fmt.Fprintf(w, "  SECURITY: evidence NONE: this is a v1 export. Integrity can be checked; delegated\n")
 		fmt.Fprintf(w, "            authority CANNOT be re-derived. This is NOT an evidence-backed pass.\n")
 	}
 	// R2-05. The trust root conditions the verdict itself, so it prints at the
@@ -159,7 +159,7 @@ func report(w io.Writer, path, trustRoot string, exp *export.Export, res *export
 	fmt.Fprintf(w, "              'genuine'. Obtain them independently of whoever gave you the export.\n")
 
 	if !quiet {
-		fmt.Fprintf(w, "\nkessa — independent verifier\n\n")
+		fmt.Fprintf(w, "\nkessa: independent verifier\n\n")
 		fmt.Fprintf(w, "  export           %s\n", path)
 		fmt.Fprintf(w, "  format           %s\n", res.Version)
 		fmt.Fprintf(w, "  enforcement pt   %s\n", exp.Signer)
@@ -167,7 +167,7 @@ func report(w io.Writer, path, trustRoot string, exp *export.Export, res *export
 		if res.EvidenceCarried {
 			fmt.Fprintf(w, "  evidence         %d credentials embedded\n", len(exp.Credentials))
 		} else {
-			fmt.Fprintf(w, "  evidence         NONE — this is a v1 export.\n")
+			fmt.Fprintf(w, "  evidence         NONE: this is a v1 export.\n")
 			fmt.Fprintf(w, "                   Integrity can be checked; delegated authority CANNOT be re-derived.\n")
 		}
 		fmt.Fprintln(w)
@@ -209,11 +209,11 @@ func report(w io.Writer, path, trustRoot string, exp *export.Export, res *export
 	case res.FatalReason != "":
 		verdict, verdictColor = "FAIL (envelope rejected)", ansiRed
 	case !res.EvidenceCarried:
-		verdict, verdictColor = "DOWNGRADED (integrity-only, no evidence — not a clean pass)", ansiYellow
+		verdict, verdictColor = "DOWNGRADED (integrity-only, no evidence, not a clean pass)", ansiYellow
 	case !res.Pass():
 		verdict, verdictColor = "FAIL", ansiRed
 	}
-	fmt.Fprintf(w, "  VERDICT: %s  (%d allow verified, %d deny — evidence intact, %d integrity-only, %d failed, %d unverified)\n",
+	fmt.Fprintf(w, "  VERDICT: %s  (%d allow verified, %d deny: evidence intact, %d integrity-only, %d failed, %d unverified)\n",
 		colorize(color, verdictColor, verdict), pass, deny, integrity, fail, unver)
 
 	if quiet {

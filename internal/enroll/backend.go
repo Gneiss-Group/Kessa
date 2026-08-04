@@ -15,7 +15,7 @@ import (
 
 // ConfirmRequest is what a Backend is asked to authorize: a device key has just
 // been generated for an employee identity, and the question is whether to trust
-// it and register it. No private key is ever passed — only the identity, the DID
+// it and register it. No private key is ever passed: only the identity, the DID
 // being registered, and the public key's fingerprint/algorithm.
 type ConfirmRequest struct {
 	Identity    string
@@ -32,12 +32,12 @@ type ConfirmRequest struct {
 // The default (LocalTOFU) is self-administered trust-on-first-use: it shows the
 // operator the new key's fingerprint and asks for interactive confirmation, the
 // same ceremony ssh uses for a new host key. No secret crosses between two
-// parties, so there is nothing to intercept — honest and sufficient wherever
+// parties, so there is nothing to intercept: honest and sufficient wherever
 // there is no organizational gap between "admin" and "employee" (solo, home lab,
 // small team).
 //
-// A stronger backend — binding enrollment to a live corporate IdP session
-// (Okta/Azure AD) so the human is authenticated, not just the key confirmed —
+// A stronger backend: binding enrollment to a live corporate IdP session
+// (Okta/Azure AD) so the human is authenticated, not just the key confirmed:
 // satisfies this same interface and drops in without touching Enroll's
 // orchestration. It is deliberately NOT built here; the seam exists so it can be,
 // and whether it ships open or paid is a separate, deferred decision. Rejected
@@ -72,7 +72,7 @@ func (b LocalTOFU) Name() string {
 }
 
 // Confirm shows the fingerprint and, unless AssumeYes is set, requires the
-// operator to type "yes". Anything else — including EOF or a nil reader — fails
+// operator to type "yes". Anything else (including EOF or a nil reader) fails
 // closed, so an enrollment is never silently accepted for want of an answer.
 func (b LocalTOFU) Confirm(req ConfirmRequest) error {
 	out := b.Out

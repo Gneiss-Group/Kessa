@@ -138,8 +138,8 @@ a holder could edit its own credential to skip the revocation check
 (R2-01); `statusChecked` was an assertion the verifier accepted rather than a
 count it re-derived; and the envelope signature bound nothing about the log's
 length, so a genuine export could be truncated by anyone holding the file
-(R2-02). Both are closed; the consolidated [security review](README.md#security-review)
-records the fixes.
+(R2-02). Both are closed; the [security review record](security-review.md) lists
+them.
 
 **The keys those signatures are checked against are trusted input.** No amount of
 re-derivation changes that. It is the first entry under [Known

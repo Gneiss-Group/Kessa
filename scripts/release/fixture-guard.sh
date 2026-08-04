@@ -3,7 +3,7 @@
 # SPDX-FileCopyrightText: 2026 Gneiss Group Inc.
 # SPDX-License-Identifier: Apache-2.0
 #
-# fixture-guard.sh — refuse to release on a golden fixture that moved without
+# fixture-guard.sh: refuse to release on a golden fixture that moved without
 # anyone saying so.
 #
 # The goldens in testdata/ are not test data in the ordinary sense. They freeze
@@ -11,7 +11,7 @@
 # format: an export carries the evidence a verifier re-derives every verdict
 # from, and a v1 export carries none and must never read as a clean pass. A
 # golden that changes quietly is the one change that can invalidate that claim
-# while every test still goes green — because the goldens are what the tests
+# while every test still goes green, because the goldens are what the tests
 # compare against.
 #
 # So a release asks four questions:
@@ -47,11 +47,8 @@ V1_GOLDEN="testdata/audit_export.golden.json"
 DIDS="testdata/dids"
 STATUS_URL="https://localhost/orgs/acme/status.json"
 STATUS_FILE="testdata/status/acme_status.json"
-# Where a change to the frozen export format must be recorded. This was the
-# round-2 fixes doc; that file was removed pending a consolidated security-review
-# document. CHANGELOG.md is the interim home — a format change is release-notable
-# by definition. Repoint this to the consolidated security doc once it lands, if
-# that is where the format history should live.
+# Where a change to the frozen export format is recorded, since a format change is
+# release-notable by definition.
 FORMAT_HISTORY="CHANGELOG.md"
 
 fail=0
@@ -70,11 +67,11 @@ else
   make -s fixtures >/dev/null
   drift="$(git status --porcelain -- testdata/)"
   if [ -n "$drift" ]; then
-    bad "regenerating the fixtures changed the tree — the committed goldens are not what this source produces"
+    bad "regenerating the fixtures changed the tree: the committed goldens are not what this source produces"
     printf '%s\n' "$drift" >&2
     git --no-pager diff --stat -- testdata/ >&2
   else
-    note "OK — make fixtures is a no-op in git"
+    note "OK: make fixtures is a no-op in git"
   fi
 fi
 
@@ -91,17 +88,17 @@ v1_code=$?
 set -e
 
 if [ "$v2_code" -ne 0 ] || ! printf '%s' "$v2_out" | grep -q 'VERDICT: PASS'; then
-  bad "the v2 golden no longer verifies clean (exit $v2_code) — evidence-backed verification is broken or the fixture moved"
+  bad "the v2 golden no longer verifies clean (exit $v2_code): evidence-backed verification is broken or the fixture moved"
   printf '%s\n' "$v2_out" >&2
 else
-  note "OK — v2 golden: PASS, evidence re-derived"
+  note "OK: v2 golden: PASS, evidence re-derived"
 fi
 
 if [ "$v1_code" -eq 0 ] || ! printf '%s' "$v1_out" | grep -q 'VERDICT: DOWNGRADED'; then
-  bad "the v1 golden did not come back DOWNGRADED with a non-zero exit (exit $v1_code) — an evidence-free export must never read as a clean pass"
+  bad "the v1 golden did not come back DOWNGRADED with a non-zero exit (exit $v1_code): an evidence-free export must never read as a clean pass"
   printf '%s\n' "$v1_out" >&2
 else
-  note "OK — v1 golden: DOWNGRADED, exit $v1_code, not a clean pass"
+  note "OK: v1 golden: DOWNGRADED, exit $v1_code, not a clean pass"
 fi
 
 # ---- 4. a golden that moved needs a stated reason and an acknowledgement -----
@@ -111,12 +108,12 @@ last_tag="$(git tag --list 'v[0-9]*' --sort=-v:refname | head -n1)"
 fixtures_changed=false
 
 if [ -z "$last_tag" ]; then
-  note "no previous release tag — nothing to diff against (first release)"
+  note "no previous release tag: nothing to diff against (first release)"
 else
   changed="$(git diff --name-only "$last_tag..HEAD" -- testdata/ || true)"
   goldens="$(printf '%s\n' "$changed" | grep -E 'golden\.json$' || true)"
   if [ -z "$goldens" ]; then
-    note "OK — no golden fixture changed since $last_tag"
+    note "OK: no golden fixture changed since $last_tag"
   else
     fixtures_changed=true
     echo "  golden fixtures changed since $last_tag:" >&2
@@ -125,13 +122,13 @@ else
     if git diff --quiet "$last_tag..HEAD" -- "$FORMAT_HISTORY"; then
       bad "a golden moved but $FORMAT_HISTORY did not. Regenerating a golden means the frozen export format changed; it needs an entry in $FORMAT_HISTORY saying what changed and why (see the 'fixtures' target in the Makefile)."
     else
-      note "OK — $FORMAT_HISTORY was updated in the same range"
+      note "OK: $FORMAT_HISTORY was updated in the same range"
     fi
 
     if [ "${KESSA_FIXTURE_ACK:-false}" != "true" ]; then
       bad "a golden moved and the release was not run with the fixture change acknowledged. Re-run the release workflow with 'fixtures_reviewed' checked once you have read the diff above."
     else
-      note "OK — the release operator acknowledged the golden change"
+      note "OK: the release operator acknowledged the golden change"
     fi
   fi
 fi
@@ -143,6 +140,6 @@ fi
 if [ "$fail" -eq 0 ]; then
   echo "fixture-guard: OK"
 else
-  echo "fixture-guard: FAILED — see above" >&2
+  echo "fixture-guard: FAILED: see above" >&2
 fi
 exit "$fail"

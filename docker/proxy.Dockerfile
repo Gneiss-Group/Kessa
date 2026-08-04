@@ -8,7 +8,7 @@
 #
 # Builds from source (provably this repository's binary), cross-compiled so one
 # runner yields linux/amd64 and linux/arm64 without QEMU. Final base is
-# distroless/static (nonroot) — it carries CA certificates, which the proxy needs
+# distroless/static (nonroot), it carries CA certificates, which the proxy needs
 # when it resolves did:web documents or status lists over HTTPS. No shell, no
 # package manager. Bases pinned by digest, bumped by Dependabot.
 #
@@ -16,7 +16,7 @@
 # verifier out of this image (it has its own).
 #
 # NOTE: the `serve` transport is a documented mock (plain JSON over HTTP, no
-# mTLS — see the README's "not production-hardened"). This image is for
+# mTLS: see the README's "not production-hardened"). This image is for
 # evaluation and development deployments (k8s, sidecars); it is not a
 # production-hardened enforcement endpoint yet.
 

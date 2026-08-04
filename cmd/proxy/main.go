@@ -25,6 +25,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"strings"
@@ -263,6 +264,56 @@ func cmdRun(args []string, stdout, stderr io.Writer) int {
 	return exitOK
 }
 
+// isLoopbackAddr reports whether a listen address is loopback-only. An empty
+// address means the listener is disabled and is trivially fine. A bare port or a
+// wildcard host ("", "0.0.0.0", "::") binds every interface and is NOT loopback.
+func isLoopbackAddr(addr string) bool {
+	addr = strings.TrimSpace(addr)
+	if addr == "" {
+		return true // disabled
+	}
+	host, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		return false // unparseable: refuse rather than guess
+	}
+	host = strings.Trim(host, "[]")
+	if host == "" {
+		return false // ":8181" binds all interfaces
+	}
+	if host == "localhost" {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
+}
+
+// refuseRemoteBind decides whether the configured listen addresses may be used.
+// It returns a message to print and whether to proceed: refusing carries an
+// explanation, and proceeding under the escape hatch carries a warning, because
+// an operator who opted in should still see it on every start.
+func refuseRemoteBind(httpAddr, mcpAddr string, allow bool) (string, bool) {
+	var remote []string
+	for _, a := range []string{httpAddr, mcpAddr} {
+		if !isLoopbackAddr(a) {
+			remote = append(remote, a)
+		}
+	}
+	if len(remote) == 0 {
+		return "", true
+	}
+	if allow {
+		return fmt.Sprintf("kessa-proxy: WARNING: serving %s without caller authentication. "+
+			"Anyone who can reach this address may submit requests; an export from this "+
+			"deployment is enough to have entries refused-and-recorded against it. "+
+			"See the README's Known limits.\n", strings.Join(remote, ", ")), true
+	}
+	return fmt.Sprintf("kessa-proxy: refusing to bind non-loopback address %s: the listeners have "+
+		"no caller authentication.\n"+
+		"  Bind 127.0.0.1 instead, or pass --allow-unauthenticated-remote if you accept that\n"+
+		"  anyone who can reach this address may submit requests (containerized serving needs\n"+
+		"  this, because a container's loopback is unreachable through -p).\n", strings.Join(remote, ", ")), false
+}
+
 // ---- serve: localhost HTTP shell -------------------------------------------
 
 func cmdServe(args []string, stdout, stderr io.Writer) int {
@@ -278,6 +329,7 @@ func cmdServe(args []string, stdout, stderr io.Writer) int {
 	nowStr := fs.String("now", "", "fixed entry timestamp (RFC3339) for deterministic runs; default wall clock")
 	auditLog := fs.String("audit-log", "audit-log.jsonl", "forward each audit entry to this local JSON-Lines file; \"-\" for stdout, \"\" to disable. Best-effort and lossy: a hung/slow sink drops records rather than stalling enforcement (bound sinkMaxInFlight=64; finding R2-03)")
 	walPath := fs.String("audit-wal", "", "durable write-ahead audit log path; when set, every entry is fsynced before its decision returns (log-before-act, fail-closed) and the log is recovered from it on restart. \"\" disables durability")
+	allowRemote := fs.Bool("allow-unauthenticated-remote", false, "permit binding a NON-LOOPBACK address. The listeners have no caller authentication, so this exposes the enforcement endpoint to anyone who can reach it. Required for containerized serving, where a container's loopback is unreachable through -p. It does not add authentication; it records that you accepted its absence")
 	var statuses statusFlag
 	fs.Var(&statuses, "status", "signed status list as url=file (repeatable)")
 	if err := fs.Parse(args); err != nil {
@@ -304,6 +356,24 @@ func cmdServe(args []string, stdout, stderr io.Writer) int {
 	if closeWAL != nil {
 		defer func() { _ = closeWAL() }()
 	}
+	// A non-loopback bind is refused unless the operator explicitly accepts what it
+	// means. The listeners have no caller authentication, so binding a reachable
+	// address publishes the enforcement endpoint to anyone who can route to it,
+	// and while a request still cannot become an ALLOW without a valid proof of
+	// possession, that is a different property from who may submit at all.
+	//
+	// This is a fail-closed default, not a fix: it removes the accidental version
+	// of the exposure, and the property is unchanged (README, Known limits).
+	// Containerized serving genuinely needs it, because a container's loopback is
+	// unreachable through -p, which is why the escape hatch exists and is named
+	// after what it costs rather than what it enables.
+	if msg, ok := refuseRemoteBind(*httpAddr, *mcpAddr, *allowRemote); !ok {
+		fmt.Fprint(stderr, msg)
+		return exitUsage
+	} else if msg != "" {
+		fmt.Fprint(stderr, msg)
+	}
+
 	px, _, ok := buildProxy(*policyPath, *didsDir, *epDID, *ksPath, statuses, now, sink, wal, stderr)
 	if !ok {
 		return exitUsage
@@ -311,9 +381,9 @@ func cmdServe(args []string, stdout, stderr io.Writer) int {
 	defer func() { _ = px.FlushSink(sinkFlushTimeout) }()
 
 	// Two independently configurable front-end listeners, both funneling into the
-	// SAME enforcement engine (design note §3). The MCP-native listener is a thin
-	// protocol adapter (enforce.MCPHandler calls the same px.Handle/px.Tip the HTTP
-	// handler does), so an MCP host can point its server address straight at Kessa.
+	// SAME enforcement engine. The MCP-native listener is a thin protocol adapter
+	// (enforce.MCPHandler calls the same px.Handle/px.Tip the HTTP handler does),
+	// so an MCP host can point its server address straight at Kessa.
 	// Each listener is enabled by having an address and disabled by clearing it: a
 	// security-conscious operator closes a port they don't want rather than being
 	// forced to commit to a protocol. Both enabled is the default (lowest deployment
@@ -325,8 +395,9 @@ func cmdServe(args []string, stdout, stderr io.Writer) int {
 			"GET  /export    the signed audit export so far",
 		}},
 		{name: "MCP-native (Streamable HTTP)", addr: *mcpAddr, handler: enforce.MCPHandler(px), hints: []string{
-			"POST /          an MCP JSON-RPC message (initialize, tools/list, tools/call)",
+			"POST /          an MCP JSON-RPC message (ping, tools/list, tools/call)",
 			"tools           kessa/tip, kessa/enforce",
+			"revision        2026-07-28 (stateless: no sessions, no initialize)",
 		}},
 	})
 	if len(listeners) == 0 {
@@ -366,9 +437,9 @@ type listener struct {
 // enabledListeners keeps only the listeners with a non-empty address, preserving
 // order. Clearing an address is how a listener is turned off: attack-surface
 // minimization for an operator who wants a port closed, not a forced up-front
-// protocol commitment (design note §3). Returning zero listeners is legal and
-// inert, deliberately, so the config does not hardcode "at least one protocol"
-// as an assumption a future third listener shape could break.
+// protocol commitment. Returning zero listeners is legal and inert, deliberately,
+// so the config does not hardcode "at least one protocol" as an assumption a
+// future third listener shape could break.
 func enabledListeners(ls []listener) []listener {
 	out := make([]listener, 0, len(ls))
 	for _, l := range ls {
@@ -385,7 +456,7 @@ func enabledListeners(ls []listener) []listener {
 // silently got one is a misconfiguration the operator must see, so the first
 // listener error (a bind failure, most often) stops the process rather than being
 // logged and swallowed. Crash/redundancy hardening ACROSS listeners once they are
-// up is separately scoped and explicitly deferred (design note §5).
+// up is separately scoped and explicitly deferred.
 func serveAll(ls []listener) error {
 	errc := make(chan error, len(ls))
 	for _, l := range ls {

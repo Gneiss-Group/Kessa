@@ -245,7 +245,7 @@ func TestEvidenceFieldsChangeTheHash(t *testing.T) {
 		t.Fatal(err)
 	}
 	if bytes.Equal(bare.EntryHash, gotIDs.EntryHash) {
-		t.Fatal("ChainCredentialIDs is NOT hash-covered — the B3 substitution attack would be possible")
+		t.Fatal("ChainCredentialIDs is NOT hash-covered: the B3 substitution attack would be possible")
 	}
 
 	withPoP := rec

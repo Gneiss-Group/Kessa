@@ -21,14 +21,17 @@
 //     software-minted key.
 //   - ECDSA/P-256 signs SHA-256(message) and emits an ASN.1 DER signature, which
 //     is exactly the shape a Secure Enclave / TPM signing operation returns, so a
-//     future HardwareSigner drops in behind this seam with no format change.
+//     hardware backend drops in behind this seam with no format change.
 //
 // SoftwareSigner (Ed25519) and ECDSASigner (P-256) are the in-memory
-// implementations. Hardware binding (TPM / Secure Enclave / HSM) remains MOCKED
-// for the POC: a future HardwareSigner satisfies this same interface and returns
-// the same DER-encoded P-256 signatures ECDSASigner does, so nothing above this
-// package changes when real hardware binding lands. That seam is the whole point
-// of routing through an interface.
+// implementations; their private keys exist in process memory, which is the
+// documented non-production path. The hardware side of the seam is no longer
+// hypothetical: internal/signer/enclave holds a macOS Secure Enclave backend
+// whose P-256 key is non-extractable, and it satisfies this interface returning
+// the same DER-encoded signatures ECDSASigner does, which is why nothing above
+// this package changed when it landed. TPM (Linux) and HSM backends do not exist;
+// see UPCOMING.md. What each backend does and does not prove is stated in
+// docs/signer.md.
 package signer
 
 import (
@@ -225,7 +228,7 @@ func (s *ECDSASigner) DID() types.DID { return s.did }
 // than panicking: a key we cannot verify is a failed verification, never a skip.
 //
 // PROPERTY NOTE (R3-03): the P-256 path does NOT enforce canonical low-S, so
-// ECDSA signatures are malleable — given a valid (r, s), (r, n-s) also verifies.
+// ECDSA signatures are malleable: given a valid (r, s), (r, n-s) also verifies.
 // Ed25519 is non-malleable, so this property is specific to the P-256
 // (employee/device) key path. This is safe TODAY because no Kessa mechanism
 // treats a signature as an identity, a nonce, or a dedup key: PoP and approval

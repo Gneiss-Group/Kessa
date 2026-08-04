@@ -40,15 +40,15 @@ For what the system does today, and for the limits of a clean verdict, the
 
 - **Linux TPM `Signer` backend.** The macOS Secure Enclave backend has no Linux
   counterpart yet. A TPM 2.0-backed, non-extractable P-256 key would drop straight
-  into the algorithm-agile signing seam — a TPM does ECDSA P-256, so no verifier
+  into the algorithm-agile signing seam: a TPM does ECDSA P-256, so no verifier
   change is needed, exactly as the Enclave slotted in. The cost is real rather than
   incremental: the Go standard library has no TPM support, so it means either cgo
   against `libtss2` (a system build dependency, plus the heavier TPM 2.0 object
-  model — hierarchies, sessions, create/load/sign) or the external `go-tpm`
+  model: hierarchies, sessions, create/load/sign) or the external `go-tpm`
   library (which would breach the no-external-Go-dependencies discipline). Choosing
   between those, and a `swtpm`-simulator test story, is the design decision this
   needs; unstarted. Worth building on a real trigger (a deployment needing
-  hardware-backed keys on Linux *endpoints* — note a containerized daemon has no
+  hardware-backed keys on Linux *endpoints*: note a containerized daemon has no
   clean TPM access, so this is a host concern), not speculatively.
 
 - **macOS app-bundle packaging for the signing daemon.** Persisting a Secure
@@ -57,10 +57,25 @@ For what the system does today, and for the limits of a clean verdict, the
   the daemon has to ship as a signed, profile-bearing **app bundle**, not a bare
   binary. The Enclave mechanism itself is hardware-validated; this is the packaging
   that lets the compiled Go daemon (rather than an equivalent harness) run under a
-  profile. It is **open-tier and macOS-specific** — a solo developer building from
+  profile. It is **open-tier and macOS-specific**: a solo developer building from
   source hits the same wall, so it is not fleet/paid tooling, and Linux has no
   equivalent. Distinct from production Developer ID signing + notarization for
   fleet distribution, which is the separate scale-dependent piece.
+
+- **Caller authentication on the enforcement endpoint.** No longer the thing
+  standing between an export and someone else's audit log: R5-06 closed that by
+  making possession an attribution gate, so an unattributable request causes no
+  write. What remains is the separate question of **who may submit at all**.
+  Anyone who can reach a listener may send it requests. They cannot make it record
+  anything (that needs a proof of possession), but unauthenticated submission is
+  still work the chokepoint performs for strangers, and a deployment that wants a
+  closed perimeter has no way to ask for one. `--allow-unauthenticated-remote` is a
+  fail-closed default, not an answer.
+
+  Candidates, all unstarted: mTLS (matches the sidecar topology); a unix socket
+  with a peer-uid check (matches the same-host case and reuses what the signing
+  daemon already does); a bearer token (weakest, easiest). The choice interacts
+  with the MCP deployment model below.
 
 ## Coverage and evidence
 

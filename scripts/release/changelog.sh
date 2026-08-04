@@ -3,7 +3,7 @@
 # SPDX-FileCopyrightText: 2026 Gneiss Group Inc.
 # SPDX-License-Identifier: Apache-2.0
 #
-# changelog.sh — insert a release's notes into CHANGELOG.md, newest first.
+# changelog.sh: insert a release's notes into CHANGELOG.md, newest first.
 #
 # Insertion is anchored to a marker line rather than a line count, so editing the
 # preamble cannot silently start writing releases into the middle of a sentence.

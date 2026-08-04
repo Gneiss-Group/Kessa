@@ -1,4 +1,4 @@
-# Kessa — build / test / demo
+# Kessa: build / test / demo
 #
 # The verifier (cmd/verify, built as `kessa`) is the spine: it must stay a
 # standalone, near-stdlib binary. Keep its dependency set sacred.
@@ -11,7 +11,7 @@ BINDIR  ?= bin
 all: build
 
 # build compiles every command into ./bin. The verifier lives at cmd/verify but
-# ships as `kessa` — the artifact a skeptical evaluator downloads and runs.
+# ships as `kessa`: the artifact a skeptical evaluator downloads and runs.
 build: verify
 	@mkdir -p $(BINDIR)
 	$(GO) build -o $(BINDIR)/kessa-issuer ./cmd/issuer
@@ -24,9 +24,9 @@ build: verify
 # target, and that is deliberate (security review round 2, R2-04): the proxy
 # mutates a hash-chained log and an evidence map, so "does it race?" is a
 # correctness question about the enforcement path, not a performance one. The
-# round-2 data race — two concurrent decisions landing at the same Seq, the
+# round-2 data race: two concurrent decisions landing at the same Seq, the
 # second silently overwriting the first and leaving an executed consequential
-# action with no audit entry at all — was invisible to a bare `go test` and was
+# action with no audit entry at all, was invisible to a bare `go test` and was
 # found only by running -race by hand. A defect class that only one flag can see
 # belongs behind the flag everyone runs.
 test: test-race-condition
@@ -76,7 +76,7 @@ license-check:
 # Both goldens were regenerated once, together, when the round-2 fixes
 # finalized the evidence format's contents pre-release (no version bump: the
 # evidence envelope is v2, its contents settled before release). The entry payload
-# changed shape, so the v1 golden moved too — it no longer has its old job of
+# changed shape, so the v1 golden moved too, it no longer has its old job of
 # proving the evidence fields left v1
 # hashing untouched, because this change did not leave it untouched. It now
 # freezes the integrity-only envelope path under the current entry encoding.
@@ -141,7 +141,7 @@ release-version:
 	@bash scripts/release/version.sh "$(V)"
 
 # release-check runs, locally, exactly what both release phases run before they
-# tag anything: the shared gate (scripts/ci/gate.sh — the same script CI runs)
+# tag anything: the shared gate (scripts/ci/gate.sh: the same script CI runs)
 # plus the golden-fixture guard. Run it before starting a release so a refusal
 # costs seconds, not a workflow run.
 release-check:

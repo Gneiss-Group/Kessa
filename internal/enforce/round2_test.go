@@ -6,6 +6,7 @@ package enforce
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -101,7 +102,7 @@ func TestR2_01_HolderCannotEditAnyCredentialField(t *testing.T) {
 			// chain.Verify must reject it outright. Before R2-01 the edited chain
 			// verified cleanly and the bypass flowed from there.
 			if err := tampered.Verify(h.resolver); err == nil {
-				t.Fatal("SECURITY: an edited credential still passes chain.Verify — the issuance signature does not cover this field")
+				t.Fatal("SECURITY: an edited credential still passes chain.Verify: the issuance signature does not cover this field")
 			}
 
 			// And so the proxy refuses to attribute the request at all: it never
@@ -155,7 +156,7 @@ func TestR2_01_RevocationSurvivesAStatusRefEdit(t *testing.T) {
 		Chain: tampered, Action: a, PoP: h.pop(t, tip0, a, "n1"),
 		Approver: didAlice, Approval: h.approval(t, tip0, didAlice, a),
 	}); err == nil {
-		t.Fatal("SECURITY: revocation bypassed — the proxy accepted a credential with statusRef stripped")
+		t.Fatal("SECURITY: revocation bypassed: the proxy accepted a credential with statusRef stripped")
 	}
 }
 
@@ -268,7 +269,7 @@ func TestR2_02_TruncatedExportIsRejected(t *testing.T) {
 
 	v := h.verifyBytes(t, dropEntries(t, full, func(i int) bool { return i < 1 }))
 	if v.Pass() {
-		t.Fatal("SECURITY: a truncated export still verifies clean — the deny vanished without a trace")
+		t.Fatal("SECURITY: a truncated export still verifies clean: the deny vanished without a trace")
 	}
 	if !strings.Contains(v.FatalReason, "entries may have been removed") {
 		t.Fatalf("truncation should fail at the envelope and say so, got fatal %q", v.FatalReason)
@@ -536,6 +537,34 @@ func TestR2_03_ErroringSinkChangesNothing(t *testing.T) {
 	}
 }
 
+// submitRetrying models what an honest client does under contention, and exists
+// so these tests still force the interleaving they were written for.
+//
+// Since possession became an attribution gate (R5-06), a proof bound to a slot
+// another request took is refused rather than logged: correctly, since it is
+// indistinguishable from a forgery. But a test whose goroutines all bind to the
+// same starting tip would then have exactly ONE request reach Append, and the
+// serialization property R2-04 exists to guard would go untested while the
+// assertions still passed. That is the failure mode these tests were written to
+// catch, so it must not be the failure mode they acquire.
+//
+// A real client re-reads the tip and re-signs. So does this: every request
+// reaches Append, and the concurrent-append path is exercised as before.
+func submitRetrying(t *testing.T, px *Proxy, req Request, resign func(Tip) credential.PoP) (*Result, error) {
+	t.Helper()
+	for attempt := 0; attempt < 50; attempt++ {
+		res, err := px.Handle(req)
+		var ue *UnattributableError
+		if errors.As(err, &ue) && ue.Stage == "possession" {
+			req.PoP = resign(px.Tip()) // lost the race for that slot; rebind and retry
+			continue
+		}
+		return res, err
+	}
+	t.Fatal("gave up retrying: a caller could not reach Append in 50 attempts")
+	return nil, nil
+}
+
 // ---- R2-04: concurrency ------------------------------------------------------
 
 // TestR2_04_OneApprovalAuthorizesOneAction is the finding's core, and the reason
@@ -565,10 +594,10 @@ func TestR2_04_OneApprovalAuthorizesOneAction(t *testing.T) {
 		go func(i int) {
 			defer wg.Done()
 			<-start
-			results[i], errs[i] = px.Handle(Request{
+			results[i], errs[i] = submitRetrying(t, px, Request{
 				Chain: h.chain, Action: a, PoP: pop,
 				Approver: didAlice, Approval: approval,
-			})
+			}, func(tp Tip) credential.PoP { return h.pop(t, tp, a, "n-race-retry") })
 		}(i)
 	}
 	close(start)
@@ -584,11 +613,18 @@ func TestR2_04_OneApprovalAuthorizesOneAction(t *testing.T) {
 		t.Fatalf("SECURITY: %d actions executed against ONE human approval bound to one slot; want exactly 1", allowed)
 	}
 
-	// Interleaving B: no entry may be lost. Every request that got far enough to
-	// be attributable produced exactly one entry, at its own Seq.
+	// Interleaving B: no entry may be lost. Every request rebinds and retries until
+	// it reaches Append, so all of them produce exactly one entry, at its own Seq.
+	// The original bug showed up here as a short log: two entries at seq 0, one
+	// silently overwriting the other.
 	entries := px.Entries()
 	if len(entries) != goroutines {
-		t.Fatalf("SECURITY: %d requests produced %d audit entries — the log lost one", goroutines, len(entries))
+		t.Fatalf("SECURITY: %d requests produced %d audit entries: the log lost one", goroutines, len(entries))
+	}
+	for i := range errs {
+		if errs[i] != nil {
+			t.Fatalf("request %d never reached a decision: %v", i, errs[i])
+		}
 	}
 	for i, e := range entries {
 		if e.Seq != uint64(i) {
@@ -620,8 +656,10 @@ func TestR2_04_ConcurrentHandleIsRaceFree(t *testing.T) {
 			// Each goroutine binds to whatever tip it observes. Some will lose the
 			// race for that slot and be denied; none may corrupt the log.
 			tip := px.Tip()
-			pop := h.pop(t, tip, a, "n-"+string(rune('a'+i)))
-			_, _ = px.Handle(Request{Chain: h.chain, Action: a, PoP: pop})
+			nonce := "n-" + string(rune('a'+i))
+			pop := h.pop(t, tip, a, nonce)
+			_, _ = submitRetrying(t, px, Request{Chain: h.chain, Action: a, PoP: pop},
+				func(tp Tip) credential.PoP { return h.pop(t, tp, a, nonce) })
 		}(i)
 	}
 	wg.Wait()
@@ -629,6 +667,11 @@ func TestR2_04_ConcurrentHandleIsRaceFree(t *testing.T) {
 	entries := px.Entries()
 	if len(entries) != goroutines {
 		t.Fatalf("want %d entries, got %d", goroutines, len(entries))
+	}
+	for i, e := range entries {
+		if e.Seq != uint64(i) {
+			t.Fatalf("entry %d landed at seq %d: appends are not serialized", i, e.Seq)
+		}
 	}
 	if v := h.verify(t, px); !v.Pass() {
 		t.Fatalf("a log written concurrently must still verify: %+v", v.Entries)
@@ -663,12 +706,10 @@ func TestR2_04_TipCarriesPrevHash(t *testing.T) {
 	// different log is also distinguishable.
 	a2 := action("10")
 	stale := h.pop(t, Tip{Seq: next.Seq, PrevHash: tip.PrevHash}, a2, "n1")
-	res, err := px.Handle(Request{Chain: h.chain, Action: a2, PoP: stale})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if res.Decision.Allowed {
-		t.Fatal("SECURITY: a PoP bound to the wrong PrevHash was accepted")
+	_, err := px.Handle(Request{Chain: h.chain, Action: a2, PoP: stale})
+	var ue *UnattributableError
+	if !errors.As(err, &ue) || ue.Stage != "possession" {
+		t.Fatalf("SECURITY: a PoP bound to the wrong PrevHash must be unattributable, got %v", err)
 	}
 }
 

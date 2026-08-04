@@ -2,7 +2,7 @@
 
 How work gets from an idea to a tagged artifact. Kessa is solo-maintained and
 [not yet accepting external code](../CONTRIBUTING.md), so these rules are sized
-for one maintainer plus review agents — but they are written to survive a second
+for one maintainer plus review agents, but they are written to survive a second
 contributor without being rewritten.
 
 ## Branches
@@ -26,7 +26,7 @@ docs/branching-standard
 chore/bump-go-1.27
 ```
 
-**Nothing is pushed directly to `main` — including releases.** The version bump
+**Nothing is pushed directly to `main`: including releases.** The version bump
 lands through a pull request like everything else (see [Releasing](#releasing)),
 so `main` needs no bypass for any workflow, and the commit that lands is the
 GitHub-signed squash-merge commit.
@@ -34,7 +34,7 @@ GitHub-signed squash-merge commit.
 ### Protecting `main`
 
 [`CODEOWNERS`](../CODEOWNERS) declares the verifier and its Apache-tier
-dependency closure as owner-reviewed, but a `CODEOWNERS` file only *declares* —
+dependency closure as owner-reviewed, but a `CODEOWNERS` file only *declares*:
 enforcement comes from branch protection, which is repository configuration and
 is not carried by anything in this tree. The intended settings for `main`:
 
@@ -52,8 +52,8 @@ squash-merge (see [Releasing](#releasing)).
 Kessa uses [Conventional Commits](https://www.conventionalcommits.org). This is
 not a style preference: the release pipeline reads the commit history to decide
 whether the next version is a patch, a minor, or a major, and to write the
-release notes. An unconventional subject line does not break the release — it
-lands under "Other changes" — but it does forfeit its say in the version number.
+release notes. An unconventional subject line does not break the release, it
+lands under "Other changes", but it does forfeit its say in the version number.
 
 ```
 <type>(<optional scope>)<optional !>: <subject>
@@ -87,8 +87,8 @@ it: `sec(export): bind entry count and log tip into the envelope signature
 ## Versioning
 
 Kessa follows [semantic versioning](https://semver.org). The version lives in
-exactly one place — the `Version` constant in
-[`internal/version`](../internal/version/version.go) — and the git tag is `v`
+exactly one place: the `Version` constant in
+[`internal/version`](../internal/version/version.go), and the git tag is `v`
 plus that constant. Every binary prints it:
 
 ```sh
@@ -127,18 +127,18 @@ a workflow run:
 make release-check
 ```
 
-A release runs in **two phases**, so that — like every other change — it reaches
+A release runs in **two phases**, so that (like every other change) it reaches
 `main` through a reviewed pull request and never a direct push.
 
-**Phase 1 — prepare** ([`release.yml`](../.github/workflows/release.yml), the
+**Phase 1: prepare** ([`release.yml`](../.github/workflows/release.yml), the
 **Release (prepare)** workflow). Run it from the Actions tab, on `main`, with:
 
-- **bump** — `auto` (derive from the commits), or `patch`/`minor`/`major` to force
-- **fixtures_reviewed** — check only if a golden changed and you have read the diff
-- **dry_run** — on by default: computes the version and notes, pushes nothing
+- **bump**: `auto` (derive from the commits), or `patch`/`minor`/`major` to force
+- **fixtures_reviewed**: check only if a golden changed and you have read the diff
+- **dry_run**: on by default: computes the version and notes, pushes nothing
 
 It confirms you are the owner on `main`, runs the full gate again (`gofmt`, SPDX,
-`go vet`, the licence boundary, the race tests, the demo — [`scripts/ci/gate.sh`](../scripts/ci/gate.sh)),
+`go vet`, the licence boundary, the race tests, the demo: [`scripts/ci/gate.sh`](../scripts/ci/gate.sh)),
 runs the **golden-fixture guard** (below), derives the next version, refuses a
 patch release if a golden moved, then writes the version constant and the
 changelog onto a `release/vX.Y.Z` branch and pushes it. It prints a one-click
@@ -149,7 +149,7 @@ and signs the squash commit, which is how it satisfies the require-signed-commit
 rule with no signing key on any runner. The commit subject carries the marker
 `build(release): vX.Y.Z`.
 
-**Phase 2 — publish** ([`release-publish.yml`](../.github/workflows/release-publish.yml),
+**Phase 2: publish** ([`release-publish.yml`](../.github/workflows/release-publish.yml),
 the **Release (publish)** workflow). It fires automatically on the merge, detects
 the release from that marker (confirming the version matches the source constant
 and no such tag exists yet), runs the gate and the fixture guard **again** on the
@@ -207,7 +207,7 @@ archive publish succeeds, so images never ship from a release the gate rejected.
 ### If a release goes wrong
 
 Phase 1 only pushes a `release/*` branch, and phase 2 tags and publishes as its
-last steps — so a failure before then leaves no trace beyond a red workflow run
+last steps, so a failure before then leaves no trace beyond a red workflow run
 and (at worst) an unmerged release branch to delete. Fix and re-run. If phase 2's
 auto-detect misses (the marker was edited off the squash commit), run **Release
 (publish)** manually with the version. After publishing, do not move or delete a

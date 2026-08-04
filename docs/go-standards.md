@@ -13,7 +13,7 @@ at in review.
 
 ```sh
 make vet           # go vet ./...
-make test          # go test -race ./...  — the race detector is not optional
+make test          # go test -race ./... : the race detector is not optional
 make license-check # no Apache-tier package may import an AGPL-tier one
 gofmt -l .         # must print nothing
 ```
@@ -72,19 +72,19 @@ All four run in CI on every pull request, and again before any release.
   expressed as a coding rule: if a struct carries a claim (`allowed`,
   `statusChecked`, `consequential`) and the evidence to recompute it, the
   verifier recomputes it. Round 1 and round 2 of the security review both found
-  the same class of bug — a verdict-relevant field left outside the signed
-  material or accepted as an assertion — so a new field on a signed struct
+  the same class of bug: a verdict-relevant field left outside the signed
+  material or accepted as an assertion, so a new field on a signed struct
   should be assumed to be an instance of it until shown otherwise.
-- **Validate before the side effect, never after — this repo's demonstrated blind
+- **Validate before the side effect, never after: this repo's demonstrated blind
   spot.** Three separate security findings across three branches (R2-01, R3-01,
   R4-03) were the *same* shape: a gate that used to fire before an irreversible
-  step got refactored so it fires after it — a construction-time reject becoming a
+  step got refactored so it fires after it: a construction-time reject becoming a
   verify-time reject, a uniqueness check running after the file was already
   overwritten. The side effect is still "eventually caught," which is exactly why
   it survives review. So it is a standing rule, not a per-instance fix: **any
   change to a validation path must keep the check ahead of every side effect it
   guards (key generation, file writes, minting, appends), and must ship a test
-  that asserts the gate fires *before* the side effect** — see the Tests section.
+  that asserts the gate fires *before* the side effect**: see the Tests section.
   When you touch a validation path, assume you have moved a gate until you have
   shown you have not.
 
@@ -109,8 +109,8 @@ All four run in CI on every pull request, and again before any release.
   to the review document.
 - **A validation gate is tested for WHEN it fires, not just THAT it fires.** For
   any check that guards a side effect, assert the rejection leaves no partial state
-  — the existing record is untouched, the file was not written, the key was not
-  minted — not merely that an error is returned. A "the verifier eventually rejects
+ : the existing record is untouched, the file was not written, the key was not
+  minted, not merely that an error is returned. A "the verifier eventually rejects
   it" test cannot tell an early gate from a late one, and the late-gate bug
   (R2-01/R3-01/R4-03) is precisely the one this codebase keeps reintroducing.
   `TestEnroll_DuplicateDID_RejectedBeforeSideEffect` is the pattern to copy.
@@ -138,6 +138,31 @@ Comment density in this repository is high and deliberately so. The convention:
   invariants, so a lock there would protect nothing (R2-03)" is.
 - **Do not comment what the code says.** The bar is: would a reviewer have had to
   reconstruct this reasoning themselves?
+
+## Prose style
+
+Comments, documentation, and commit messages are written to be read, so the same
+discipline applies to the prose as to the code.
+
+**Em dashes (U+2014) are not used anywhere in this repository.** Neither are en
+dashes (U+2013). This is not a preference to weigh case by case; it is a rule, and
+`scripts/ci/gate.sh` fails the build on any occurrence in a tracked file. The only
+exception is `LICENSE` and `LICENSES/`, which are third-party legal text and are
+never edited.
+
+Reach for these instead, whichever the sentence actually wants:
+
+| Situation | Use |
+|---|---|
+| the clause continues the thought | a comma |
+| an explanation, definition, or list follows | a colon |
+| two independent clauses join | a semicolon |
+| an aside interrupts the sentence | parentheses |
+| a range | a plain hyphen (`F1-F10`) or the word "to" |
+
+If none of those fits, the sentence wants rewriting rather than a dash. The rule
+is enforced mechanically because it was stated repeatedly and kept coming back:
+a convention that lives only in someone's memory is a convention that decays.
 
 ## Licence headers
 

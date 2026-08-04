@@ -54,7 +54,7 @@ func softwareSigner(t *testing.T, d string, seed byte) signer.Signer {
 }
 
 // The core loop: a client dials the daemon, signs through it, and the signature
-// verifies under the held key's public half — with the private key never leaving
+// verifies under the held key's public half, with the private key never leaving
 // the daemon.
 func TestDaemon_SignBrokered(t *testing.T) {
 	held := softwareSigner(t, "did:web:localhost:agents:worker", 0x33)
@@ -82,7 +82,7 @@ func TestDaemon_SignBrokered(t *testing.T) {
 }
 
 // The client signer is a drop-in signer.Signer, so it flows through the exact PoP
-// path cmd/agent uses — the whole point of the seam.
+// path cmd/agent uses: the whole point of the seam.
 func TestDaemon_ClientSatisfiesSignerSeam(t *testing.T) {
 	held := softwareSigner(t, "did:web:localhost:agents:worker", 0x44)
 	sock := startDaemon(t, held)

@@ -1,4 +1,4 @@
-# `kessa-shadow` — passive policy evaluation
+# `kessa-shadow`: passive policy evaluation
 
 Runs the real classifier over actions and reports what a policy **would** gate,
 without enforcing anything. It exists for one workflow: tune a policy before you

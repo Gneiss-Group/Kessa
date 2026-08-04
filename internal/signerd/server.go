@@ -28,7 +28,7 @@ const idleTimeout = 30 * time.Second
 // Server holds a set of signers keyed by DID and brokers Sign/Public over a
 // net.Listener. It is safe for concurrent connections. Two independent gates
 // protect it: the socket's own filesystem permissions (set by the caller that
-// creates the listener — 0700 dir + 0600 socket) and a per-connection peer-uid
+// creates the listener: 0700 dir + 0600 socket) and a per-connection peer-uid
 // check enforced here, so a connection from any uid other than the daemon owner
 // is refused before a single request is read.
 type Server struct {
@@ -49,7 +49,7 @@ const (
 	// acceptable: PoP is bound to (action, seq, prevHash) by the proxy, so a freely
 	// brokered PoP signature authorizes exactly one action at one slot.
 	Routine KeyPolicy = iota
-	// Approval is the human approval / issuance key — the deliberate-act moment the
+	// Approval is the human approval / issuance key: the deliberate-act moment the
 	// whole architecture leans on to make "a human decided this" a real, verifiable
 	// claim. It MUST be hardware-backed (Secure Enclave), so the per-use gesture is
 	// enforced by the OS. Brokering it as software would silently degrade that

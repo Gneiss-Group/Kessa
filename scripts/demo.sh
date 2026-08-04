@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# demo.sh — drives all seven Kessa scenarios end to end through the real
+# demo.sh: drives all seven Kessa scenarios end to end through the real
 # binaries, then hands the audit export to the independent verifier. It is
 # deterministic: fixed seeds, fixed timestamps (--now), fixed nonces. No network
 # beyond localhost; nothing of ours is trusted as a service.
@@ -8,7 +8,7 @@
 # The story it tells: an agent delegated down a chain attempts actions through an
 # enforcement proxy; a second org's proxy (different vertical) trusts the same
 # chain with no shared config; and finally an independent verifier re-derives
-# every verdict from the export alone — catching a tampered entry.
+# every verdict from the export alone: catching a tampered entry.
 
 set -euo pipefail
 
@@ -92,22 +92,22 @@ agentB() { "$BIN/kessa-agent" attempt --proxy "$B" --chain "$CH" --keystore "$KS
 act() { echo --type payment.transfer --target acct/999; }
 
 # ---------------------------------------------------------------------------
-hr "Scenario 1 — happy path (below threshold)"
+hr "Scenario 1: happy path (below threshold)"
 agentA $(act) --attr amount=10 --nonce s1 | sed 's/^/   /'
 
-hr "Scenario 2 — scope violation (\$500 vs an attenuated \$100 ceiling)"
+hr "Scenario 2: scope violation (\$500 vs an attenuated \$100 ceiling)"
 agentA $(act) --attr amount=500 --nonce s2 | sed 's/^/   /'
 
-hr "Scenario 3 — consequential + human-in-the-loop"
+hr "Scenario 3: consequential + human-in-the-loop"
 note "without approval:"
 agentA $(act) --attr amount=100 --nonce s3a | sed 's/^/   /'
 note "with alice's approval:"
 agentA $(act) --attr amount=100 --approver "$ALICE" --nonce s3b | sed 's/^/   /'
 
-hr "Scenario 5 — token loan (a copied blob signed by the wrong key)"
+hr "Scenario 5: token loan (a copied blob signed by the wrong key)"
 agentA --as "$ACME" $(act) --attr amount=10 --nonce s5 | sed 's/^/   /'
 
-hr "Scenario 6 — cross-org + cross-vertical (same \$100 action, two orgs)"
+hr "Scenario 6: cross-org + cross-vertical (same \$100 action, two orgs)"
 note "Org A (commerce): consequential → needs approval → without one:"
 agentA $(act) --attr amount=100 --nonce s6a | sed 's/^/   /'
 note "Org B (legal), NO shared config with A, trusts A's chain via public DID docs:"
@@ -115,18 +115,18 @@ agentB $(act) --attr amount=100 --nonce s6b | sed 's/^/   /'
 note "→ same action, routine under the legal vertical: consequentiality is environment-defined."
 
 # ---------------------------------------------------------------------------
-hr "Independent verification — Org A's export"
+hr "Independent verification: Org A's export"
 curl -sf "$A/export" > "$WORK/export-A.json"
 "$BIN/kessa" verify --export "$WORK/export-A.json" --dids "$PUBLIC" --status "$ST" \
   | grep -E '^  (entry|VERDICT)' | sed 's/^/ /'
 
-hr "Independent verification — Org B's export (signed by bravo, re-derived from A's evidence)"
+hr "Independent verification: Org B's export (signed by bravo, re-derived from A's evidence)"
 curl -sf "$B/export" > "$WORK/export-B.json"
 "$BIN/kessa" verify --export "$WORK/export-B.json" --dids "$PUBLIC" --status "$ST" \
   | grep -E '^  VERDICT' | sed 's/^/ /'
 
 # ---------------------------------------------------------------------------
-hr "Scenario 4 — revocation propagation (live, one rewritten static file)"
+hr "Scenario 4: revocation propagation (live, one rewritten static file)"
 "$BIN/kessa-issuer" revoke --spec scripts/demo/spec.json --keystore "$KS" \
   --root "$PUBLIC" --index 42 >/dev/null
 note "issuer revoked the acme→worker credential (index 42)"
@@ -136,7 +136,7 @@ note "consequential action after revocation (forces a live check → blocked):"
 agentA $(act) --attr amount=100 --approver "$ALICE" --nonce s4c | sed 's/^/   /'
 
 # ---------------------------------------------------------------------------
-hr "Scenario 7 — tamper (post-hoc edit of one audit entry)"
+hr "Scenario 7: tamper (post-hoc edit of one audit entry)"
 sed 's/acct\/999/acct\/evil/' "$WORK/export-A.json" > "$WORK/export-tampered.json"
 note "flipped one action target in entry 0, then re-ran the verifier:"
 "$BIN/kessa" verify --export "$WORK/export-tampered.json" --dids "$PUBLIC" --status "$ST" \
@@ -146,4 +146,4 @@ note "flipped one action target in entry 0, then re-ran the verifier:"
 hr "Done"
 note "Org A's clean export verified; Org B trusted A cross-org; the tampered"
 note "export failed at exactly the altered entry. Every verdict was re-derived"
-note "from files alone — no Kessa service was trusted at any point."
+note "from files alone: no Kessa service was trusted at any point."

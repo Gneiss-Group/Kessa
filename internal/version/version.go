@@ -32,7 +32,7 @@ import (
 
 // Version is the released version of this module: semantic versioning, no
 // leading "v" (the git tag adds it). It is the single source of truth for the
-// version of every binary in this repository — they ship together, from one
+// version of every binary in this repository, they ship together, from one
 // tree, at one version.
 //
 // Do not edit by hand outside a release: `make release-version V=x.y.z` and the

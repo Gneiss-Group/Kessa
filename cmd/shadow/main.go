@@ -168,7 +168,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	return exitOK
 }
 
-const usage = `kessa-shadow — passive policy evaluation (predictions only, nothing enforced)
+const usage = `kessa-shadow: passive policy evaluation (predictions only, nothing enforced)
 
   kessa-shadow -policy <file> -export  <file> [-format json|text] [-out <file>]
   kessa-shadow -policy <file> -actions <file> [-format json|text] [-out <file>]

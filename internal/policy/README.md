@@ -1,4 +1,4 @@
-# `internal/policy` — writing a policy
+# `internal/policy`: writing a policy
 
 A policy answers one question about an action: **is it routine, or is it
 consequential?** Consequential actions demand a live revocation check and a human

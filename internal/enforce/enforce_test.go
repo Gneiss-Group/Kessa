@@ -5,6 +5,7 @@
 package enforce
 
 import (
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -295,15 +296,13 @@ func TestTokenLoanDenied(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	res, err := px.Handle(Request{Chain: h.chain, Action: a, PoP: badPoP})
-	if err != nil {
-		t.Fatal(err)
+	_, err = px.Handle(Request{Chain: h.chain, Action: a, PoP: badPoP})
+	var ue *UnattributableError
+	if !errors.As(err, &ue) || ue.Stage != "possession" {
+		t.Fatalf("a copied credential without the private key is unattributable, got %v", err)
 	}
-	if res.Decision.Allowed {
-		t.Fatal("a copied credential without the private key must fail PoP")
-	}
-	if !strings.Contains(res.Decision.Reason, "possession") {
-		t.Fatalf("reason should cite possession: %q", res.Decision.Reason)
+	if n := len(px.Entries()); n != 0 {
+		t.Fatalf("an unattributable request must not be logged; got %d entries", n)
 	}
 }
 

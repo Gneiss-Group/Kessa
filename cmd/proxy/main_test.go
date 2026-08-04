@@ -309,3 +309,42 @@ func writeJSON(t *testing.T, path string, v any) {
 		t.Fatal(err)
 	}
 }
+
+// TestRefuseRemoteBind pins the fail-closed default. It removes the accidental
+// exposure (an operator who binds a reachable address without meaning to), while
+// leaving the deliberate one available, because containerized serving requires it
+// (a container's loopback is unreachable through -p).
+func TestRefuseRemoteBind(t *testing.T) {
+	cases := []struct {
+		name       string
+		http, mcp  string
+		allow      bool
+		wantOK     bool
+		wantMsgHas string
+	}{
+		{"loopback ipv4", "127.0.0.1:8181", "127.0.0.1:8182", false, true, ""},
+		{"loopback ipv6", "[::1]:8181", "", false, true, ""},
+		{"localhost name", "localhost:8181", "", false, true, ""},
+		{"both disabled", "", "", false, true, ""},
+		{"wildcard v4", "0.0.0.0:8181", "", false, false, "refusing to bind"},
+		{"bare port binds all", ":8181", "", false, false, "refusing to bind"},
+		{"routable address", "10.0.0.5:8181", "", false, false, "refusing to bind"},
+		{"only the mcp listener is remote", "127.0.0.1:8181", "0.0.0.0:8182", false, false, "refusing to bind"},
+		{"unparseable is refused, not guessed", "not-an-addr", "", false, false, "refusing to bind"},
+		{"opt-in permits it, with a warning", "0.0.0.0:8181", "", true, true, "WARNING"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			msg, ok := refuseRemoteBind(tc.http, tc.mcp, tc.allow)
+			if ok != tc.wantOK {
+				t.Fatalf("ok = %v, want %v (msg %q)", ok, tc.wantOK, msg)
+			}
+			if tc.wantMsgHas != "" && !strings.Contains(msg, tc.wantMsgHas) {
+				t.Fatalf("message %q should mention %q", msg, tc.wantMsgHas)
+			}
+			if tc.wantMsgHas == "" && msg != "" {
+				t.Fatalf("expected no message, got %q", msg)
+			}
+		})
+	}
+}

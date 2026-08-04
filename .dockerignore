@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 Gneiss Group Inc.
 # SPDX-License-Identifier: Apache-2.0
 #
-# Keep the Docker build context lean — but NOT .git: the build stamps the commit
+# Keep the Docker build context lean, but NOT .git: the build stamps the commit
 # into `--version` from the toolchain's VCS info, which needs .git present.
 bin/
 dist/

@@ -5,6 +5,7 @@
 package enforce
 
 import (
+	"errors"
 	"fmt"
 	"testing"
 
@@ -161,11 +162,9 @@ func TestP256EmployeeAndApprover_EndToEnd(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	res2, err := px.Handle(Request{Chain: ch, Action: a, PoP: badPoP, Approver: alice.DID(), Approval: badAppr})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if res2.Decision.Allowed {
-		t.Fatal("a P-256 PoP from a non-bound key must be denied by the real pipeline")
+	_, err = px.Handle(Request{Chain: ch, Action: a, PoP: badPoP, Approver: alice.DID(), Approval: badAppr})
+	var ue *UnattributableError
+	if !errors.As(err, &ue) || ue.Stage != "possession" {
+		t.Fatalf("a P-256 PoP from a non-bound key is unattributable, got %v", err)
 	}
 }

@@ -3,7 +3,7 @@
 # SPDX-FileCopyrightText: 2026 Gneiss Group Inc.
 # SPDX-License-Identifier: Apache-2.0
 #
-# build-artifacts.sh — cross-compile the release bundles and checksum them.
+# build-artifacts.sh: cross-compile the release bundles and checksum them.
 #
 # Two bundles per platform, split along the license boundary rather than by
 # convenience (LICENSING.md):

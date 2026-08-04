@@ -10,14 +10,14 @@
 #
 # Builds from source (provably this repository's binary), cross-compiled so one
 # runner yields linux/amd64 and linux/arm64 without QEMU. Final base is
-# distroless/static (nonroot) — it carries CA certificates, which `enroll
+# distroless/static (nonroot), it carries CA certificates, which `enroll
 # --fetch-org-did` needs to resolve the org's did:web over HTTPS. No shell, no
 # package manager. Bases pinned by digest, bumped by Dependabot.
 #
 # Licence-tier pure: contains ONLY the AGPL issuer binary. Keep the Apache
 # verifier out of this image (it has its own).
 #
-# SCOPE: this is the software/keystore path — the pure-Go issuer that runs
+# SCOPE: this is the software/keystore path: the pure-Go issuer that runs
 # anywhere (CGO disabled, the Secure Enclave backend compiles to its no-op stub).
 # Hardware-backed keys (macOS Secure Enclave) are a host concern, not a container
 # one: a containerized daemon has no clean access to the platform secure element,

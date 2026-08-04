@@ -1,18 +1,18 @@
 # SPDX-FileCopyrightText: 2026 Gneiss Group Inc.
 # SPDX-License-Identifier: Apache-2.0
 #
-# Release, phase 1 of 2 — PREPARE.
+# Release, phase 1 of 2: PREPARE.
 #
 # A release lands on main the same way every other change does: through a pull
 # request. Nothing pushes to main directly, so the branch ruleset needs no bypass
 # for this workflow, and because the PR is squash-merged, the commit that lands is
-# created and SIGNED by GitHub itself — which is how a "require signed commits"
+# created and SIGNED by GitHub itself, which is how a "require signed commits"
 # rule is satisfied without giving a runner a signing key.
 #
 # This phase is manual and owner-only. It runs the full gate again, derives the
 # next version, writes the version constant and the changelog, and pushes a
 # `release/vX.Y.Z` branch. It does NOT open the PR (repository policy disables
-# Actions-authored PRs) — it prints the one-click "create PR" link instead. You
+# Actions-authored PRs), it prints the one-click "create PR" link instead. You
 # open the PR, review it, and squash-merge it. Phase 2 (release-publish.yml) then
 # tags, builds, signs, and publishes off the merged commit.
 #
@@ -134,7 +134,7 @@ jobs:
           git checkout -b "$BRANCH"
           git add internal/version/version.go CHANGELOG.md
           if git diff --cached --quiet; then
-            echo "::error::nothing to commit — the source already carries $NEXT and CHANGELOG is up to date."
+            echo "::error::nothing to commit: the source already carries $NEXT and CHANGELOG is up to date."
             exit 1
           fi
           # The subject IS the marker phase 2 keys off (release-publish.yml). Keep
@@ -169,7 +169,7 @@ jobs:
           {
             echo "## Release $TAG is ready to open"
             echo
-            echo "1. **[Open the release PR]($url)** (title is pre-filled with the marker subject — keep it)."
+            echo "1. **[Open the release PR]($url)** (title is pre-filled with the marker subject: keep it)."
             echo "2. Let CI pass, then **squash-merge** it. GitHub signs the squash commit, satisfying the signed-commits rule."
             echo "3. Phase 2 (**Release (publish)**) fires on the merge: it tags \`$TAG\`, builds the signed artifacts, and publishes the release."
           } >>"$GITHUB_STEP_SUMMARY"

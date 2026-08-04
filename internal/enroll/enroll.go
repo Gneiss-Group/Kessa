@@ -25,7 +25,7 @@
 //
 // This package is AGPL-3.0: enrollment mints authority (it issues a credential),
 // which is protective-tier per the open-core boundary. The hardware Signer it
-// drives (internal/signer/enclave) stays Apache — the mechanism is open; issuing
+// drives (internal/signer/enclave) stays Apache: the mechanism is open; issuing
 // authority with it is not.
 package enroll
 
@@ -69,7 +69,7 @@ type Config struct {
 	Location string
 
 	// Caveats scope the authority granted to the employee. FORWARD-COMPAT RULE:
-	// none of these may constrain the employee to issuing only to an "agent" — the
+	// none of these may constrain the employee to issuing only to an "agent": the
 	// next hop must be free to be a service/automation identity too. The macaroon
 	// vocabulary has no next-hop-kind caveat, so this holds by construction; the
 	// rule is stated so a future caveat addition does not quietly break it.
@@ -149,8 +149,8 @@ func (c *Config) validate() error {
 }
 
 // Enroll runs the ceremony end to end. Ordering is deliberate and load-bearing:
-// every check that can reject an enrollment — org-DID preflight, DID-uniqueness,
-// and the trust-on-first-use confirmation — runs BEFORE any side effect, so a
+// every check that can reject an enrollment: org-DID preflight, DID-uniqueness,
+// and the trust-on-first-use confirmation: runs BEFORE any side effect, so a
 // rejected enrollment leaves NO partial state: no generated key, no overwritten
 // DID document, no credential, no mapping entry.
 //
@@ -161,7 +161,7 @@ func (c *Config) validate() error {
 // device's credential (its bound key would no longer match the published one).
 // Checking first is what makes the no-partial-state guarantee true rather than
 // aspirational. (This is the third instance of the codebase's recurring
-// gate-after-side-effect shape — R2-01, R3-01, R4-03 — so it is guarded here and
+// gate-after-side-effect shape (R2-01, R3-01, R4-03), so it is guarded here and
 // asserted by a dedicated test.)
 func Enroll(cfg Config) (result *Result, err error) {
 	if err := cfg.validate(); err != nil {
@@ -181,7 +181,7 @@ func Enroll(cfg Config) (result *Result, err error) {
 	// issuer-side sharp end of the root-of-trust question: an employee credential
 	// whose issuer DID resolves to nothing is dead on arrival at the verifier, so
 	// fail loudly here rather than mint it. (It does NOT cover org-root enrollment
-	// or key rotation — those stay out of scope.)
+	// or key rotation: those stay out of scope.)
 	resolver := cfg.Resolver
 	if resolver == nil {
 		resolver = did.FileResolver{Root: cfg.Root}

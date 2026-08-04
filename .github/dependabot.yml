@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 Gneiss Group Inc.
 # SPDX-License-Identifier: Apache-2.0
 #
-# Dependabot — keep the pinned GitHub Actions current.
+# Dependabot: keep the pinned GitHub Actions current.
 #
 # Every action in this repository's workflows is pinned to a full commit SHA
 # (not a moving tag), which is the right supply-chain posture but freezes the
