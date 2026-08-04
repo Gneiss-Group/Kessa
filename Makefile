@@ -6,7 +6,7 @@
 GO      ?= go
 BINDIR  ?= bin
 
-.PHONY: all build test test-race-condition test-fast vet license-check fixtures demo stories stories-capture stories-images verify version release-version release-check release-artifacts clean test-enclave-signed
+.PHONY: all build test test-race-condition test-fast vet license-check notice fixtures demo stories stories-capture stories-images verify version release-version release-check release-artifacts clean test-enclave-signed
 
 all: build
 
@@ -62,11 +62,20 @@ test-enclave-signed:
 	codesign --force --sign "$(SIGN_IDENTITY)" --entitlements build/enclave.entitlements $(BINDIR)/enclave.test
 	$(BINDIR)/enclave.test -test.v
 
-# license-check enforces the open/paid license boundary: no Apache-tier package
+# license-check enforces two boundaries. The tier boundary: no Apache-tier package
 # may import an AGPL-tier package, or the copyleft goes viral into the permissive
-# verifier. This is the guardrail that keeps the two-tier model honest.
+# verifier. The plug-point boundary: a package carrying the //kessa:plugin-interface
+# marker may reach nothing but the standard library and other marked packages, or
+# the Section 7 additional permission cannot fire for anyone implementing it.
+# Neither is checked against a hardcoded list; both are derived from the source.
 license-check:
 	@bash scripts/license-check.sh
+
+# notice regenerates NOTICE.md, the licence bundle shipped with a binary, from the
+# plug-point markers in the source. Run it after adding or removing a designated
+# plug point; license-check fails if the committed file and the tree disagree.
+notice:
+	@bash scripts/gen-notice.sh
 
 # fixtures regenerates the did:web testdata from fixed seeds, then the golden
 # audit exports. Regenerating a golden is a deliberate act: it means the frozen

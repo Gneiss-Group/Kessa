@@ -52,9 +52,14 @@ benchmarks that link the enforcement engine.
 Because copyleft is viral through imports, **no Apache-tier package may import an
 AGPL-tier package.** [`scripts/license-check.sh`](scripts/license-check.sh)
 (`make license-check`) enforces that in CI, so the permissive-verifier guarantee
-cannot regress. It additionally fails when any package in the module sits in
-neither tier, so the test above cannot be quietly bypassed by adding a package and
-classifying it nowhere.
+cannot regress.
+
+A package's tier is read from the SPDX headers on its own files, not from a list
+kept somewhere else. Every Go file in the repository carries one, so the check
+derives the tier of every package in `go list ./...` and fails on any package
+whose files carry no identifier or disagree with each other. The test above
+therefore cannot be bypassed by adding a package and classifying it nowhere:
+there is nowhere to classify it, only headers to write.
 
 ## Commercial licensing
 
@@ -62,13 +67,60 @@ The `AGPL-3.0-only` components are also available under a separate commercial
 license for organizations that cannot meet the AGPL's terms. Contact Gneiss Group
 Inc.
 
-## Plugin interfaces
+## Designated plugin interfaces: the marker
 
-We intend to add a Section 7 additional permission designating specific plugin
-interfaces (starting with `auditsink`) as independent modules, so that
-implementations can be licensed freely. That permission is **not yet in effect**:
-see [`PLUGIN_LICENSING.md`](PLUGIN_LICENSING.md) for the intent and its current
-status.
+A **designated plugin interface** is a seam a third party may implement and
+license on their own terms. Which packages are designated is stated in the source
+and nowhere else, by this marker:
+
+```go
+//kessa:plugin-interface
+```
+
+This is the canonical definition of the marker. Nothing else in this repository
+redefines it, and no file enumerates the designated packages by name.
+
+**Syntax.** A Go directive comment: two slashes, no space, `kessa:plugin-interface`,
+nothing after it on the line. Written as a directive so `gofmt` keeps it attached
+to the declaration instead of reflowing it into surrounding prose.
+
+**Placement.** In the file that *declares* the interface, either in that file's
+package doc comment or immediately above the interface type. Never in a file that
+merely implements or imports the interface: the marker says "the boundary is
+here," and a marker on an implementation would put the boundary wherever someone
+last pasted a comment. Contributors should write a short comment beside it saying
+what it does, as [`auditsink/auditsink.go`](auditsink/auditsink.go) does.
+
+**Meaning, and the obligation it creates.** Marking a package asserts two things
+and binds you to the second:
+
+1. The exported interface types in the marked file are a designated plug point.
+   An independent implementation of them may be conveyed under its author's own
+   licence, once the Section 7 permission is in force (see below).
+2. The marked package depends on nothing but the standard library and other
+   marked packages. This is what makes the first claim true rather than merely
+   stated: if a designated package imported the core, then every implementation
+   of its interface would link the core too, the permission's condition could not
+   be satisfied by anyone, and the combined binary would fall back to AGPL-3.0 in
+   full.
+
+`scripts/license-check.sh` enforces all of this from the marker alone. It fails
+when a marked package reaches outside that closure, when the marker sits on a file
+declaring no exported interface, when a marked package is not permissively
+licensed, and, fail-closed, when a package is *shaped* like a plug point
+(permissive, externally importable, exporting an interface type) but carries no
+marker. Interfaces under `internal/` need no marker: the Go toolchain already
+prevents another module from importing them, so they are not external seams.
+[`internal/licensing`](internal/licensing/) tests each of these rejections, and
+tests that they are the rejections doing the work.
+
+**Status of the permission itself.** The Section 7 additional permission that
+gives the designation its legal effect has **not yet been added** to
+[`LICENSE`](LICENSE). The marker, the check, and the tests are in place ahead of
+it so that the boundary is real by the time the clause lands. See
+[`PLUGIN_LICENSING.md`](PLUGIN_LICENSING.md) for what is and is not granted
+today, and [`NOTICE.md`](NOTICE.md) for the bundle a recipient of a binary is
+owed.
 
 ## Contributing
 

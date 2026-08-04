@@ -19,6 +19,20 @@
 // record, e.g. the tool-call body an action actually sent, could be added as a
 // new field and flow through this same seam without changing the interface or
 // breaking existing sinks.
+//
+// The directive line below is the designation itself, and it is load-bearing
+// rather than decorative. It says: the exported interface types declared in THIS
+// file are a designated plug point, so an independent implementation of them may
+// be licensed on its own terms even when compiled into the same binary as the
+// AGPL core. That permission is conditional, and the condition is mechanical: a
+// designated package may reach nothing but the standard library and other
+// designated packages, so implementing the interface can never force an importer
+// to link the core. Delete the line and the package stops being designated;
+// import the core from here and the designation stops being true, which is why
+// scripts/license-check.sh fails the build on either. LICENSING.md carries the
+// canonical statement of the marker's syntax and meaning.
+//
+//kessa:plugin-interface
 package auditsink
 
 import "time"
