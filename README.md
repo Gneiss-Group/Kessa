@@ -136,6 +136,11 @@ docker run --rm -v "$PWD:/data:ro" ghcr.io/gneiss-group/kessa:latest \
 # Streamable HTTP (8182). Close either with an empty address (e.g. --mcp-addr "").
 docker run --rm -p 8181:8181 -p 8182:8182 ghcr.io/gneiss-group/kessa-proxy:latest serve --help
 
+# Serving from a container binds a non-loopback address, which is refused unless you
+# say so: the listeners have no caller authentication. The flag adds none — it
+# records that you accepted its absence.
+#   ... serve --http-addr 0.0.0.0:8181 --allow-unauthenticated-remote
+
 # The issuer (AGPL-3.0-only) — mint/publish/enroll/daemon. Publishes a chain's
 # public artifacts into a mounted directory (software-key path; see docker/README).
 docker run --rm -v "$PWD/out:/pub" -v "$PWD/scripts/demo:/in:ro" \
@@ -220,38 +225,27 @@ Works](docs/how-it-works.md#what-a-clean-verdict-actually-proves).
   one of the allow-checks failing; running those checks on denied entries would
   make "correctly denied" and "verifier failure" indistinguishable.
 
-- **Giving someone an export gives them the ability to write to the log they are
-  auditing.** Stated in the terms that matter, because this is a property of the
-  distribution model rather than a deployment caveat: an export exists to be handed
-  to parties who do not trust you and whom you need not trust — an auditor, a
-  regulator, a counterparty, opposing counsel — and a recipient can use it to make
-  your proxy record entries.
+- **The log records only *attributable* decisions**, and that is a deliberate
+  property rather than an accident of implementation. An entry exists only for a
+  request whose proof of possession verified, so every entry is bound to a
+  principal who demonstrably held the key. A request nobody can be tied to — a
+  chain that does not verify, or a possession proof that does not — produces no
+  decision and no entry; it is refused, and reported to the audit sink as
+  telemetry instead.
 
-  **How.** A v2 export carries each credential with its issuer proof, deliberately,
-  because that is what lets the verifier re-check a chain offline with no shared
-  secret. So the delegation chain re-derives from an export alone. Chain
-  verification is the only gate before an entry is written, and a chain proves
-  *issuance*, which is public — not *possession*, which is what the holder's key is
-  for. The endpoint has no caller authentication.
+  This closed a real hole (R5-06). An export carries each credential with its
+  issuer proof, deliberately, because that is what lets the verifier re-check a
+  chain offline with no shared secret — so the chain re-derives from an export
+  alone. When chain verification was the only gate before a write, that made an
+  export a *write credential*: giving one to an auditor, a regulator, or a
+  counterparty gave them the ability to append to the log they were auditing.
+  Possession is now checked first, so the entries they could once cause are
+  impossible rather than merely denied.
 
-  **What they get.** Entries that are denials, but genuine: correctly signed,
-  correctly chained, and verifying PASS, because the verifier faithfully re-derives
-  what the enforcement point saw. Each one also advances the log tip out from under
-  an honest caller whose proof was bound to the position it read, so an interleaved
-  write makes a legitimate request fail. No unauthorized *action* is allowed — an
-  ALLOW still requires a valid proof of possession — but **writing to the record and
-  allowing an action are different properties, and only the second is closed.**
-
-  **How far it reaches.** Bounded, and the bound is real: a proxy resolves DIDs from
-  its local `--dids` directory and has no network resolution, so a chain is only
-  usable against a proxy whose trust root resolves *every* hop of it. In practice
-  that is the deployment that issued the export, plus any proxy deliberately
-  configured to trust that org — the cross-org case, working as designed. **It does
-  not reach an arbitrary party on the internet.** The recipient of your export can
-  write to *your* log, not to a stranger's.
-
-  Loopback binding is today's mitigation and it is not authentication. Closing this
-  means authenticating the caller; see [`UPCOMING.md`](UPCOMING.md).
+  What this does **not** close: the endpoint still has no caller authentication, so
+  anyone who can reach it may *submit* — they simply cannot make it record
+  anything. Non-loopback binds are refused unless you pass
+  `--allow-unauthenticated-remote`. See [`UPCOMING.md`](UPCOMING.md).
 
 Accepted, documented risks (current boundaries, not defects):
 

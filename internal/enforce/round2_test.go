@@ -6,6 +6,7 @@ package enforce
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -584,11 +585,33 @@ func TestR2_04_OneApprovalAuthorizesOneAction(t *testing.T) {
 		t.Fatalf("SECURITY: %d actions executed against ONE human approval bound to one slot; want exactly 1", allowed)
 	}
 
-	// Interleaving B: no entry may be lost. Every request that got far enough to
-	// be attributable produced exactly one entry, at its own Seq.
+	// Interleaving B: no entry may be lost or overwritten. Since possession became
+	// an attribution gate (R5-06), a request that loses the race for a slot is
+	// REFUSED rather than logged — its proof was bound to a position another
+	// request took — so the entry count is no longer the request count. What must
+	// still hold, and is what the original overwrite bug violated, is that every
+	// entry that exists sits at its own consecutive Seq: an overwrite shows up as a
+	// duplicate or a gap.
+	//
+	// Every request must also be accounted for: allowed, logged denial, or
+	// explicit refusal. A request that silently produced neither is the failure
+	// this arm exists to catch.
 	entries := px.Entries()
-	if len(entries) != goroutines {
-		t.Fatalf("SECURITY: %d requests produced %d audit entries — the log lost one", goroutines, len(entries))
+	if len(entries) == 0 {
+		t.Fatal("SECURITY: concurrent requests produced no entries at all")
+	}
+	accounted := 0
+	for i := range results {
+		var ue *UnattributableError
+		switch {
+		case errs[i] == nil && results[i] != nil:
+			accounted++ // a decision was recorded
+		case errors.As(errs[i], &ue):
+			accounted++ // refused, unlogged, by design
+		}
+	}
+	if accounted != goroutines {
+		t.Fatalf("SECURITY: %d requests, only %d accounted for", goroutines, accounted)
 	}
 	for i, e := range entries {
 		if e.Seq != uint64(i) {
@@ -626,9 +649,17 @@ func TestR2_04_ConcurrentHandleIsRaceFree(t *testing.T) {
 	}
 	wg.Wait()
 
+	// Race losers are refused rather than logged (R5-06), so the entry count is
+	// not the request count. The property under test is that concurrent appends do
+	// not corrupt the log: consecutive Seqs, and the whole thing still verifies.
 	entries := px.Entries()
-	if len(entries) != goroutines {
-		t.Fatalf("want %d entries, got %d", goroutines, len(entries))
+	if len(entries) == 0 {
+		t.Fatal("concurrent requests produced no entries at all")
+	}
+	for i, e := range entries {
+		if e.Seq != uint64(i) {
+			t.Fatalf("entry %d landed at seq %d: appends are not serialized", i, e.Seq)
+		}
 	}
 	if v := h.verify(t, px); !v.Pass() {
 		t.Fatalf("a log written concurrently must still verify: %+v", v.Entries)
@@ -663,12 +694,10 @@ func TestR2_04_TipCarriesPrevHash(t *testing.T) {
 	// different log is also distinguishable.
 	a2 := action("10")
 	stale := h.pop(t, Tip{Seq: next.Seq, PrevHash: tip.PrevHash}, a2, "n1")
-	res, err := px.Handle(Request{Chain: h.chain, Action: a2, PoP: stale})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if res.Decision.Allowed {
-		t.Fatal("SECURITY: a PoP bound to the wrong PrevHash was accepted")
+	_, err := px.Handle(Request{Chain: h.chain, Action: a2, PoP: stale})
+	var ue *UnattributableError
+	if !errors.As(err, &ue) || ue.Stage != "possession" {
+		t.Fatalf("SECURITY: a PoP bound to the wrong PrevHash must be unattributable, got %v", err)
 	}
 }
 

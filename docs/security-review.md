@@ -35,7 +35,7 @@ rounds.
 | **R3** | 2026-07-26 | Scoped P-256 employee key and algorithm-agile verification (`feat/scoped-p256-employee-key`, merged 2026-07-27) | No critical or high. No false-PASS path. Four findings, all closed |
 | **R4** | 2026-08-01 | The whole on-device issuer surface: enrollment, Secure Enclave backend, signing daemon, agent wiring (`feat/issuer-enrollment`, merged 2026-08-01) | No critical or high. No false-PASS path in the verifier. Four findings plus two scope observations, all closed |
 | *(spec alignment)* | 2026-08-03 | Not a review round — see below. Conformance work bringing the MCP listener to revision 2026-07-28 | Surfaced one security-relevant defect (SA-01) as a by-product |
-| **R5** | 2026-08-03 | The ingress surface of both listeners, reviewed because it had just changed | Six findings. Five closed (R5-01–R5-05, no critical or high). **R5-06 is High and open**: an export is a bearer artifact, so it doubles as a write credential for a reachable proxy. No false-ALLOW path in any of them |
+| **R5** | 2026-08-03 | The ingress surface of both listeners, reviewed because it had just changed | Six findings, all closed. Five of one class (R5-01–R5-05, no critical or high); **R5-06 was High** — an export doubled as a write credential — and was closed by making possession an attribution gate. No false-ALLOW path in any of them |
 
 **R1 and R2 predate this repository's first commit** (2026-07-23). Their fixes are
 contained in the initial publication, so no released or published version of Kessa
@@ -69,8 +69,6 @@ Severity is as each round rated it. Identifiers appear throughout the source as
 
 ### R1
 
-| ID | Area | Status |
-|---|---|---|
 Round 1 raised ten findings. F1–F4 were four instances of a single class — a
 verdict-relevant field left outside the signed material — which became the
 project's central coding rule. F5–F6 were low-severity hardening. F7–F10 were
@@ -158,11 +156,12 @@ that fires correctly and still does not establish what the endpoint needed.
 | R5-03 | Low | An explicit null JSON-RPC id processed as a request | Closed |
 | R5-04 | Low | Required `clientCapabilities` checked for presence only, so a null satisfied it | Closed |
 | R5-05 | Low | No request `Content-Type` validation, leaving cross-origin forgery defence incidental rather than deliberate | Closed |
-| R5-06 | **High** | An export is a bearer artifact: the chain re-derives from it, and chain verification is the only gate before an audit entry is written, so an export doubles as a write credential for a reachable proxy | **Open** — documented; needs caller authentication |
+| R5-06 | **High** | An export is a bearer artifact: the chain re-derived from it, and chain verification was the only gate before an audit entry was written, so an export doubled as a write credential for a reachable proxy | **Closed** — possession is now an attribution gate; see below |
 
-R5-06 is **open**, is the only High in this round, and is not an ingress bug —
-following R5-05 to its root turned up an architectural property instead. It is
-stated in full below because it changes what the other five findings mean.
+R5-06 was the only High in this round and is not an ingress bug — following R5-05
+to its root turned up an architectural property instead. It is stated in full
+below, including how it was closed, because it changes what the other five
+findings mean.
 
 These findings touch **two properties that must be stated separately**, because
 "no false-ALLOW" on its own is the more flattering half and would leave the other
@@ -199,7 +198,7 @@ Two consequences follow, neither covered by "no false-ALLOW":
 Audit disclosure under rebinding (R5-01) compounds both: the same page that can
 write can also read the export.
 
-### R5-06 — the export is a bearer artifact (High, open)
+### R5-06 — the export was a bearer artifact (High, closed)
 
 Naming *what* the write gate actually is, rather than what it looks like:
 
@@ -254,16 +253,38 @@ default, so the practical precondition is network reach to the endpoint — whic
 non-local bind, or the documented container command's published ports, grants.
 Loopback is the current mitigation and it is not authentication.
 
-**Why it is open rather than fixed.** The two changes that would close it at the
-ingress are both wrong. Carrying fewer credentials in the export breaks the
-offline verifier, which is the central claim. Not logging a failed proof of
-possession breaks the rule that a denial is a real decision (R2), and that rule is
-what scenario 5 of the demo demonstrates. The correct fix is caller
-authentication, which the endpoint does not have and which is a design decision
-rather than a patch; it is filed in [`UPCOMING.md`](../UPCOMING.md) with the
-candidate mechanisms. Until then the property is stated in the README's [Known
-limits](../README.md#known-limits): **treat an export as a write credential for
-the proxy that produced it.**
+**How it was closed — by moving the attribution boundary, not by adding
+authentication.** The two obvious ingress fixes are both wrong: carrying fewer
+credentials in the export breaks the offline verifier, and silently dropping a
+failed proof of possession erases the evidence of the attack. The third option was
+to notice that the design was internally inconsistent. An unverifiable *chain* was
+already refused unlogged as "not attributable"; an unverifiable *possession* was
+recorded as a decision about the holder, when the one thing established was that
+it was not the holder. Both are attribution failures.
+
+Proof of possession is therefore now a **gate**, checked before anything is
+appended. A request that fails it is refused (HTTP 422) and produces no entry. The
+resulting property is stronger than the one it replaced: **the log records only
+attributable decisions**, so an entry from a party nobody can identify is not
+defended against — it is impossible.
+
+Refused attempts are reported to the audit sink as telemetry
+(`Outcome: "unattributable"`), with their own dispatch budget so a flood cannot
+evict the records that reveal it. That half is not optional: without it, closing
+the hole would have converted a loud attack into a silent one.
+
+Two consequences worth recording. Every entry now carries the proof that
+attributed it, including denials, which previously carried none when the denial
+came from policy or authority. And a concurrent caller that loses the race for a
+slot is now refused rather than logged — its proof was bound to a position another
+request took — so honest races no longer leave denials in the record either. The
+refusal names the position and the retry, because the proxy cannot distinguish a
+stale proof from a forged one and does not pretend to.
+
+What remains open is the narrower question of **who may submit at all**: the
+endpoint still has no caller authentication, and a non-loopback bind is refused
+unless `--allow-unauthenticated-remote` is passed. See
+[`UPCOMING.md`](../UPCOMING.md).
 
 R5-01 and R5-05 also applied to the generic HTTP listener, which had not changed.
 They were fixed there too: a defence applied to one of two doors is not a defence.
@@ -273,13 +294,11 @@ They were fixed there too: a defence applied to one of two doors is not a defenc
 These are recorded as open rather than closed. All but the first are design
 decisions or scale-dependent work rather than unfixed defects:
 
-- **R5-06 — no caller authentication on the enforcement endpoint**, so an export
-  doubles as a write credential. This one **is** an unfixed defect, listed first
-  because the rest of this section is boundaries and this is not. It is open
-  because the fix is a design decision (mTLS, a unix socket with a peer-uid check,
-  or a bearer token) rather than a patch, and because the two changes that would
-  close it at the ingress would each break something load-bearing. Mitigated today
-  only by the loopback default. See the R5-06 entry above.
+- **Caller authentication on the enforcement endpoint.** R5-06 is closed — an
+  unattributable request can no longer cause a write — but the endpoint still does
+  not establish *who may submit at all*. A non-loopback bind is refused unless
+  `--allow-unauthenticated-remote` is passed, which is a fail-closed default rather
+  than authentication. See [`UPCOMING.md`](../UPCOMING.md).
 
 - **S1 — status is checked against the current status list**, not the list as of
   action time. Re-verifying an old export after a later revocation flips

@@ -125,19 +125,25 @@ func TestBearerChainCanWriteToTheLog(t *testing.T) {
 	}
 	defer resp.Body.Close()
 
+	// R5-06 CLOSED. Possession is an attribution gate now, so the bearer chain —
+	// which proves issuance but not possession — is refused before anything is
+	// appended.
+	if resp.StatusCode != http.StatusUnprocessableEntity {
+		t.Fatalf("bearer write should be refused as unattributable (422), got %d", resp.StatusCode)
+	}
 	after, err := px.Export()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(after.Entries) == before {
-		t.Fatalf("expected the bearer write to be recorded (status %d)", resp.StatusCode)
+	if len(after.Entries) != before {
+		t.Fatalf("an unattributable request must not be logged: %d -> %d entries", before, len(after.Entries))
 	}
 
-	// The honest caller's proof is now bound to a position that has moved. This is
-	// the availability half: it needs no key at all.
+	// And the availability half is closed with it: the tip never moved, so the
+	// honest caller's proof is still bound to the position it read.
 	res, err := px.Handle(Request{Chain: h.chain, Action: honestAction, PoP: honestPoP})
-	if err == nil && res.Decision.Allowed {
-		t.Fatal("expected the honest caller's tip-bound proof to be invalidated by the interleaved write")
+	if err != nil || !res.Decision.Allowed {
+		t.Fatalf("the honest caller must be unaffected: err=%v res=%+v", err, res)
 	}
 }
 

@@ -83,8 +83,13 @@ type Proxy struct {
 	// sinkSlots bounds how many sink writes may be in flight at once, so a slow or
 	// hostile sink cannot backpressure enforcement or accumulate work without
 	// limit (R2-03). Non-nil exactly when sink is.
-	sink      auditsink.AuditSink
-	sinkSlots chan struct{}
+	//
+	// unattrSlots is a SEPARATE reserve for unattributable-attempt telemetry, so a
+	// flood of refused attempts and ordinary traffic cannot evict one another. See
+	// forwardUnattributable for why sharing one budget would be a bug.
+	sink        auditsink.AuditSink
+	sinkSlots   chan struct{}
+	unattrSlots chan struct{}
 	// wal, if non-nil, is the durable write-ahead audit log. Unlike sink, it is on
 	// the enforcement path and load-bearing: an entry is written here and fsynced
 	// BEFORE it is committed and the decision returned (log-before-act), and a write
@@ -138,6 +143,7 @@ func NewProxy(c Config) (*Proxy, error) {
 	}
 	if c.Sink != nil {
 		p.sinkSlots = make(chan struct{}, sinkMaxInFlight)
+		p.unattrSlots = make(chan struct{}, sinkMaxInFlight)
 	}
 	// Carry the concrete policy so the verifier can re-derive consequentiality
 	// (F1). The POC's only evaluator is the Option-B *policy.Policy; a future
@@ -256,11 +262,20 @@ func (p *Proxy) Handle(req Request) (*Result, error) {
 	// what the verifier's steps 3-4 will re-derive; if it does not hold, the
 	// request is not attributable and must not be logged at all.
 	if err := req.Chain.Verify(p.dids); err != nil {
-		return nil, fmt.Errorf("proxy: unattributable chain: %w", err)
+		e := &UnattributableError{Stage: "chain", Claim: req.Chain.Actor(), Action: req.Action, Err: err}
+		p.forwardUnattributable(e)
+		return nil, e
 	}
 
 	entry, dec, err := p.decideAndAppend(req)
 	if err != nil {
+		// An attribution failure is not a decision, so it produced no entry — but
+		// an operator still needs to see it, because a refused attempt is what an
+		// attack looks like. Telemetry, not evidence.
+		var ue *UnattributableError
+		if errors.As(err, &ue) {
+			p.forwardUnattributable(ue)
+		}
 		return nil, err
 	}
 
@@ -300,9 +315,40 @@ func (p *Proxy) decideAndAppend(req Request) (audit.Entry, types.Decision, error
 	// the one we verify against and the one the entry seals.
 	seq, prevHash := p.log.Tip()
 
+	// Gate 1 (pre-log): POSSESSION. The caller must control the terminal holder
+	// key, proved against the position this entry would occupy.
+	//
+	// This is an ATTRIBUTION gate, not a decision, and it sits here rather than
+	// inside decide() for the reason Gate 0 sits where it does: a request we
+	// cannot attribute to anyone must not be logged at all. A chain names who
+	// CLAIMS to be acting; the proof of possession is what establishes they
+	// actually are. Both are attribution, so they belong on the same side of the
+	// line — and before this gate existed they were not: an unverifiable chain
+	// was refused unlogged while an unverifiable possession was recorded as a
+	// decision about the holder, when the one thing established was that it was
+	// not the holder (R5-06).
+	//
+	// The consequence is the property the log now carries: it records only
+	// ATTRIBUTABLE decisions. Every entry is bound to a principal who proved
+	// possession, so an entry from a party nobody can identify is not defended
+	// against, it is impossible.
+	//
+	// It cannot be hoisted above the lock. The proof binds to (Seq, PrevHash), so
+	// verifying it outside the critical section validates a position the entry
+	// will not occupy — the R2-04 trap in a new place.
+	if err := terminal.VerifyPossession(req.PoP, req.Action, seq, prevHash); err != nil {
+		return audit.Entry{}, types.Decision{}, &UnattributableError{
+			Stage:  "possession",
+			Claim:  terminal.Subject,
+			Action: req.Action,
+			Seq:    seq,
+			Err:    err,
+		}
+	}
+
 	// From here every path produces an entry. deny() and allow() below fill in
 	// the Decision; the entry is sealed, made durable, then committed, once.
-	dec, popRecorded := p.decide(req, terminal, seq, prevHash)
+	dec := p.decide(req, terminal, seq, prevHash)
 
 	rec := audit.EntryDraft{
 		Action:             req.Action,
@@ -312,14 +358,14 @@ func (p *Proxy) decideAndAppend(req Request) (audit.Entry, types.Decision, error
 		PolicyID:           p.policyID,
 		Timestamp:          p.now().UTC(),
 	}
-	// Evidence is recorded whenever it was actually produced/consumed, so a denial
-	// still carries the PoP and approval that were checked. (The verifier only
-	// *requires* them on allows, but recording them on denials keeps the log a
-	// faithful account of what was authorized.)
-	if popRecorded {
-		rec.PoPNonce = req.PoP.Nonce
-		rec.PoPSignature = req.PoP.Signature
-	}
+	// The proof of possession is recorded on EVERY entry now, denials included:
+	// it is what attributed the request, so it is the evidence that this entry is
+	// about the principal it names. Previously it was recorded only when the
+	// possession check had been reached, which meant a policy or authority denial
+	// carried none — a gap that no longer exists, because nothing reaches here
+	// without proving possession first.
+	rec.PoPNonce = req.PoP.Nonce
+	rec.PoPSignature = req.PoP.Signature
 	if len(req.Approval) > 0 {
 		rec.ApprovedBy = req.Approver
 		rec.Approval = req.Approval
@@ -352,6 +398,76 @@ func (p *Proxy) decideAndAppend(req Request) (audit.Entry, types.Decision, error
 		}
 	}
 	return entry, dec, nil
+}
+
+// UnattributableError reports a request that could not be tied to any principal:
+// its chain did not verify, or its proof of possession did not. Handle returns it
+// INSTEAD of a decision, and nothing is appended.
+//
+// It is a distinct type because the distinction is the point. A denial is a
+// judgement about someone we identified. This is the absence of anyone to judge,
+// and the log is for the first kind only.
+// A possession failure has two indistinguishable causes, and the message must
+// serve both. Either the signature was not produced by the holder's key at all
+// (an impostor), or it was produced correctly but bound to an EARLIER tip and
+// another request took the slot first (an honest caller that lost a race). The
+// proof covers the position, so both present identically as "does not verify" —
+// the proxy cannot tell them apart and does not pretend to. The message therefore
+// states the position and names the retry, because for the honest case that is
+// the whole remedy.
+type UnattributableError struct {
+	Stage  string // "chain" or "possession"
+	Claim  types.DID
+	Action types.Action
+	Seq    uint64 // position the proof was checked against; possession stage only
+	Err    error
+}
+
+func (e *UnattributableError) Error() string {
+	if e.Stage == "possession" {
+		return fmt.Sprintf("proxy: unattributable request: proof of possession did not verify at seq %d "+
+			"(if it was bound to an earlier tip, re-read the tip and retry): %v", e.Seq, e.Err)
+	}
+	return fmt.Sprintf("proxy: unattributable request (%s): %v", e.Stage, e.Err)
+}
+
+func (e *UnattributableError) Unwrap() error { return e.Err }
+
+// forwardUnattributable emits telemetry for a refused attempt.
+//
+// It uses its OWN slot budget rather than sinkSlots, and that is deliberate. The
+// sink drops under saturation so a slow consumer cannot backpressure enforcement
+// (R2-03), which is right for ordinary records — but here the ATTACKER CHOOSES THE
+// VOLUME. Sharing one budget would let a flood evict exactly the records that
+// reveal the flood, converting a loud attack into a silent one at the moment it
+// matters. A separate reserve means ordinary traffic and refused attempts cannot
+// starve each other in either direction.
+func (p *Proxy) forwardUnattributable(e *UnattributableError) {
+	if p.sink == nil {
+		return
+	}
+	rec := auditsink.AuditRecord{
+		Timestamp:    p.now().UTC(),
+		Actor:        string(e.Claim), // CLAIMED, not established: that is the finding
+		ActionType:   e.Action.Type,
+		ActionTarget: e.Action.Target,
+		Allowed:      false,
+		Reason:       e.Error(),
+		Outcome:      auditsink.OutcomeUnattributable,
+		// Seq and EntryHash stay zero: there is no entry to point at.
+	}
+	select {
+	case p.unattrSlots <- struct{}{}:
+	default:
+		return
+	}
+	go func() {
+		defer func() {
+			<-p.unattrSlots
+			_ = recover()
+		}()
+		_ = p.sink.Write(rec)
+	}()
 }
 
 // sinkMaxInFlight caps how many sink writes may be outstanding at once. It is
@@ -472,15 +588,15 @@ func auditRecord(e *audit.Entry) auditsink.AuditRecord {
 // decide is the pure composition. It returns the Decision and whether a PoP was
 // consumed (so the caller records it). It NEVER sets Allowed:true without having
 // passed every applicable check.
-func (p *Proxy) decide(req Request, terminal *credential.Credential, seq uint64, prevHash []byte) (types.Decision, bool) {
+func (p *Proxy) decide(req Request, terminal *credential.Credential, seq uint64, prevHash []byte) types.Decision {
 	// Policy classifies: consequential? denied by a rule?
 	dec, err := p.policy.Evaluate(req.Action)
 	if err != nil {
-		return deny(dec, "policy evaluation failed: "+err.Error()), false
+		return deny(dec, "policy evaluation failed: "+err.Error())
 	}
 	if !dec.Allowed {
 		// A policy hard-deny (e.g. forbidden-wire). Authority was never consulted.
-		return dec, false
+		return dec
 	}
 
 	// Authority: the action must satisfy the terminal credential's caveats. The
@@ -491,18 +607,18 @@ func (p *Proxy) decide(req Request, terminal *credential.Credential, seq uint64,
 		ctx[k] = v
 	}
 	if err := macaroon.Satisfies(terminal.Macaroon, ctx); err != nil {
-		return deny(dec, "action exceeds delegated authority: "+err.Error()), false
+		return deny(dec, "action exceeds delegated authority: "+err.Error())
 	}
 
 	// Consequential actions demand a live status check (no revoked hop) AND a
 	// human approval, one knob, two jobs (§10).
 	if dec.Consequential {
 		if p.status == nil {
-			return deny(dec, "consequential action requires a status check, but no status source is configured"), false
+			return deny(dec, "consequential action requires a status check, but no status source is configured")
 		}
 		revoked, where, checked, err := p.anyHopRevoked(req.Chain)
 		if err != nil {
-			return deny(dec, "status check failed: "+err.Error()), false
+			return deny(dec, "status check failed: "+err.Error())
 		}
 		// Record how many hops were ACTUALLY checked, not that checking happened.
 		// The old boolean was set here unconditionally and was therefore true even
@@ -510,24 +626,18 @@ func (p *Proxy) decide(req Request, terminal *credential.Credential, seq uint64,
 		// re-derive from the credential evidence cannot be vacuous.
 		dec.StatusCheckedHops = checked
 		if revoked {
-			return deny(dec, "credential revoked: "+where), false
+			return deny(dec, "credential revoked: "+where)
 		}
 		if err := p.verifyApproval(req, terminal.Subject, seq, prevHash); err != nil {
-			return deny(dec, err.Error()), false
+			return deny(dec, err.Error())
 		}
-	}
-
-	// Possession: the caller must control the terminal holder key. Required for
-	// every allow (routine or consequential): a copied credential fails here.
-	if err := terminal.VerifyPossession(req.PoP, req.Action, seq, prevHash); err != nil {
-		return deny(dec, "proof of possession failed: "+err.Error()), true
 	}
 
 	dec.Allowed = true
 	if dec.Reason == "" {
 		dec.Reason = "within delegated authority"
 	}
-	return dec, true
+	return dec
 }
 
 // verifyApproval requires and checks a human approval token for a consequential

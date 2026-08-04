@@ -62,30 +62,20 @@ For what the system does today, and for the limits of a clean verdict, the
   equivalent. Distinct from production Developer ID signing + notarization for
   fleet distribution, which is the separate scale-dependent piece.
 
-- **Caller authentication on the enforcement endpoint. This one is not a
-  roadmap item in the ordinary sense — it gates the distribution model.**
-  Kessa's neutrality argument requires exports to circulate freely: an auditor, a
-  regulator, or a counterparty must be able to take one and verify it against
-  public keys, trusting nothing of ours. That circulation is exactly what is
-  currently unsafe. The listeners have no caller authentication, and the only gate
-  before an audit entry is written is chain verification — which proves *issuance*,
-  a public fact, not *possession*. So a party you hand an export to can make your
-  proxy write to the log they are auditing (README, *Known limits*; R5-06).
-
-  The property is not a chain-design flaw: public verifiability is precisely what
-  makes the offline verifier possible. It is that design meeting an ingress path
-  that assumed more than a chain provides. Which is why **the fix cannot be at the
-  export**: carrying fewer credentials breaks the verifier, and not logging failed
-  proofs of possession breaks "a denial is a real decision" and erases the evidence
-  of the attack. It has to be caller authentication.
+- **Caller authentication on the enforcement endpoint.** No longer the thing
+  standing between an export and someone else's audit log — R5-06 closed that by
+  making possession an attribution gate, so an unattributable request causes no
+  write. What remains is the separate question of **who may submit at all**.
+  Anyone who can reach a listener may send it requests. They cannot make it record
+  anything — that needs a proof of possession — but unauthenticated submission is
+  still work the chokepoint performs for strangers, and a deployment that wants a
+  closed perimeter has no way to ask for one. `--allow-unauthenticated-remote` is a
+  fail-closed default, not an answer.
 
   Candidates, all unstarted: mTLS (matches the sidecar topology); a unix socket
   with a peer-uid check (matches the same-host case and reuses what the signing
   daemon already does); a bearer token (weakest, easiest). The choice interacts
-  with the MCP deployment model below. **Blast radius is bounded** — a proxy
-  resolves DIDs only from its local `--dids` root, with no network resolution, so
-  an export reaches the issuing deployment and any proxy configured to trust that
-  org, not an arbitrary internet party.
+  with the MCP deployment model below.
 
 ## Coverage and evidence
 

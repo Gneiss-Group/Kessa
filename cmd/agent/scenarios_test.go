@@ -201,6 +201,19 @@ func mustAllow(t *testing.T, res *enforce.Result, err error) {
 	}
 }
 
+// mustReject asserts an UNATTRIBUTABLE request: no decision, no entry, an error.
+// Distinct from mustDeny, which asserts a recorded judgement about an identified
+// principal. The log is for the second kind only.
+func mustReject(t *testing.T, res *enforce.Result, err error, wantReason string) {
+	t.Helper()
+	if err == nil {
+		t.Fatalf("expected an unattributable rejection, got a logged decision: %+v", res.Decision)
+	}
+	if wantReason != "" && !contains(err.Error(), wantReason) {
+		t.Fatalf("rejection %q should mention %q", err.Error(), wantReason)
+	}
+}
+
 func mustDeny(t *testing.T, res *enforce.Result, err error, wantReason string) {
 	t.Helper()
 	if err != nil {
@@ -272,7 +285,11 @@ func TestScenario5_TokenLoan(t *testing.T) {
 	stranger := types.DID("did:web:localhost:agents:stranger")
 	seeds[stranger] = 0x77
 	res, err := w.attempt(t, stranger, "", act("10"), "s5")
-	mustDeny(t, res, err, "possession")
+	// The token loan is REFUSED, not denied — and that is the stronger outcome.
+	// A denial is a judgement about someone we identified; this request could not
+	// be attributed to anyone, so it produces no decision and no audit entry. The
+	// copied blob never enters the record (R5-06).
+	mustReject(t, res, err, "possession")
 }
 
 // Scenario 6, cross-org and cross-vertical trust. An agent credentialed by
