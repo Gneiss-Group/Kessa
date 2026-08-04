@@ -32,16 +32,27 @@ if [ -n "$unformatted" ]; then
 fi
 echo "OK"
 
-step "SPDX headers on every source file (REUSE)"
-missing=""
-for f in $(git ls-files '*.go' 'scripts/release/*.sh' 'scripts/ci/*.sh' '.github/workflows/*.yml' 'docker/*.Dockerfile'); do
-  grep -q 'SPDX-License-Identifier' "$f" || missing="$missing $f"
-done
-if [ -n "$missing" ]; then
-  echo "files with no SPDX-License-Identifier header:"
-  printf '  %s\n' $missing
-  exit 1
-fi
+step "licence on every tracked file, and only one per file"
+# This step used to walk a glob of source extensions and check each file had an
+# inline SPDX header. That shape was wrong and was recorded as known debt in
+# docs/go-standards.md: it enumerated its inclusions, so any file type nobody
+# thought of went unchecked (docker/demo/requests.json did, and nothing said so),
+# and it could not be widened, because a dozen files carry no inline header by
+# design and are licensed through REUSE.toml annotations instead. The fix that
+# note called for was "a checker that accepts a header OR an annotation", and
+# scripts/reusecheck is it.
+#
+# It starts from the complete tracked set, so no file type can fall outside it,
+# and it is stricter than the FSFE's `reuse lint` in the place that matters: it
+# fails when the repository states TWO licences for one file. REUSE resolves that
+# case silently by precedence, which is how docs/enrollment.md carried an
+# AGPL-3.0-only header under a glob claiming Apache-2.0 without any tool objecting.
+#
+# It is written in Go rather than installed, because scripts/ci/secret-scan.sh
+# next door already answered this question for third-party tooling: pinned and
+# built from source, never fetched as an opaque artifact. A pip install here would
+# contradict the script beside it. See scripts/reusecheck/main.go.
+go run ./scripts/reusecheck
 echo "OK"
 
 step "no em dashes (house style, enforced not remembered)"

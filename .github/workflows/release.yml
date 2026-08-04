@@ -80,7 +80,7 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - name: gate (fmt, SPDX, vet, licence boundary, race tests, demo)
+      - name: gate (fmt, licence, vet, licence boundary, race tests, demo)
         run: scripts/ci/gate.sh
 
       - name: golden-fixture guard

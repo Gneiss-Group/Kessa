@@ -18,8 +18,23 @@ path = [
   ".gitignore",
   "go.mod",
   "REUSE.toml",
+  # docs/ is named file by file rather than by a `docs/*.md` glob. The glob was
+  # wrong for one file (enrollment.md is AGPL-tier, see the block below) and it
+  # was wrong SILENTLY, because a blanket claim over a directory quietly extends
+  # itself to every file added later. Listing them is safe here specifically
+  # because scripts/reusecheck fails on a tracked file that no statement covers:
+  # a doc added without a licence is a build failure, not a silent Apache-2.0
+  # grant nobody decided to make.
   "docs/README.md",
-  "docs/*.md",
+  "docs/branching.md",
+  "docs/daemon.md",
+  "docs/demo.md",
+  "docs/enclave-runbook.md",
+  "docs/go-standards.md",
+  "docs/how-it-works.md",
+  "docs/security-review.md",
+  "docs/signer.md",
+  "docs/stories.md",
   "docs/demo.tape",
   "docs/assets/**",
   "internal/policy/README.md",
@@ -38,7 +53,19 @@ SPDX-License-Identifier = "Apache-2.0"
 
 # perf/ is server-tier (its benchmarks import the AGPL enforcement engine), so its
 # docs are annotated to match.
+#
+# docs/enrollment.md is the same case reached from the other direction: it
+# documents `kessa-issuer enroll`, which is AGPL-tier, and it carries an
+# AGPL-3.0-only header inline. The old `docs/*.md` glob claimed Apache-2.0 for it,
+# so this file stated two different licences for one document. The inline header
+# won under REUSE's precedence, so removing the glob changes no file's effective
+# licence: it stops the repository stating a licence it never meant.
+#
+# The entry below agrees with that file's inline header rather than overriding it.
+# Both say AGPL-3.0-only, which is redundant and deliberately so: the annotation
+# records the tier decision next to perf/README.md's, where a reader looking for
+# the AGPL-tier docs will find it.
 [[annotations]]
-path = ["perf/README.md"]
+path = ["perf/README.md", "docs/enrollment.md"]
 SPDX-FileCopyrightText = "2026 Gneiss Group Inc."
 SPDX-License-Identifier = "AGPL-3.0-only"

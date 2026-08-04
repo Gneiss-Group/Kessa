@@ -71,7 +71,22 @@ make license-check # enforce the Apache/AGPL import boundary
 make demo          # the seven-scenario end-to-end story, verified offline
 ```
 
-All of these, plus `gofmt`, SPDX headers, and a check that the golden fixtures
+Before opening a pull request, run the full gate, which is the same script CI
+runs:
+
+```sh
+bash scripts/ci/gate.sh
+```
+
+It needs nothing beyond Go and a shell. Every check in it is a shell script or a
+Go program in [`scripts/`](scripts/), including the licence checks: the REUSE
+conformance check is [`scripts/reusecheck`](scripts/reusecheck/), not the FSFE's
+`reuse` tool, and [`scripts/ci/secret-scan.sh`](scripts/ci/secret-scan.sh) builds
+its scanner from pinned source rather than downloading one. A project whose
+subject is not trusting artifacts you did not build should not fetch opaque
+tooling to check itself.
+
+All of these, plus `gofmt`, the licence lint, and a check that the golden fixtures
 still reproduce from source, run in CI on every pull request
 ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)).
 

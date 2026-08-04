@@ -101,13 +101,41 @@ All four run in CI on every pull request, and again before any release.
   package in neither tier, so the lists *classify* packages rather than decide
   which ones get checked.
 
-  The SPDX check in `gate.sh` still has the wrong shape, knowingly. Widening its
-  glob to every tracked file fails the build immediately, because four shell
-  scripts carry no inline header by design and are covered by `REUSE.toml`
-  annotations instead. The real fix is a checker that accepts a header *or* an
-  annotation, which is a language and dependency decision rather than an edit to
-  a glob. It is recorded here so the current shape is read as known debt and not
-  as the standard.
+  The SPDX check in `gate.sh` carried the same debt for longer, and it is now
+  paid. It walked a glob of source extensions, so it enumerated its inclusions and
+  any file type nobody thought of went unchecked. It could not simply be widened,
+  because a dozen files carry no inline header by design and are licensed through
+  `REUSE.toml` annotations instead. The fix this note called for was "a checker
+  that accepts a header *or* an annotation", and that is
+  [`scripts/reusecheck`](../scripts/reusecheck/), which the gate now runs over the
+  complete tracked set.
+
+  It is written here rather than installed, and that is the second rule this
+  episode produced. **The dependency question is settled by
+  [`scripts/ci/secret-scan.sh`](../scripts/ci/secret-scan.sh), not re-litigated per
+  tool:** gitleaks is pinned and built from source because "don't trust an
+  artifact you did not build" is the product's thesis and CI is not exempt from
+  it. The FSFE's `reuse` is the reference implementation and a good tool, but
+  installing it means eleven prebuilt Python wheels, which would contradict the
+  script sitting next to it in the same directory. A hundred lines of Go and a
+  parser for the four keys `REUSE.toml` actually uses was the cheaper side of that
+  trade. Revisit it if `REUSE.toml` ever needs real TOML, not before.
+
+  The reimplementation is narrower than the spec on purpose, and **stricter in the
+  one place that matters.** `reuse lint` answers "does every file resolve to some
+  licence?". `scripts/reusecheck` also answers "do all of the repository's
+  statements about that file agree?", and fails when they do not. REUSE resolves
+  that case silently by precedence, which is how `docs/enrollment.md` carried an
+  `AGPL-3.0-only` header under a glob claiming `Apache-2.0` with no tool
+  objecting; it was found by hand. Note what the strictness buys: the checker does
+  not model precedence at all, because precedence only decides who wins when two
+  statements disagree, and a disagreement is now a build failure. **A rule you
+  enforce is cheaper than a rule you emulate.**
+
+  The residual hazard is the glob itself, which claims every file added to a
+  directory later. `docs/*.md` is gone for that reason; the docs are named
+  individually, which is safe here only because an unlicensed file is now a
+  failure rather than a silent default.
 
 ## Concurrency
 
