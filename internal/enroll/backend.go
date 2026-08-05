@@ -25,9 +25,21 @@ type ConfirmRequest struct {
 }
 
 // Backend authenticates an enrollment before any key is registered or credential
-// minted. It is the pluggable seam the deployment model calls for (the same shape
-// as the dual listeners, AuditSink, and the dispatch seam): a zero-dependency
-// default that always works, with room for a stronger check in real deployments.
+// minted. It is the extension point the deployment model calls for: a
+// zero-dependency default that always works, with room for a stronger check in
+// real deployments.
+//
+// It is an INTERNAL extension point, not a designated plugin interface, and the
+// difference is not cosmetic. A designated plug point carries the
+// //kessa:plugin-interface marker, is licensed permissively, and reaches nothing
+// but the standard library, so a third party can implement it and license their
+// implementation on their own terms (see LICENSING.md; auditsink is the only one).
+// Backend has none of those properties: this package is AGPL-3.0-only, and it
+// lives under internal/, so the Go toolchain refuses the import outright to
+// anyone outside this module. The seam exists so WE can add a stronger backend
+// without disturbing Enroll's orchestration, which is a different thing from a
+// seam a stranger can build against. An earlier version of this comment grouped
+// it with AuditSink, which invited exactly the wrong inference.
 //
 // The default (LocalTOFU) is self-administered trust-on-first-use: it shows the
 // operator the new key's fingerprint and asks for interactive confirmation, the

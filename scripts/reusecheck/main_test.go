@@ -5,6 +5,7 @@
 package main
 
 import (
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -323,6 +324,65 @@ func TestGlobSemantics(t *testing.T) {
 			t.Errorf("matchPath(%q, %q) = %v, want %v", c.pattern, c.path, got, c.want)
 		}
 	}
+}
+
+// -explain has to answer for a glob-covered file, which is the case a contributor
+// cannot grep their way to: nothing in the file, and nothing matching its path in
+// REUSE.toml either. That gap is what made CONTRIBUTING.md's old "every file
+// states its license in an SPDX header" so misleading, so it is the case worth
+// pinning.
+func TestExplain_NamesTheStatementResponsible(t *testing.T) {
+	dir := newRepo(t, baseFiles())
+
+	for _, c := range []struct{ path, wantLicense, wantSource string }{
+		{"data/config.json", "Apache-2.0", `via the entry "data/*.json"`},
+		{"core.go", "AGPL-3.0-only", "its own SPDX header"},
+	} {
+		out := captureExplain(t, dir, c.path)
+		if !strings.Contains(out, c.wantLicense) {
+			t.Errorf("-explain %s: want licence %s, got:\n%s", c.path, c.wantLicense, out)
+		}
+		if !strings.Contains(out, c.wantSource) {
+			t.Errorf("-explain %s: want source %q, got:\n%s", c.path, c.wantSource, out)
+		}
+	}
+}
+
+// A licence text has no licence of its own, and asking must say so rather than
+// report it as unlicensed.
+func TestExplain_LicenceTextSaysItIsExempt(t *testing.T) {
+	dir := newRepo(t, baseFiles())
+	if out := captureExplain(t, dir, "LICENSES/Apache-2.0.txt"); !strings.Contains(out, "exempt") {
+		t.Fatalf("expected an exemption note, got:\n%s", out)
+	}
+}
+
+// Asking about a file git does not track is a question with no answer, and
+// answering it anyway would invent a licence for a file that is not in the repo.
+func TestExplain_UntrackedFileIsAnError(t *testing.T) {
+	dir := newRepo(t, baseFiles())
+	if err := explain(dir, "not/in/the/repo.go"); err == nil {
+		t.Fatal("expected an error for an untracked path")
+	}
+}
+
+// captureExplain runs explain and returns what it printed.
+func captureExplain(t *testing.T, dir, path string) string {
+	t.Helper()
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("pipe: %v", err)
+	}
+	saved := os.Stdout
+	os.Stdout = w
+	explainErr := explain(dir, path)
+	os.Stdout = saved
+	w.Close()
+	out, _ := io.ReadAll(r)
+	if explainErr != nil {
+		t.Fatalf("explain(%s): %v", path, explainErr)
+	}
+	return string(out)
 }
 
 // The strongest single assertion available: the real repository passes. It is
