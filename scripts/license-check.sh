@@ -249,54 +249,11 @@ if [ -x "$ROOT/scripts/gen-notice.sh" ] && [ "$ROOT" = "$PWD" ]; then
   "$ROOT/scripts/gen-notice.sh" --check || fail=1
 fi
 
-# ---------------------------------------------------------------------------
-# TRANSITIONAL, REMOVE IN THE FOLLOW-UP PR.
-#
-# The hardcoded tier lists this check used to classify by, kept for exactly one
-# pull request so a reviewer can watch the derived classification agree with them
-# package by package rather than take it on trust. Once this PR is merged the
-# block below and both arrays come out; nothing else references them.
-# ---------------------------------------------------------------------------
-LEGACY_APACHE_PKGS=(
-  pkg/types
-  internal/did internal/signer internal/signer/enclave internal/signerd internal/audit internal/macaroon
-  internal/status internal/vc internal/credential internal/chain
-  internal/policy internal/export internal/shadow internal/version
-  internal/licensing
-  auditsink cmd/verify cmd/shadow scripts/genfixtures scripts/stories scripts/reusecheck
-)
-LEGACY_AGPL_PKGS=(
-  internal/enforce internal/keystore internal/enroll cmd/proxy cmd/issuer cmd/agent perf
-)
-
-if [ "$MOD" = "github.com/Gneiss-Group/Kessa" ]; then
-  legacy_diff=0
-  for p in $all_pkgs; do
-    legacy=""
-    for a in "${LEGACY_APACHE_PKGS[@]}"; do [ "$a" = "$p" ] && legacy=apache; done
-    for a in "${LEGACY_AGPL_PKGS[@]}"; do [ "$a" = "$p" ] && legacy="${legacy:+$legacy+}agpl"; done
-    derived="$(lookup "$p" "$TIER_TABLE")"
-    if [ -z "$legacy" ]; then
-      note "PARALLEL-RUN DIFF: '$p' is $derived by SPDX header but appears in no legacy list."
-      legacy_diff=1
-    elif [ "$legacy" != "$derived" ]; then
-      note "PARALLEL-RUN DIFF: '$p' is $derived by SPDX header but '$legacy' by legacy list."
-      legacy_diff=1
-    fi
-  done
-  for p in "${LEGACY_APACHE_PKGS[@]}" "${LEGACY_AGPL_PKGS[@]}"; do
-    printf '%s\n' $all_pkgs | grep -qxF "$p" ||
-      { note "PARALLEL-RUN DIFF: legacy list names '$p', which is not a package in this module."; legacy_diff=1; }
-  done
-  [ "$legacy_diff" -eq 1 ] && fail=1
-fi
-
 if [ "$fail" -eq 0 ]; then
   n_all="$(printf '%s\n' $all_pkgs | wc -l | tr -d ' ')"
   n_marked="$(printf '%s' "$marked_pkgs" | wc -w | tr -d ' ')"
   echo "license-check: OK: no Apache-tier package imports an AGPL-tier one;"
   echo "               $n_all packages classified from their own SPDX headers;"
-  echo "               $n_marked designated plug point(s), each stdlib-only in closure;"
-  echo "               derived classification agrees with the legacy lists (transitional)"
+  echo "               $n_marked designated plug point(s), each stdlib-only in closure"
 fi
 exit "$fail"
