@@ -42,8 +42,9 @@ identity is a valid next hop under the identical credential format.
    a software key.
 3. **Trust-on-first-use confirmation.** Displays the key fingerprint and, unless
    `--yes`, requires the operator to confirm it: the same ceremony `ssh` uses for
-   a new host key. No secret crosses between two parties. This is the pluggable
-   [enrollment backend](#enrollment-backends) seam; the default is `local-tofu`.
+   a new host key. No secret crosses between two parties. This step is the
+   [enrollment backend](#enrollment-backends) extension point; the default is
+   `local-tofu`.
 4. **Publish the device DID document** (public key only) into the publication root.
 5. **Mint and sign** the `org → employee` credential and write it out (kept out of
    the public root, like any credential).
@@ -106,8 +107,14 @@ Symmetric with initial enrollment, with no new mechanism:
 
 ## Enrollment backends
 
-Enrollment is a pluggable seam (`internal/enroll.Backend`). The default,
-`local-tofu`, is self-administered trust-on-first-use: honest and sufficient
+Enrollment has an internal extension point (`internal/enroll.Backend`). It is
+**not** a designated plugin interface: the package is `AGPL-3.0-only` and sits
+under `internal/`, so nothing outside this module can import it. The seam is there
+so a stronger backend can be added without disturbing the orchestration, not so a
+third party can supply one. (The only designated plug point is `auditsink`; see
+[`LICENSING.md`](../LICENSING.md).)
+
+The default, `local-tofu`, is self-administered trust-on-first-use: honest and sufficient
 wherever there is no organizational gap between "admin" and "employee" (solo,
 home lab, small team). A stronger backend that binds enrollment to a live
 corporate IdP session (Okta/Azure AD) satisfies the same interface and drops in

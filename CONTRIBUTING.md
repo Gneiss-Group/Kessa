@@ -24,10 +24,31 @@ that the ground rules are visible before contributions open.
 ## Licensing: read this first
 
 Kessa uses a **two-tier license model** (see [`LICENSING.md`](LICENSING.md)): the
-independent verifier and its dependency closure, plus the plug-point seams, are
-`Apache-2.0`; the enforcement engine and server binaries are `AGPL-3.0-only`.
-**Your contribution is licensed under the license of the file(s) it touches**:
-each file states its license in an SPDX header.
+independent verifier and its dependency closure, plus the designated plug-point
+interface, are `Apache-2.0`; the enforcement engine and server binaries are
+`AGPL-3.0-only`.
+
+**Your contribution is licensed under the license of the file(s) it touches.**
+Most files say so in their own SPDX header. Formats that have no comment syntax
+(all the JSON, the images) cannot carry one, so they are licensed by an annotation
+in [`REUSE.toml`](REUSE.toml) instead. Both are authoritative; roughly a quarter of
+the tree is licensed the second way, so **"no header" does not mean
+"unlicensed"**, and the file you are editing may well be one of them.
+
+To ask about a specific file rather than guess:
+
+```sh
+go run ./scripts/reusecheck -explain examples/policies/data-governance.json
+```
+
+It names the licence and the statement responsible, whether that is the file's own
+header or the `REUSE.toml` entry covering it. Grepping is not always enough: a file
+covered by a glob has nothing in it to find, and nothing matching its own path in
+`REUSE.toml` either, since `examples/**` is what covers the file above.
+
+[`scripts/reusecheck`](scripts/reusecheck/) also fails the build if any tracked
+file has no licence by either route, or if the two routes disagree about one, so
+the answer is never ambiguous.
 
 ## Contributor License Agreement (CLA)
 
@@ -96,8 +117,11 @@ performance one. Security review round 2 found one that a bare `go test` could
 not see (`make test-fast` is that bare run, for the inner loop only). Do not
 submit a change on `test-fast` alone.
 
-Every source file carries an SPDX header (the repo follows the
-[REUSE](https://reuse.software) spec): **new files must too.**
+The repository follows the [REUSE](https://reuse.software) spec, and **every new
+file must be licensed**: put an SPDX header in it if its format takes comments,
+and add a `REUSE.toml` annotation if it does not (JSON, images).
+[`scripts/reusecheck`](scripts/reusecheck/), which the gate runs, refuses a file
+that has neither, so this is a build failure rather than a review comment.
 
 ## The license boundary (do not cross it)
 

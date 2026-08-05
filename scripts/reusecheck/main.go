@@ -50,6 +50,8 @@
 //     cannot rot into claims about files that no longer exist.
 //
 // Usage:  go run ./scripts/reusecheck [repo-root]
+//
+//	go run ./scripts/reusecheck -explain <path>   how one file is licensed
 package main
 
 import (
@@ -59,6 +61,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 )
@@ -75,8 +78,35 @@ const headerLines = 16
 
 func main() {
 	root := "."
-	if len(os.Args) > 1 {
-		root = os.Args[1]
+	args := os.Args[1:]
+
+	// -explain answers "what licenses THIS file, and how do I know?" for one path.
+	//
+	// It exists because the honest answer is not always greppable. A file with its
+	// own header is easy, but a file covered by a REUSE.toml glob has nothing in it
+	// to find and nothing matching its path in REUSE.toml either: `examples/**` is
+	// what covers examples/policies/data-governance.json, and a contributor has no
+	// reason to guess that. CONTRIBUTING.md used to tell people every file states
+	// its licence in a header, which is false for about a quarter of the tree, so
+	// pointing them at a command that actually answers is the fix rather than a
+	// better-worded promise.
+	if len(args) > 0 && args[0] == "-explain" {
+		if len(args) < 2 {
+			fmt.Fprintln(os.Stderr, "usage: reusecheck -explain <path> [repo-root]")
+			os.Exit(2)
+		}
+		if len(args) > 2 {
+			root = args[2]
+		}
+		if err := explain(root, args[1]); err != nil {
+			fmt.Fprintf(os.Stderr, "reuse-check: %v\n", err)
+			os.Exit(2)
+		}
+		return
+	}
+
+	if len(args) > 0 {
+		root = args[0]
 	}
 	problems, summary, err := check(root)
 	if err != nil {
@@ -91,6 +121,67 @@ func main() {
 		os.Exit(1)
 	}
 	fmt.Print(summary)
+}
+
+// explain reports how one file gets its licence, naming the statement responsible
+// rather than only the answer. Every statement is listed, not just the first,
+// because two of them is the failure this program exists to catch and a reader
+// asking the question deserves to see it.
+func explain(root, path string) error {
+	path = strings.TrimPrefix(filepath.ToSlash(path), "./")
+
+	if exemptFromLicensing(path) {
+		fmt.Printf("%s\n  is a licence text, which REUSE exempts: it needs no licence of its own.\n", path)
+		return nil
+	}
+	files, err := trackedFiles(root)
+	if err != nil {
+		return err
+	}
+	if !slices.Contains(files, path) {
+		return fmt.Errorf("%s is not tracked by git in %s (only tracked files are licensed)", path, root)
+	}
+	anns, err := parseREUSE(filepath.Join(root, "REUSE.toml"))
+	if err != nil {
+		return err
+	}
+
+	var sources []string
+	licenses := map[string]bool{}
+	if inline, err := inlineLicense(filepath.Join(root, path)); err != nil {
+		return err
+	} else if inline != "" {
+		licenses[inline] = true
+		sources = append(sources, fmt.Sprintf("its own SPDX header says %s", inline))
+	}
+	for _, a := range anns {
+		for _, pat := range a.paths {
+			ok, err := matchPath(pat, path)
+			if err != nil {
+				return err
+			}
+			if ok {
+				licenses[a.license] = true
+				sources = append(sources, fmt.Sprintf("REUSE.toml block %d says %s, via the entry %q", a.block, a.license, pat))
+				break
+			}
+		}
+	}
+
+	fmt.Printf("%s\n", path)
+	switch len(licenses) {
+	case 0:
+		fmt.Println("  has NO licence: no SPDX header and no REUSE.toml annotation covers it.")
+		fmt.Println("  This is a build failure; add a header, or annotate it in REUSE.toml.")
+	case 1:
+		fmt.Printf("  is licensed %s\n", onlyKey(licenses))
+	default:
+		fmt.Printf("  is given CONTRADICTORY licences (%s), which is a build failure.\n", sortedList(licenses))
+	}
+	for _, s := range sources {
+		fmt.Printf("    - %s\n", s)
+	}
+	return nil
 }
 
 // exemptFromLicensing is the checker's only exclusion, and it is enumerated here
