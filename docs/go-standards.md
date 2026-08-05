@@ -97,9 +97,16 @@ All four run in CI on every pull request, and again before any release.
   so nothing checked its licence boundary; and `docker/demo/requests.json` fell
   outside the extension glob in [`scripts/ci/gate.sh`](../scripts/ci/gate.sh), so
   nothing checked it carried an SPDX annotation. The licence check now has the
-  right shape: it derives the package set from `go list ./...` and fails on any
-  package in neither tier, so the lists *classify* packages rather than decide
-  which ones get checked.
+  right shape twice over: it derives the package set from `go list ./...`, and it
+  derives each package's tier from that package's own SPDX headers, so there is no
+  longer a list to fall out of. The follow-on rule is worth stating separately,
+  because the first fix left it standing: **a classification lives in the thing
+  being classified, not in a register of it.** A list that classifies rather than
+  selects is better than one that selects, but it is still a second copy, and the
+  copy is what goes stale. Tier comes from the file's header and plug-point
+  designation comes from the `//kessa:plugin-interface` marker in the source; both
+  are unfalsifiable in the sense that matters, which is that you cannot change the
+  code without the classification moving with it.
 
   The SPDX check in `gate.sh` carried the same debt for longer, and it is now
   paid. It walked a glob of source extensions, so it enumerated its inclusions and
