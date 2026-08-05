@@ -27,6 +27,13 @@ import (
 
 const marker = "//kessa:plugin-interface"
 
+// notice is the permission pointer every marked file must carry, assembled from
+// pieces for the same reason hdr is: fixtures that quote it must not read as
+// carrying it. See the comment on hdr.
+func notice() string {
+	return "// ADDITIONAL " + "PERMISSION: see the clause at the end of LICENSE.\n"
+}
+
 // hdr builds the SPDX header this test writes into its fixture files.
 //
 // The tag is assembled from two pieces rather than written whole, and that is not
@@ -141,7 +148,7 @@ func TestDesignatedPlugPoint_StdlibOnly_Passes(t *testing.T) {
 	dir := fixture{
 		"plug/plug.go": apacheHdr +
 			"// Package plug is a designated plug point.\n" +
-			"//\n" + marker + "\npackage plug\n\n" +
+			"//\n" + notice() + "//\n" + marker + "\npackage plug\n\n" +
 			"import \"time\"\n\n" +
 			"// Record is what crosses the seam.\ntype Record struct{ At time.Time }\n\n" +
 			"// Sink is the designated interface.\ntype Sink interface {\n\tWrite(r Record) error\n}\n",
@@ -170,7 +177,7 @@ func TestDesignatedPlugPoint_DependingOnUndesignatedPackage_IsRejected(t *testin
 	files := fixture{
 		"plug/plug.go": apacheHdr +
 			"// Package plug is a designated plug point that reaches outside its seam.\n" +
-			"//\n" + marker + "\npackage plug\n\n" +
+			"//\n" + notice() + "//\n" + marker + "\npackage plug\n\n" +
 			"import \"example.test/fixture/internal/helper\"\n\n" +
 			"// Sink is the designated interface.\ntype Sink interface {\n\tWrite(s string) error\n}\n\n" +
 			"// Normalize drags a non-designated package across the seam.\n" +
@@ -209,7 +216,7 @@ func TestDesignatedPlugPoint_ReachingIntoAGPLCore_IsRejected(t *testing.T) {
 	files := fixture{
 		"plug/plug.go": apacheHdr +
 			"// Package plug is a designated plug point that cheats.\n" +
-			"//\n" + marker + "\npackage plug\n\n" +
+			"//\n" + notice() + "//\n" + marker + "\npackage plug\n\n" +
 			"import \"example.test/fixture/internal/core\"\n\n" +
 			"// Sink is the designated interface.\ntype Sink interface {\n\tWrite(s string) error\n}\n\n" +
 			"// Allowed leaks the core across the seam.\nfunc Allowed() bool { return core.Enforce() }\n",
@@ -292,7 +299,7 @@ func TestMarker_OnImplementationFile_IsRejected(t *testing.T) {
 		"plug/plug.go": apacheHdr +
 			"// Package plug declares the seam.\npackage plug\n\n" +
 			"// Sink is the interface.\ntype Sink interface {\n\tWrite(s string) error\n}\n",
-		"plug/impl.go": apacheHdr +
+		"plug/impl.go": apacheHdr + notice() +
 			"package plug\n\n" +
 			"// The marker does not belong here.\n//\n" + marker + "\ntype noopSink struct{}\n\n" +
 			"func (noopSink) Write(string) error { return nil }\n",
@@ -349,13 +356,72 @@ func TestQuotedMarkerAndIdentifiers_DoNotDesignate(t *testing.T) {
 	}
 }
 
+// Counsel's Q6 requirement (2026-08-05), enforced rather than remembered.
+//
+// The marker travels with a file when someone copies it out of the distribution.
+// LICENSE does not. A detached file carrying a designation whose grant the reader
+// cannot locate is worse than an undesignated one, so a marked file must also
+// point at the clause. This is the rule that stops a NEW plug point shipping
+// without it, which is the only way the requirement decays: auditsink will not
+// lose its notice, but the second designated interface could be added without one.
+func TestMarkedFileWithoutItsPermissionNotice_IsRejected(t *testing.T) {
+	files := fixture{
+		"plug/plug.go": apacheHdr +
+			"// Package plug is designated but says nothing about the permission.\n" +
+			"//\n" + marker + "\npackage plug\n\n" +
+			"// Sink is the designated interface.\ntype Sink interface {\n\tWrite(s string) error\n}\n",
+	}
+	dir := files.build(t)
+	script := scriptPath(t)
+
+	out, ok := runCheck(t, script, dir)
+	if ok {
+		t.Fatalf("a marked file with no permission notice was accepted:\n%s", out)
+	}
+	if !strings.Contains(out, "MARKED FILE WITHOUT ITS PERMISSION NOTICE") {
+		t.Fatalf("rejected, but not for the missing notice:\n%s", out)
+	}
+
+	// Observed to fail with its guard removed. With the notice check deleted this
+	// tree must pass cleanly: nothing else in the script has an opinion about it,
+	// which is what proves the rejection came from this guard and not a neighbour.
+	out, ok = runCheck(t, mutate(t, script, "notice"), files.build(t))
+	if !ok {
+		t.Fatalf("with the notice guard removed the tree still failed, so the assertion\nabove was not observing that guard:\n%s", out)
+	}
+}
+
+// The notice is a POINTER to the clause, never a copy of it. Two copies of
+// operative text is how they come to disagree, and a file quoting the notice must
+// not thereby appear to carry it, which is the anchoring lesson this suite has now
+// learned three times.
+func TestQuotedNoticeDoesNotSatisfyTheRequirement(t *testing.T) {
+	files := fixture{
+		"plug/plug.go": apacheHdr +
+			"// Package plug quotes the notice instead of carrying it.\n" +
+			"//\n" + marker + "\npackage plug\n\n" +
+			"// Sink is the designated interface.\ntype Sink interface {\n\tWrite(s string) error\n}\n\n" +
+			"// Text is the notice as data, indented, not as a comment of this file.\n" +
+			"const Text = \"" + strings.TrimSuffix(notice(), "\n") + "\"\n",
+	}
+	dir := files.build(t)
+
+	out, ok := runCheck(t, scriptPath(t), dir)
+	if ok {
+		t.Fatalf("a quoted notice satisfied the requirement:\n%s", out)
+	}
+	if !strings.Contains(out, "MARKED FILE WITHOUT ITS PERMISSION NOTICE") {
+		t.Fatalf("rejected, but not for the missing notice:\n%s", out)
+	}
+}
+
 // A designated plug point under a protective licence promises a third party
 // something its own SPDX headers refuse to grant.
 func TestDesignatedPlugPoint_UnderAGPLHeader_IsRejected(t *testing.T) {
 	dir := fixture{
 		"plug/plug.go": agplHdr +
 			"// Package plug claims to be a plug point.\n" +
-			"//\n" + marker + "\npackage plug\n\n" +
+			"//\n" + notice() + "//\n" + marker + "\npackage plug\n\n" +
 			"// Sink is the designated interface.\ntype Sink interface {\n\tWrite(s string) error\n}\n",
 	}.build(t)
 

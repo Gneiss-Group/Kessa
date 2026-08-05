@@ -32,6 +32,16 @@
 // scripts/license-check.sh fails the build on either. LICENSING.md carries the
 // canonical statement of the marker's syntax and meaning.
 //
+// ADDITIONAL PERMISSION: an additional permission under section 7 of the
+// AGPL-3.0 applies to independent implementations of the interfaces declared in
+// this file. Its authoritative text is the section headed "KESSA ADDITIONAL
+// PERMISSION UNDER SECTION 7" at the end of the LICENSE file in the Kessa
+// distribution, https://github.com/Gneiss-Group/Kessa, and is not reproduced
+// here. This notice travels with the file on purpose: the marker below is
+// meaningless without the permission it refers to, so a copy of this file taken
+// out of the distribution still says where its legal context lives rather than
+// carrying a designation with nothing behind it.
+//
 //kessa:plugin-interface
 package auditsink
 
