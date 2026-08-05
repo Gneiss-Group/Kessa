@@ -44,8 +44,9 @@ MOD="$(go list -m)"
 MARKER='//kessa:plugin-interface'
 MARKER_RE='^//kessa:plugin-interface[[:space:]]*$'
 
-# Every marked file must also carry a notice pointing at the permission, which is
-# counsel's requirement (2026-08-05, answering our Q6) and not a stylistic one.
+# Every marked file must also carry a notice pointing at the permission. This came
+# from counsel, so it is a licensing requirement rather than a house style rule,
+# and arguing it away in review is not one of the available moves.
 #
 # The reasoning is worth keeping next to the check: the marker travels with the
 # file when someone copies it out of the distribution, but LICENSE does not. A
