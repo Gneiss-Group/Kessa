@@ -356,7 +356,7 @@ func TestQuotedMarkerAndIdentifiers_DoNotDesignate(t *testing.T) {
 	}
 }
 
-// A licensing requirement from counsel, enforced rather than remembered.
+// A licensing requirement, enforced rather than remembered.
 //
 // The marker travels with a file when someone copies it out of the distribution.
 // LICENSE does not. A detached file carrying a designation whose grant the reader

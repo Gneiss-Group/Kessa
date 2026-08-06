@@ -5,15 +5,20 @@
 
 Thanks for your interest. Kessa is early-stage and solo-maintained.
 
-**External code contributions are not being accepted yet.** A CLA is in progress
-(see [`CLA.md`](CLA.md)) and pull requests will not be merged until it is
-finalized. In the meantime:
+**Kessa is open to external contributions.** The CLA is published and the signing
+flow is live (see [`CLA.md`](CLA.md)); signing takes one comment on your first
+pull request.
+
+The project is pre-1.0 and solo-maintained, so a little coordination saves
+everyone time:
 
 - Bug reports and issues are welcome and read.
 - Design feedback and questions are welcome; open an issue or start a
   discussion.
-- Please do not submit pull requests yet. They will not be merged and the work
-  may be wasted.
+- For anything beyond a small fix, **open an issue before writing code.** Not a
+  formality: the licence boundary, the verifier's dependency closure, and the
+  plug-point rules all constrain where a change can go, and it is cheaper to say
+  so before you have written it than after.
 
 If you are interested in a deeper collaboration (design partner, early
 reviewer), open a [Discussions
@@ -58,9 +63,18 @@ Kessa requires a signed CLA before a contribution can be merged. This lets the
 project be maintained under its two-tier model and the AGPL components be offered
 under a commercial license.
 
-> **Status:** the CLA text and signing flow are being finalized; see
-> [`CLA.md`](CLA.md). Until it is published, external code contributions cannot
-> be merged. Issues, reproductions, and design feedback need no CLA.
+**Signing takes one comment.** Open your pull request; a bot replies with a link
+to [`CLA.md`](CLA.md) and the phrase to post back. Signatures are recorded in
+`.github/cla/signatures.json` in this repository, so nothing about you is stored
+with a third party. You sign once, not per pull request.
+
+You keep ownership of your work. The CLA is a licence grant, not a copyright
+assignment, and it exists for one reason: the AGPL core is also offered under a
+separate commercial licence, which we cannot do with your code unless you have
+said we may. If you are contributing on behalf of an employer, that employer also
+needs to sign [`CLA-CORPORATE.md`](CLA-CORPORATE.md).
+
+Issues, reproductions, and design feedback need no CLA.
 
 ## The ground rules, written down
 
