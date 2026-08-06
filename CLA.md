@@ -4,11 +4,25 @@
 # Kessa Individual Contributor License Agreement
 
 Adapted from the Apache Software Foundation's Individual Contributor License
-Agreement v2.0. The architecture and the standard clauses are the Apache
-agreement's, with every reference to the Foundation replaced by Gneiss Group Inc.
-The additions specific to Kessa are the preamble, the final sentence of section 2,
-and section 5's treatment of AI assistance. Corporate contributors also need
-[`CLA-CORPORATE.md`](CLA-CORPORATE.md).
+Agreement. The architecture and the standard clauses are the Apache agreement's,
+with every reference to the Foundation replaced by Gneiss Group Inc. Corporate
+contributors also need [`CLA-CORPORATE.md`](CLA-CORPORATE.md).
+
+**Where this departs from the Apache agreement**, beyond that substitution:
+
+- **The preamble** above section 1 is ours.
+- **Section 2** carries a final sentence, ours, on commercial relicensing.
+- **Section 5** adds the treatment of AI assistance, and broadens the originality
+  representation to cover work you have sufficient rights to submit but did not
+  originate. Apache's reads "is Your original creation" alone.
+- **Apache's nonprofit covenant is not reproduced.** The Apache agreement promises
+  in return not to use Contributions contrary to the public benefit or its
+  nonprofit status and bylaws. Gneiss Group Inc. is a for-profit company and makes
+  no such promise; the sentence is dropped rather than reworded.
+- **Section headings** are ours. Apache numbers its clauses without titles.
+
+Checked clause by clause against the Apache ICLA on 2026-08-06, at which date the
+published version was V2.2 (`apache.org/licenses/icla.pdf`).
 
 **How to sign.** Open a pull request. A bot comments with a link to this agreement
 and asks you to reply confirming you accept it. Your signature is recorded on the

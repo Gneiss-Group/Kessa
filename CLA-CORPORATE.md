@@ -4,12 +4,30 @@
 # Kessa Corporate Contributor License Agreement
 
 Adapted from the Apache Software Foundation's Corporate Contributor License
-Agreement v2.0, with every reference to the Foundation replaced by Gneiss Group
-Inc. The Kessa-specific additions are identical to those in the individual
-agreement: the preamble, the final sentence of section 2, and section 5's
-treatment of AI assistance. The mechanism and logic are the same for a corporate
-entity; the difference is that the corporation makes the representations on behalf
-of its authorized employees.
+Agreement, with every reference to the Foundation replaced by Gneiss Group Inc.
+The mechanism and logic are the same for a corporate entity; the difference is
+that the corporation makes the representations on behalf of its authorized
+employees.
+
+**Where this departs from the Apache agreement**, beyond that substitution:
+
+- **The preamble** above section 1 is ours, as is the final sentence of section 2
+  on commercial relicensing and section 5's treatment of AI assistance. These
+  match the individual agreement.
+- **Apache's nonprofit covenant is not reproduced**, for the same reason it is not
+  reproduced in [`CLA.md`](CLA.md): Gneiss Group Inc. is a for-profit company and
+  cannot make that promise.
+- **This is not a software grant.** Apache's document is a combined "Software
+  Grant and Corporate Contributor License Agreement", and its Schedule B
+  identifies a concurrent software grant. Ours licenses Contributions and nothing
+  more; Schedule B here only names an initial Contribution.
+- **Sections 5 and 8** each carry a sentence Apache places in the individual
+  agreement rather than the corporate one: the disclosure of third-party
+  restrictions, and the duty to report facts that would make a representation
+  inaccurate.
+
+Checked clause by clause against the Apache CCLA on 2026-08-06, at which date the
+published revision was `r190612` (`apache.org/licenses/cla-corporate.pdf`).
 
 **Who signs this.** An entity (the "Corporation") whose employees contribute to
 Kessa, where the Corporation owns the intellectual property those employees
@@ -17,8 +35,8 @@ create. Each employee also signs the individual agreement,
 [`CLA.md`](CLA.md). This one authorizes them to do so.
 
 **How to sign.** Unlike the individual agreement, this is not signed through the
-pull request bot. Contact Gneiss Group Inc. to execute it, and provide Schedule A
-below. Contributions from listed employees are recognized once it is on file.
+pull request bot. Contact Gneiss Group Inc. to execute it. Contributions from
+employees listed in Schedule A are recognized once it is on file.
 
 ---
 
@@ -168,10 +186,30 @@ would make these representations inaccurate in any respect.
 
 ---
 
+## Execution
+
+| | |
+|---|---|
+| Corporation name | |
+| Corporation address | |
+| Point of contact | |
+| Email | |
+| Telephone | |
+
+Signed for and on behalf of the Corporation:
+
+| | |
+|---|---|
+| Signature | |
+| Name | |
+| Title | |
+| Date | |
+
 ## Schedule A
 
 The employees of the Corporation authorized to submit Contributions on its behalf.
-Amend by written notice to Gneiss Group Inc.
+Authorization is not tied to particular Contributions. Amend by written notice to
+Gneiss Group Inc., as section 8 requires.
 
 | Full name | GitHub username | Email |
 |---|---|---|
