@@ -64,8 +64,8 @@ there is nowhere to classify it, only headers to write.
 ## Commercial licensing
 
 The `AGPL-3.0-only` components are also available under a separate commercial
-license for organizations that cannot meet the AGPL's terms. Contact Gneiss Group
-Inc.
+license for organizations that cannot meet the AGPL's terms:
+<sales@gneiss-group.com>.
 
 ## Designated plugin interfaces: the marker
 

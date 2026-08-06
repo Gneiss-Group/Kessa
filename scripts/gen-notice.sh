@@ -66,7 +66,7 @@ for any modifications you made to AGPL-licensed files, and, if you make it
 available to users over a network, to offer that source to those users.
 
 A separate commercial licence is available for organizations that cannot meet
-these terms. Contact Gneiss Group Inc.
+these terms: <sales@gneiss-group.com>.
 
 ## 2. Additional permission under Section 7
 

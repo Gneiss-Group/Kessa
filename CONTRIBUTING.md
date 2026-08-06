@@ -16,7 +16,9 @@ finalized. In the meantime:
   may be wasted.
 
 If you are interested in a deeper collaboration (design partner, early
-reviewer), reach out directly rather than through a pull request.
+reviewer), open a [Discussions
+thread](https://github.com/Gneiss-Group/Kessa/discussions) rather than a pull
+request.
 
 The rest of this document describes how the project is built and reviewed, so
 that the ground rules are visible before contributions open.

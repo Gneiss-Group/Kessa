@@ -16,6 +16,8 @@ trusting nothing of ours beyond public DID documents.
 
 *Same command, one byte changed between runs. The verifier fails at exactly the tampered entry and re-derives every verdict from the files alone. [How the GIF is built and regenerated.](docs/demo.md)*
 
+Jump to: [What this solves](#what-this-solves) · [Try it](#try-it) · [Status](#status) · [Licensing](#licensing) · [Known limits](#known-limits)
+
 ## What this solves
 
 When a person hands work to an AI agent, and that agent hands part of it to
@@ -79,6 +81,29 @@ each backend does and does not prove is stated bluntly in
 [Signing backends](docs/signer.md); the other boundaries are under
 [Known limits](#known-limits), and open questions are collected in
 [`UPCOMING.md`](UPCOMING.md).
+
+## Licensing
+
+The core is `AGPL-3.0-only`: the enforcement engine, the proxy, the issuer, and
+the agent. The independent verifier and its dependency closure are `Apache-2.0`,
+because a verifier whose value is that anyone can run it and trust no one,
+including us, cannot also be the part you need our permission to use.
+
+Designated plugin interfaces are `Apache-2.0` as well, and an additional
+permission under section 7 of the AGPL lets an independent implementation of one
+be conveyed under its author's own terms even when linked into the same binary as
+the core. That permission is conditional: it applies only to code that reaches the
+core exclusively through a designated interface. Which interfaces those are is
+stated in the source by a `//kessa:plugin-interface` marker and nowhere else.
+`auditsink.AuditSink` is the only one today; the build fails if a marked package
+reaches beyond the standard library, because the permission's condition depends on
+it.
+
+[`LICENSE`](LICENSE) carries the AGPL text and the exception. [`NOTICE.md`](NOTICE.md)
+is the bundle to ship with a binary. [`LICENSING.md`](LICENSING.md) states the tier
+test and the marker's meaning. The `AGPL-3.0-only` components are also available
+under a separate commercial licence for organizations that cannot meet the AGPL's
+terms: <sales@gneiss-group.com>.
 
 ## Try it
 
@@ -268,6 +293,9 @@ Accepted, documented risks (current boundaries, not defects):
 Open design questions and known gaps beyond these limits are collected in
 [`UPCOMING.md`](UPCOMING.md).
 
+If this matches a problem you have, or you think one of these limits is wrong,
+open a [Discussions thread](https://github.com/Gneiss-Group/Kessa/discussions).
+
 ## Documentation
 
 [How Kessa Works](docs/how-it-works.md) is the mechanical walkthrough: the
@@ -281,6 +309,7 @@ everything else:
 | [Enrollment](docs/enrollment.md) | How a device gets its own key and credential. |
 | [Signing daemon](docs/daemon.md) | The long-running signer, its socket, and its trust boundary. |
 | [Enclave runbook](docs/enclave-runbook.md) | Reproducing the Secure Enclave path on real hardware, including code-signing setup. |
+| [Standards alignment](docs/standards-alignment.md) | Published requirements mapped to specific tests and files, with what Kessa does not address stated alongside. Not a certification. |
 
 The adversarial review rounds were **self-run AI red-team passes, not a
 third-party audit**; their findings are closed. The [security review
