@@ -92,19 +92,31 @@ which Kessa does not do. See [Known limits](../README.md#known-limits).
 
 ## DORA (Regulation (EU) 2022/2554)
 
-> **NOT yet verified against the primary source**, for the same reason as the
-> section above. Article 9's number and subject were taken from secondary
-> sources on 2026-08-05.
+> **Verified against the primary source.** Regulation (EU) 2022/2554 of
+> 14 December 2022 on digital operational resilience for the financial sector,
+> OJ L 333, 27.12.2022. Article 9, "Protection and prevention", sits in Chapter II
+> (ICT risk management). Read directly on **2026-08-05**; paragraph references and
+> quoted wording below come from that text.
 
-| Article | Requirement, in one clause | What Kessa does | Check it |
+DORA places obligations on **financial entities**, not on software. Kessa is a
+tool such an entity could use toward them; it cannot discharge an obligation, and
+no row below should be read as saying otherwise.
+
+| Provision | The requirement, as published | What Kessa does | Check it |
 |---|---|---|---|
-| Art. 9 (protection and prevention) | Ensure the authenticity and integrity of data | Evidence is signed per hop and chained; the verifier re-derives every verdict from public keys with no service of ours in the path | `TestIssuedChainVerifiesAgainstPublishedDIDDocs`, `TestPublishedStatusListIsSignedByItsIssuer` |
-| Art. 9 (protection and prevention) | Prevent the unauthorised use of data or systems | Revocation is checked against a signed status list at action time, so revoking a mid-chain credential stops the consequential actions depending on it | `TestAcceptance_RevokedThenUsedFailsThatEntry`, `TestR2_01_RevocationSurvivesAStatusRefEdit` |
+| Art. 9(2) | ICT security policies, procedures, protocols and tools that "maintain high standards of availability, authenticity, integrity and confidentiality of data, whether at rest, in use or in transit" | Addresses **authenticity and integrity** for one class of data, the authority and audit record: evidence is signed per hop and hash-chained, and the verifier re-derives every verdict from public keys with no service of ours in the path. Availability and confidentiality are not addressed. | `TestIssuedChainVerifiesAgainstPublishedDIDDocs`, `TestPublishedStatusListIsSignedByItsIssuer`, `TestR2_04_TipCarriesPrevHash` |
+| Art. 9(3)(b) | ICT solutions that "minimise the risk of corruption or loss of data, unauthorised access and technical flaws" | Tampering with a signed export is detected at exactly the altered entry rather than minimised, and entries cannot be reordered or dropped without breaking the signature over the count and tip | `TestAcceptance_TamperedExportFailsAtExactlyThatEntry`, `TestR2_02_TruncatedExportIsRejected` |
+| Art. 9(4)(c) | Policies that "limit the physical or logical access to information assets and ICT assets to what is required for legitimate and approved functions and activities only", with controls addressing access rights | Each delegation hop is minted strictly narrower than its parent, and revocation is checked against a signed status list at action time, so a revoked mid-chain credential stops the consequential actions depending on it | `TestAttenuate_RejectsBroadening`, `TestAcceptance_RevokedThenUsedFailsThatEntry`, `TestR2_01_RevocationSurvivesAStatusRefEdit` |
 
-**Partial, stated plainly.** Status is checked against the *current* list, not the
-list as of action time, so re-verifying an old export after a later revocation
-flips previously-legitimate entries to FAIL. This is an honest false-FAIL and is
-documented as such under [Known limits](../README.md#known-limits).
+**Partial, stated plainly.** Art. 9(4)(c) is written about a financial entity's
+own access-rights administration across its ICT estate. Kessa governs one thing
+inside that: authority delegated to agents. It is a mechanism an entity could
+point at for part of this provision, not coverage of it.
+
+Status is also checked against the *current* list, not the list as of action time,
+so re-verifying an old export after a later revocation flips previously-legitimate
+entries to FAIL. This is an honest false-FAIL and is documented as such under
+[Known limits](../README.md#known-limits).
 
 ---
 
@@ -132,21 +144,22 @@ source" meant.
 | Standard | Last verified | Against what | By |
 |---|---|---|---|
 | NIST SP 800-207 | 2026-08-05 | The publication itself, 59 pages, August 2020, retrieved from `nvlpubs.nist.gov` and read directly. Tenet numbering and wording quoted from section 2.1. | Maintainer |
+| DORA (2022/2554) | 2026-08-05 | The Official Journal text, OJ L 333, 27.12.2022, 79 pages, read directly. Article 9's heading, its position in Chapter II, and the wording of paragraphs 2, 3(b) and 4(c) confirmed. | Maintainer |
 | EU AI Act (2024/1689) | **never** | Secondary sources only. EUR-Lex refuses automated retrieval (bot protection), so the Official Journal text has not been read. | |
-| DORA (2022/2554) | **never** | Secondary sources only, same reason. | |
 
 **A row is only as good as its date.** When a standard is revised, re-read it and
 update both the row and this table, or delete the row. An out-of-date mapping
 presented as current is worse than no mapping, because a reader has no way to tell
 which it is.
 
-### What verifying the unverified ones requires
+### What verifying the last one requires
 
 EUR-Lex serves the Official Journal from behind a bot-protection layer, so it
-cannot be fetched by tooling. Verifying those two sections means a human opening
-the texts and confirming, for each row: the article number, the article heading,
-and that the "requirement, in one clause" summary is a fair reading of the
-article's operative text rather than of a commentary site's gloss.
+cannot be fetched by tooling; the DORA text above was verified from a copy
+retrieved by hand. The AI Act section needs the same treatment: open
+Regulation (EU) 2024/1689 and confirm, for each row, the article number, the
+article heading, and that the quoted requirement is the article's operative text
+rather than a commentary site's gloss.
 
 ## Caveats on this document
 
