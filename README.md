@@ -227,9 +227,9 @@ it.
 
 [`LICENSE`](LICENSE) carries the AGPL text and the exception. [`NOTICE.md`](NOTICE.md)
 is the bundle to ship with a binary. [`LICENSING.md`](LICENSING.md) states the tier
-test and the marker's meaning. The `AGPL-3.0-only` components are also available
-under a separate commercial licence for organizations that cannot meet the AGPL's
-terms: <sales@gneiss-group.com>.
+test and the marker's meaning. The `AGPL-3.0-only` components: organizations that
+cannot meet the AGPL's terms are welcome to discuss a separate commercial licence:
+<sales@gneiss-group.com>.
 
 ## Standards
 
