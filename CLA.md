@@ -11,10 +11,11 @@ and section 5's treatment of AI assistance. Corporate contributors also need
 [`CLA-CORPORATE.md`](CLA-CORPORATE.md).
 
 **How to sign.** Open a pull request. A bot comments with a link to this agreement
-and asks you to reply confirming you accept it. Your signature is recorded in
-`.github/cla/signatures.json` in this repository, together with your GitHub
-identity and the pull request you signed against. You sign once; later
-contributions are recognized automatically.
+and asks you to reply confirming you accept it. Your signature is recorded on the
+[`cla-signatures`](https://github.com/Gneiss-Group/Kessa/tree/cla-signatures)
+branch of this repository, together with your GitHub identity and the pull request
+you signed against, and nowhere else. You sign once; later contributions are
+recognized automatically.
 
 ---
 

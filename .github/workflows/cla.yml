@@ -59,9 +59,23 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           # Signatures live in this repository. Nothing leaves it.
-          path-to-signatures: .github/cla/signatures.json
+          path-to-signatures: signatures.json
           path-to-document: https://github.com/Gneiss-Group/Kessa/blob/main/CLA.md
-          branch: main
+          # NOT main, and this is load-bearing rather than tidiness. main's ruleset
+          # requires signed commits and forbids direct pushes (docs/branching.md),
+          # both of which a signature write would violate: the Action pushes
+          # directly, and a runner has no signing key. Pointed at main, every
+          # signature silently fails to record.
+          #
+          # The alternative was a ruleset bypass for this workflow. That trades a
+          # standing hole in main's protection for a convenience, on a repository
+          # whose release process is built specifically so that no bypass is
+          # needed. A dedicated branch costs nothing by comparison.
+          #
+          # cla-signatures is an orphan branch holding signatures.json and nothing
+          # else. It is not a source branch, is never merged, and its history is
+          # the signature record.
+          branch: cla-signatures
           allowlist: dependabot[bot]
           # The phrase a contributor comments to sign. Counsel's requirement is
           # intent plus association; a fixed phrase is the intent half.

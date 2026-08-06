@@ -5,10 +5,12 @@
 
 Thanks for your interest. Kessa is early-stage and solo-maintained.
 
-**The CLA is published and the signing flow is live** (see [`CLA.md`](CLA.md)), so
-the licensing blocker on external contributions is gone. Whether a given pull
-request is a good use of your time is a separate question, and the honest answer
-while the project is pre-1.0 and solo-maintained is: ask first.
+**Kessa is open to external contributions.** The CLA is published and the signing
+flow is live (see [`CLA.md`](CLA.md)); signing takes one comment on your first
+pull request.
+
+The project is pre-1.0 and solo-maintained, so a little coordination saves
+everyone time:
 
 - Bug reports and issues are welcome and read.
 - Design feedback and questions are welcome; open an issue or start a
