@@ -8,19 +8,17 @@
 # has granted the right in writing. CLA.md is that grant; this workflow is what
 # makes it a gate rather than an honour system.
 #
-# Why an Action rather than a hosted CLA service: counsel approved either, and
-# this repository already decided the question for third-party tooling in
-# scripts/ci/secret-scan.sh, which builds its scanner from pinned source rather
-# than downloading a binary. A hosted service would put contributor identity and
-# signature records with a processor we do not control. Here the signatures live
-# in this repository, in .github/cla/signatures.json, and the only dependency is
-# an Action pinned by SHA like every other one.
+# Why an Action rather than a hosted CLA service: this repository already decided
+# the question for third-party tooling in scripts/ci/secret-scan.sh, which builds
+# its scanner from pinned source rather than downloading a binary. A hosted service
+# would put contributor identity and signature records with a processor we do not
+# control. Here the signatures live in this repository, on the cla-signatures
+# branch, and the only dependency is an Action pinned by SHA like every other one.
 #
-# Counsel's note on validity, recorded because it is the reason this is
-# sufficient: under the Electronic Transactions Act (British Columbia), an
-# electronic signature needs intent to sign and association with the record. A
-# contributor commenting the agreed phrase, together with their authenticated
-# GitHub identity and the commit SHA it is recorded against, satisfies both.
+# What a recorded signature consists of, since that is what the rest of this file
+# is arranged to produce: a deliberate act by the contributor (posting a fixed
+# phrase, not merely opening a pull request), tied to an authenticated GitHub
+# identity and to the specific pull request it was given against.
 
 name: CLA
 
@@ -77,8 +75,9 @@ jobs:
           # the signature record.
           branch: cla-signatures
           allowlist: dependabot[bot]
-          # The phrase a contributor comments to sign. Counsel's requirement is
-          # intent plus association; a fixed phrase is the intent half.
+          # The phrase a contributor comments to sign. Fixed and explicit on
+          # purpose: signing has to be a deliberate act, distinguishable from any
+          # other comment they might leave on the pull request.
           custom-pr-sign-comment: I have read the CLA Document and I hereby sign the CLA
           custom-notsigned-prcomment: >
             Thank you for the contribution. Before it can be merged, please read
