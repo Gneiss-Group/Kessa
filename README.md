@@ -16,7 +16,7 @@ trusting nothing of ours beyond public DID documents.
 
 *Same command, one byte changed between runs. The verifier fails at exactly the tampered entry and re-derives every verdict from the files alone. [How the GIF is built and regenerated.](docs/demo.md)*
 
-Jump to: [What this solves](#what-this-solves) · [Try it](#try-it) · [Status](#status) · [Licensing](#licensing) · [Known limits](#known-limits)
+Jump to: [What this solves](#what-this-solves) · [Try it](#try-it) · [Status](#status) · [Standards](#standards) · [Known limits](#known-limits)
 
 ## What this solves
 
@@ -104,6 +104,21 @@ is the bundle to ship with a binary. [`LICENSING.md`](LICENSING.md) states the t
 test and the marker's meaning. The `AGPL-3.0-only` components are also available
 under a separate commercial licence for organizations that cannot meet the AGPL's
 terms: <sales@gneiss-group.com>.
+
+## Standards
+
+Kessa maps to four published frameworks. Every row in the detailed mapping cites a
+test you can run.
+
+| Framework | What Kessa contributes | Where it stops |
+|---|---|---|
+| **OWASP LLM06:2025** Excessive Agency | All four mitigations OWASP names: least-privilege delegation, authorization outside the model, complete mediation, human approval for high-impact actions | The other nine Top 10 items are model-layer, not authority |
+| **NIST SP 800-207** Zero Trust | Tenets 3, 4, 6, 7: per-session credentials, dynamic policy, enforcement before access, signed evidence | Transport security and asset posture are yours |
+| **EU AI Act** Art. 12 | A tamper-evident authorization record, which Art. 12 does not require and most logging does not provide | Logging the AI system's own operation stays with the provider |
+| **DORA** Art. 9 | Authenticity and integrity of the authority record; access limited to approved activity | Availability and confidentiality are deployment properties |
+
+[Full mapping, with citations and test names](docs/standards-alignment.md). Not a
+certification; no external audit has been commissioned.
 
 ## Try it
 
