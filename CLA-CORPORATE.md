@@ -35,8 +35,24 @@ create. Each employee also signs the individual agreement,
 [`CLA.md`](CLA.md). This one authorizes them to do so.
 
 **How to sign.** Unlike the individual agreement, this is not signed through the
-pull request bot. Contact Gneiss Group Inc. to execute it. Contributions from
-employees listed in Schedule A are recognized once it is on file.
+pull request bot, and this file is not the copy you sign. What follows are the
+terms, published so your legal team can read them before you commit to anything.
+To execute, write to <sales@gneiss-group.com> and we will send a signable copy
+with the schedules attached. Contributions from employees listed in Schedule A are
+recognized once it is on file.
+
+**The schedules**, which the clauses below refer to and the signable copy carries:
+
+- **Schedule A** lists the employees authorized to submit Contributions for the
+  Corporation, by name, GitHub username, and email. It is amended by written
+  notice under section 8, so name a role address rather than an individual as your
+  point of contact if you can; the person who signs this is rarely the person who
+  maintains the list a year later.
+- **Schedule B** optionally identifies an initial Contribution. Leave it empty if
+  there is none.
+
+Executed agreements are held by Gneiss Group Inc. and are not published here.
+Schedule A carries employee personal data, and this repository is public.
 
 ---
 
@@ -135,8 +151,8 @@ or Work shall terminate as of the date such litigation is filed.
 
 You represent that You are legally entitled to grant the above licenses. You
 represent further that each employee of the Corporation designated on Schedule A
-below (or in a subsequent written modification to that Schedule) is authorized to
-submit Contributions on behalf of the Corporation.
+(or in a subsequent written modification to that Schedule) is authorized to submit
+Contributions on behalf of the Corporation.
 
 ### 5. Representations regarding originality and AI assistance
 
@@ -186,36 +202,4 @@ would make these representations inaccurate in any respect.
 
 ---
 
-## Execution
-
-| | |
-|---|---|
-| Corporation name | |
-| Corporation address | |
-| Point of contact | |
-| Email | |
-| Telephone | |
-
-Signed for and on behalf of the Corporation:
-
-| | |
-|---|---|
-| Signature | |
-| Name | |
-| Title | |
-| Date | |
-
-## Schedule A
-
-The employees of the Corporation authorized to submit Contributions on its behalf.
-Authorization is not tied to particular Contributions. Amend by written notice to
-Gneiss Group Inc., as section 8 requires.
-
-| Full name | GitHub username | Email |
-|---|---|---|
-| | | |
-
-## Schedule B
-
-Any initial Contribution submitted with this Agreement, if the Corporation wishes
-to identify one expressly. Leave empty if not applicable.
+To execute this agreement, write to <sales@gneiss-group.com>.
