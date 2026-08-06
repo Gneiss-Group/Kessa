@@ -28,9 +28,25 @@
 // designated package may reach nothing but the standard library and other
 // designated packages, so implementing the interface can never force an importer
 // to link the core. Delete the line and the package stops being designated;
-// import the core from here and the designation stops being true, which is why
-// scripts/license-check.sh fails the build on either. LICENSING.md carries the
-// canonical statement of the marker's syntax and meaning.
+// import the core from here and the designation stops being true; delete the
+// notice below and a copy of this file carries a designation whose grant the
+// reader cannot locate. scripts/license-check.sh fails the build on all three.
+// LICENSING.md carries the canonical statement of the marker's syntax and
+// meaning.
+//
+// ADDITIONAL PERMISSION: An additional permission under section 7 of the
+// AGPL-3.0 applies to independent implementations of the interfaces declared in
+// this file.
+//
+// The authoritative text is the section headed "KESSA ADDITIONAL PERMISSION
+// UNDER SECTION 7" at the end of the LICENSE file in the Kessa distribution
+// you received (also available at https://github.com/Gneiss-Group/Kessa),
+// and is not reproduced here.
+//
+// Note to downstream developers: This notice is intended to travel with this
+// file. The interface designation marker below relies on the Section 7
+// permission; retaining this header ensures the legal context is preserved
+// if this file is copied outside the core distribution.
 //
 //kessa:plugin-interface
 package auditsink

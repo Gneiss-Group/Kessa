@@ -44,6 +44,21 @@ MOD="$(go list -m)"
 MARKER='//kessa:plugin-interface'
 MARKER_RE='^//kessa:plugin-interface[[:space:]]*$'
 
+# Every marked file must also carry a notice pointing at the permission. This came
+# from counsel, so it is a licensing requirement rather than a house style rule,
+# and arguing it away in review is not one of the available moves.
+#
+# The reasoning is worth keeping next to the check: the marker travels with the
+# file when someone copies it out of the distribution, but LICENSE does not. A
+# detached file carrying a designation with no legal context behind it is worse
+# than an undesignated one, because it reads as a grant nobody can locate. The
+# notice is a pointer, never a reproduction of the clause: two copies of operative
+# text is how they come to disagree.
+#
+# Anchored for the same reason as MARKER_RE. A file that quotes this notice, as
+# internal/licensing's fixtures do, must not thereby appear to carry it.
+POINTER_RE='^// ADDITIONAL PERMISSION:'
+
 fail=0
 note() { echo "$@"; }
 
@@ -179,6 +194,17 @@ for p in $marked_pkgs; do
       note "  implementation file designates the implementation, which is backwards."
       fail=1
     fi
+    # BEGIN GUARDRAIL notice
+    if ! grep -qE "$POINTER_RE" "$f"; then
+      note "MARKED FILE WITHOUT ITS PERMISSION NOTICE: $f"
+      note "  A marked file must also carry a comment beginning '// ADDITIONAL PERMISSION:'"
+      note "  pointing at the clause in LICENSE. The marker travels when this file is"
+      note "  copied out of the distribution; LICENSE does not. Without the notice, the"
+      note "  copy carries a designation whose grant the reader cannot locate."
+      note "  Point at the clause, never reproduce it: see auditsink/auditsink.go."
+      fail=1
+    fi
+    # END GUARDRAIL notice
   done
 
   # 4. THE GUARDRAIL. The Section 7 permission is conditional on the plugin

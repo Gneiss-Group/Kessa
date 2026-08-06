@@ -30,22 +30,24 @@ To see the current designated set, read the generated
 grep -rl '//kessa:plugin-interface' --include='*.go' .
 ```
 
-## Not yet granted: the combination
+## Also granted: the combination
 
 Whether an independent implementation of a designated interface, compiled
 together with the AGPL core, is covered by the core's copyleft is a separate
-question that the interface licence does not answer.
+question that the interface licence does not answer. A Section 7 additional
+permission answers it, the same mechanism used by the GNU Classpath exception
+(OpenJDK) and the GCC Runtime Library Exception.
 
-We intend to answer it with a Section 7 additional-permission clause, the same
-mechanism used by the GNU Classpath exception (OpenJDK) and the GCC Runtime
-Library exception, designating the marked interfaces as independent modules so
-that implementations may be licensed under terms of the plugin author's choosing.
+**That clause is now in [`LICENSE`](LICENSE) and is in effect.** It was reviewed
+by Canada-competent counsel and applied on 2026-08-05. Read it there: the section
+headed `KESSA ADDITIONAL PERMISSION UNDER SECTION 7` at the end of the file is
+authoritative, and this document is only a description of it. Where the two
+differ, `LICENSE` governs, and the clause says so itself.
 
-**That clause is not in [`LICENSE`](LICENSE) yet, and it is not in effect.** Its
-text is gated on formal written sign-off from Canada-competent counsel, which has
-not been recorded. Until it lands, the AGPL-3.0 terms govern the combined binary
-in full, including any plugin compiled into it. Treat the mechanism described here
-as a roadmap item until it is superseded by actual clause text in `LICENSE`.
+In short: an independent implementation of a designated interface may be conveyed
+under its author's own terms, even when linked into the same binary as the AGPL
+core. The core, and any modifications you make to it, stay under AGPL-3.0 in full,
+including the section 13 network clause.
 
 ## The condition, which is the whole point
 
@@ -69,12 +71,15 @@ tree then passes.
 
 ## Why this can only loosen
 
-A Section 7 additional permission grants rights beyond the base licence and
-never restricts anything. Adding it later cannot narrow what is released
-today. Early adopters and forks receive fewer permissions than later ones
-will, which is the normal state of an unfinished grant, and no future
-version of this file can take back a grant already made.
+A Section 7 additional permission grants rights beyond the base licence and never
+restricts anything. Adding this one did not narrow anything that had already been
+released, and no future version of this file can take back a grant already made.
+Anyone who took a copy before 2026-08-05 has strictly fewer permissions than
+someone who takes one after, which is the normal direction of travel.
 
-The same holds for the marker. Marking a package is a grant going forward; it
-does not reach back, and unmarking one cannot retract what a previous release
-already conveyed.
+The same holds for the marker. Marking a package is a grant going forward; it does
+not reach back, and **unmarking one cannot retract what a previous release already
+conveyed.** The clause states this directly in its section 4: a change to the
+markers "operates only in respect of the versions in which it appears". So
+removing a designation is a decision about future releases only, and should be
+taken knowing that every version already conveyed keeps its permission forever.

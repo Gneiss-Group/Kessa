@@ -115,12 +115,21 @@ prevents another module from importing them, so they are not external seams.
 tests that they are the rejections doing the work.
 
 **Status of the permission itself.** The Section 7 additional permission that
-gives the designation its legal effect has **not yet been added** to
-[`LICENSE`](LICENSE). The marker, the check, and the tests are in place ahead of
-it so that the boundary is real by the time the clause lands. See
-[`PLUGIN_LICENSING.md`](PLUGIN_LICENSING.md) for what is and is not granted
-today, and [`NOTICE.md`](NOTICE.md) for the bundle a recipient of a binary is
-owed.
+gives the designation its legal effect is **in force.** Its authoritative text is
+the section headed `KESSA ADDITIONAL PERMISSION UNDER SECTION 7` at the end of
+[`LICENSE`](LICENSE), reviewed by Canada-competent counsel and applied 2026-08-05.
+[`NOTICE.md`](NOTICE.md) reproduces it for recipients of a binary, and
+[`PLUGIN_LICENSING.md`](PLUGIN_LICENSING.md) explains the mechanism in prose.
+Where any of those differ from `LICENSE`, `LICENSE` governs; the clause says so
+itself.
+
+**Every marked file also carries a pointer to the clause**, a comment beginning
+`// ADDITIONAL PERMISSION:`, and `scripts/license-check.sh` fails the build on a
+marked file that lacks one. The reason is a copy taken out of the distribution:
+the marker travels with the file, `LICENSE` does not, and a designation whose
+grant the reader cannot locate is worse than no designation. The notice points at
+the clause and never reproduces it, because two copies of operative text is how
+they come to disagree.
 
 ## Contributing
 

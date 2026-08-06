@@ -233,3 +233,81 @@ Also add information on how to contact you by electronic and paper mail.
 If your software can interact with users remotely through a computer network, you should also make sure that it provides a way for users to get its source.  For example, if your program is a web application, its interface could display a "Source" link that leads users to an archive of the code.  There are many ways you could offer source, and different solutions will be better for different programs; see section 13 for the specific requirements.
 
 You should also get your employer (if you work as a programmer) or school, if any, to sign a "copyright disclaimer" for the program, if necessary. For more information on this, and how to apply and follow the GNU AGPL, see <http://www.gnu.org/licenses/>.
+
+-----------------------------------------------------------------------
+
+KESSA ADDITIONAL PERMISSION UNDER SECTION 7 OF THE GNU AFFERO GENERAL
+PUBLIC LICENSE, VERSION 3
+
+0. Definitions
+
+"The Program" has the meaning given in the GNU Affero General Public License,
+version 3 ("the AGPL"), and refers to Kessa as conveyed by Gneiss Group Inc.
+
+"Designation Marker" means the character sequence //kessa:plugin-interface
+appearing on a line of its own in a source file of the Program.
+
+"Designated Interface" means each exported interface type declared in a source
+file of the Program that bears the Designation Marker, together with the data
+types that the methods of such an interface accept as parameters or return, as
+those files stand in the version of the Program you received.
+
+"Independent Implementation" means a work that implements one or more Designated
+Interfaces and that is not derived from the Program otherwise than through
+Designated Interfaces.
+
+"Combined Work" means a work formed by combining or linking the Program, or a
+modified version of it, with one or more Independent Implementations.
+
+1. Grant
+
+As an additional permission under section 7 of the AGPL, the copyright holders
+of the Program give you permission to convey a Combined Work, and to license the
+Independent Implementations contained in it under terms of your choice, without
+those terms being required to comply with the AGPL, provided that the condition
+in section 2 is satisfied.
+
+This permission does not alter your obligations under the AGPL in respect of the
+Program itself. The Program, and any modifications you make to it, remain
+governed by the AGPL in full, including the requirement in section 13 of the
+AGPL to offer the Corresponding Source to users interacting with a modified
+Program remotely over a network.
+
+2. Condition
+
+The permission in section 1 applies to an Independent Implementation only if
+that Independent Implementation interacts with the Program exclusively through
+Designated Interfaces.
+
+An Independent Implementation does not interact with the Program exclusively
+through Designated Interfaces if it reads, calls, links against, or otherwise
+depends upon any part of the Program other than a Designated Interface
+(excluding the standard library of the programming language), whether directly
+or through an intermediary work supplied for that purpose.
+
+3. Effect of failing the condition
+
+If the condition in section 2 is not satisfied in respect of an Independent
+Implementation, the permission in section 1 does not apply to any Combined Work
+containing that Independent Implementation, and the AGPL applies to that
+Combined Work as a whole and to all of its parts, without regard to this
+additional permission.
+
+4. Designation
+
+The set of Designated Interfaces is determined solely by the presence of the
+Designation Marker in the source of the version of the Program you received. No
+other document, list, or statement determines that set, and where any such
+document conflicts with the source, the source governs.
+
+The copyright holders may add or remove Designation Markers in later versions of
+the Program. Any such change operates only in respect of the versions in which
+it appears, and does not affect any permission already granted in respect of a
+version previously conveyed.
+
+5. Extension and removal
+
+If you modify the Program, you may extend this additional permission to your
+version, but you are not obliged to do so. As provided by section 7 of the AGPL,
+you may remove this additional permission from a copy of the Program, or from
+any part of it, that you convey.
