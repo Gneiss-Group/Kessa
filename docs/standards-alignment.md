@@ -107,7 +107,7 @@ below; a mapping is only as current as its last check.
 | OWASP LLM06:2025 | 2026-08-05 | OWASP's own repository for the Top 10 for LLM Applications |
 | NIST SP 800-207 | 2026-08-05 | The publication, 59 pages, August 2020 |
 | DORA 2022/2554 | 2026-08-05 | Official Journal text, OJ L 333, 27.12.2022 |
-| EU AI Act 2024/1689 | 2026-08-05 | Official Journal text, OJ L, 12.7.2024, 144 pages ([ELI](http://data.europa.eu/eli/reg/2024/1689/oj)). Articles 12 and 15 read directly. |
+| EU AI Act 2024/1689 | 2026-08-05 | Official Journal text, OJ L, 12.7.2024, 144 pages ([ELI](http://data.europa.eu/eli/reg/2024/1689/oj)) |
 
 Claims about **what Kessa does** are checkable from the last column of every table.
 Claims about **what a standard requires** are as good as this log says.
