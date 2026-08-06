@@ -36,25 +36,46 @@ state boundaries in the negative rather than describing capability.
 
 ## NIST SP 800-207 (Zero Trust Architecture)
 
+> **Verified against the primary source.** NIST Special Publication 800-207,
+> *Zero Trust Architecture*, 59 pages, August 2020
+> ([doi:10.6028/NIST.SP.800-207](https://doi.org/10.6028/NIST.SP.800-207)).
+> Tenet numbering and wording below were read from section 2.1 of that document
+> on **2026-08-05**. See the verification log at the end of this file.
+
 The tenets in section 2.1. Kessa is not a full zero-trust architecture; it is an
-authorization and evidence layer that several tenets bear on directly.
+authorization and evidence layer that several tenets bear on directly. Tenet
+wording is quoted from the publication; the "what Kessa does" column is ours.
 
-| Tenet | Requirement, in one clause | What Kessa does | Check it |
+| Tenet | The tenet, as published | What Kessa does | Check it |
 |---|---|---|---|
-| 3 | Access is granted per-session | Each delegation hop mints a new credential rather than passing a token along, and a hop cannot broaden what it received | `TestAttenuate_NarrowsAndVerifies`, `TestAttenuate_RejectsBroadening`, `TestIssuerRefusesBroadeningDelegation` |
-| 4 | Access is determined by dynamic policy | Consequentiality is re-derived from the carried, signed policy at decision time, not read as a stored bit | `TestR2_01_StatusCheckedHopsIsReDerivedNotAsserted`, [`internal/policy`](../internal/policy/) |
-| 6 | Authentication and authorization are dynamic and strictly enforced *before* access | Chain verification and proof of possession run before any decision is recorded or action allowed; a request that fails either produces no log entry at all | `TestProofOfPossession_HolderControlsKey`, `TestProofOfPossession_BoundToActionAndSeq`, `TestTokenLoan_CopiedBlobFailsPoP` |
-| 7 | Collect state about assets and communications, and use it to improve posture | Every consequential decision is recorded as signed, hash-chained evidence that a third party can re-derive offline | [`internal/audit`](../internal/audit/), `TestAcceptance_TamperedExportFailsAtExactlyThatEntry` |
+| 3 | "Access to individual enterprise resources is granted on a per-session basis." | Each delegation hop mints a new credential rather than passing a token along, and a hop cannot broaden what it received | `TestAttenuate_NarrowsAndVerifies`, `TestAttenuate_RejectsBroadening`, `TestIssuerRefusesBroadeningDelegation` |
+| 4 | "Access to resources is determined by dynamic policy." | Consequentiality is re-derived from the carried, signed policy at decision time, not read as a stored bit | `TestR2_01_StatusCheckedHopsIsReDerivedNotAsserted`, [`internal/policy`](../internal/policy/) |
+| 6 | "All resource authentication and authorization are dynamic and strictly enforced before access is allowed." | Chain verification and proof of possession run before any decision is recorded or action allowed; a request that fails either produces no log entry at all | `TestProofOfPossession_HolderControlsKey`, `TestProofOfPossession_BoundToActionAndSeq`, `TestTokenLoan_CopiedBlobFailsPoP` |
+| 7 | "The enterprise collects as much information as possible about the current state of assets, network infrastructure and communications and uses it to improve its security posture." | Every consequential decision is recorded as signed, hash-chained evidence that a third party can re-derive offline | [`internal/audit`](../internal/audit/), `TestAcceptance_TamperedExportFailsAtExactlyThatEntry` |
 
-**Partial, stated plainly.** Tenet 2 (all communication secured regardless of
-network location) is **not** addressed: the enforcement endpoint has no caller
+**Partial, stated plainly.** Tenet 2, "All communication is secured regardless of
+network location", is **not** addressed: the enforcement endpoint has no caller
 authentication, and non-loopback binds are refused unless you pass
 `--allow-unauthenticated-remote`. See [Known limits](../README.md#known-limits).
 
+Tenet 4 continues past the clause quoted above, to include "the observable state
+of client identity, application/service, and the requesting asset" and possibly
+"other behavioral and environmental attributes". Kessa's policy input is the
+carried credential chain and the action, not device posture or behavioural
+signals, so it satisfies the quoted clause and not the full tenet.
+
 ## EU AI Act
 
-Articles 12 and 15 as they apply to high-risk systems. Kessa is a component, not
-a system, so it can support an obligation but never discharge one.
+> **NOT yet verified against the primary source.** Article numbers and headings
+> below were taken from secondary sources on 2026-08-05. EUR-Lex serves its texts
+> from behind a bot-protection layer that refuses automated retrieval, so the
+> Official Journal text has not been read directly. Treat every article reference
+> in this section as unconfirmed until the verification log at the end of this
+> file says otherwise.
+
+Regulation (EU) 2024/1689 of 13 June 2024. Articles 12 and 15 as they apply to
+high-risk systems. Kessa is a component, not a system, so it can support an
+obligation but never discharge one.
 
 | Article | Requirement, in one clause | What Kessa does | Check it |
 |---|---|---|---|
@@ -70,6 +91,10 @@ that needs the log tip anchored somewhere the enforcement point does not control
 which Kessa does not do. See [Known limits](../README.md#known-limits).
 
 ## DORA (Regulation (EU) 2022/2554)
+
+> **NOT yet verified against the primary source**, for the same reason as the
+> section above. Article 9's number and subject were taken from secondary
+> sources on 2026-08-05.
 
 | Article | Requirement, in one clause | What Kessa does | Check it |
 |---|---|---|---|
@@ -93,17 +118,43 @@ more useful to a reader than a row stretched to cover one.
 | RATS architecture (RFC 9334) and EAT | Kessa's audit export is its own format (`kessa-audit-export/v2`), not an EAT or any RATS-defined evidence format. There is no interoperability claim to make. |
 | OWASP Agentic AI Top 10 | Several items are plainly adjacent to what Kessa does, but the list's item identifiers and wording are still moving. A row citing an ID that later shifts is worse than no row. Revisit when the numbering is stable. |
 | SOC 2, ISO 27001 | Organizational controls audited against an operator, not properties of a piece of software. Kessa can be evidence inside such an audit; it cannot align with one. |
-| NIST SP 800-207 tenets 1 and 5 | Tenet 1 concerns resource inventory and tenet 5 continuous posture measurement. Kessa does neither. |
+| NIST SP 800-207 tenets 1 and 5 | Tenet 1 is "All data sources and computing services are considered resources", a classification decision an enterprise makes about its own estate. Tenet 5 is "The enterprise monitors and measures the integrity and security posture of all owned and associated assets". Kessa does neither: it has no view of the estate and measures no asset's posture. |
 
 ---
 
+## Verification log
+
+Standards texts drift, and a mapping that was right in 2026 can be wrong later
+without anything in this repository changing. So each standard carries the date
+its citations were last read against the primary source, and what "primary
+source" meant.
+
+| Standard | Last verified | Against what | By |
+|---|---|---|---|
+| NIST SP 800-207 | 2026-08-05 | The publication itself, 59 pages, August 2020, retrieved from `nvlpubs.nist.gov` and read directly. Tenet numbering and wording quoted from section 2.1. | Maintainer |
+| EU AI Act (2024/1689) | **never** | Secondary sources only. EUR-Lex refuses automated retrieval (bot protection), so the Official Journal text has not been read. | |
+| DORA (2022/2554) | **never** | Secondary sources only, same reason. | |
+
+**A row is only as good as its date.** When a standard is revised, re-read it and
+update both the row and this table, or delete the row. An out-of-date mapping
+presented as current is worse than no mapping, because a reader has no way to tell
+which it is.
+
+### What verifying the unverified ones requires
+
+EUR-Lex serves the Official Journal from behind a bot-protection layer, so it
+cannot be fetched by tooling. Verifying those two sections means a human opening
+the texts and confirming, for each row: the article number, the article heading,
+and that the "requirement, in one clause" summary is a fair reading of the
+article's operative text rather than of a commentary site's gloss.
+
 ## Caveats on this document
 
-**Clause numbers and article references have not been checked against the primary
-sources by anyone other than the author of this file.** They are cited from the
-published structure of each standard and should be verified before this document
-is relied on externally or quoted in a procurement response.
-
 **Every "what Kessa does" cell is a statement about this repository**, and those
-are checkable directly. If a row's artifact does not do what the row says, that is
-a defect in this document; please report it.
+are checkable directly by the test names and paths in the last column. Those were
+verified when this file was written. If a row's artifact does not do what the row
+says, that is a defect in this document; please report it.
+
+The claims in the *other* direction, about what each standard requires, are only
+as reliable as the verification log above says. The two are different kinds of
+statement and are worth reading differently.
