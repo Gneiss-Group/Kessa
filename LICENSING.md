@@ -133,8 +133,13 @@ they come to disagree.
 
 ## Contributing
 
-Contributions will be accepted under a Contributor License Agreement, which is
-still being finalized (see [`CLA.md`](CLA.md)); external code contributions
-cannot be merged until it is published. A contribution is licensed under the
-license of the file(s) it touches (see each file's SPDX header). See
-[`CONTRIBUTING.md`](CONTRIBUTING.md).
+Contributions are accepted under a Contributor License Agreement (see
+[`CLA.md`](CLA.md), and [`CLA-CORPORATE.md`](CLA-CORPORATE.md) if you contribute
+on behalf of an employer). It is a licence grant, not a copyright assignment: you
+keep ownership of your work, and we get the right to offer it under the separate
+commercial licence described above. Signing is one comment on your first pull
+request.
+
+A contribution is licensed under the license of the file(s) it touches, which each
+file states in its SPDX header or through an annotation in
+[`REUSE.toml`](REUSE.toml). See [`CONTRIBUTING.md`](CONTRIBUTING.md).
