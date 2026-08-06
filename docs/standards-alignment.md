@@ -66,29 +66,38 @@ signals, so it satisfies the quoted clause and not the full tenet.
 
 ## EU AI Act
 
-> **NOT yet verified against the primary source.** Article numbers and headings
-> below were taken from secondary sources on 2026-08-05. EUR-Lex serves its texts
-> from behind a bot-protection layer that refuses automated retrieval, so the
-> Official Journal text has not been read directly. Treat every article reference
-> in this section as unconfirmed until the verification log at the end of this
-> file says otherwise.
+> **Verified against a named secondary source, not the Official Journal.** Article
+> text read on **2026-08-05** from `artificialintelligenceact.eu`, which states it
+> reproduces the Official Journal version of 13 June 2024. EUR-Lex refuses
+> automated retrieval, so the OJ PDF itself has not been read for this section.
+> This is a weaker check than the other two sections and the log says so.
 
-Regulation (EU) 2024/1689 of 13 June 2024. Articles 12 and 15 as they apply to
-high-risk systems. Kessa is a component, not a system, so it can support an
-obligation but never discharge one.
+Regulation (EU) 2024/1689. Article 12 as it applies to high-risk systems. **Kessa
+is not an AI system**, and Article 12's obligations fall on the provider of one,
+so nothing here is Kessa discharging an obligation.
 
-| Article | Requirement, in one clause | What Kessa does | Check it |
+| Provision | The requirement, as published | What Kessa does | Check it |
 |---|---|---|---|
-| Art. 12 (record-keeping) | Automatic recording of events over the system's lifetime | Consequential decisions are appended to a hash-chained log, signed with the entry count and log tip covered, so entries cannot be edited, reordered, or dropped after the fact | `TestR2_02_TruncatedExportIsRejected`, `TestR2_04_TipCarriesPrevHash` |
-| Art. 12 (traceability) | Records support traceability of the system's functioning | Each entry carries the delegation chain, the policy, and the approval as evidence, so a verdict can be re-derived rather than trusted | [`docs/how-it-works.md`](how-it-works.md#what-a-clean-verdict-actually-proves) |
-| Art. 15 (robustness) | Resilience against attempts to alter use or performance by exploiting vulnerabilities | Tampering with a signed export fails at exactly the altered entry and marks everything after it unverified | `TestScenario7_Tamper`, `make demo` scenario 7 |
+| Art. 12(1) and 12(2)(c) | High-risk AI systems shall "technically allow for the automatic recording of events (logs) over the lifetime of the system", including events relevant for "monitoring the operation of high-risk AI systems referred to in Article 26(5)" | Provides **one input** to such a log, not the log: a record of which agent actions were authorised, under what delegated authority, and whether they were allowed. A deployer would still need to log the system's own operation separately. | [`internal/audit`](../internal/audit/), [`docs/how-it-works.md`](how-it-works.md#what-a-clean-verdict-actually-proves) |
 
-**Partial, stated plainly.** Art. 12 asks for logging over the lifetime of the
-system. Kessa's log is complete only for what the enforcement point chose to
-record: a short log signed honestly and a short log signed by a proxy that
-declined to record something are indistinguishable from the file alone. Closing
-that needs the log tip anchored somewhere the enforcement point does not control,
-which Kessa does not do. See [Known limits](../README.md#known-limits).
+**Where Kessa exceeds what the article asks, and where it falls short.** Article 12
+requires that logging exist; it does not require the log to be tamper-evident.
+Kessa's record is hash-chained and signed over the entry count and log tip, so
+entries cannot be edited, reordered, or silently dropped
+(`TestR2_02_TruncatedExportIsRejected`, `TestR2_04_TipCarriesPrevHash`). That is
+more than the article demands, on a narrow slice.
+
+The slice is the limitation. Article 12 wants logging of the AI system's operation
+over its lifetime; Kessa records authorisation decisions about agent actions,
+which is one category of event inside that. Completeness is also bounded: a short
+log signed honestly and a short log signed by a proxy that declined to record
+something are indistinguishable from the file alone. See
+[Known limits](../README.md#known-limits).
+
+Article 12(3) sets specific requirements (period of each use, reference database,
+matching input data, identity of the natural persons verifying results) that apply
+to the biometric systems in Annex III point 1(a). Kessa addresses none of them and
+they are outside its scope.
 
 ## DORA (Regulation (EU) 2022/2554)
 
@@ -127,6 +136,7 @@ more useful to a reader than a row stretched to cover one.
 
 | Standard | Why there is no row |
 |---|---|
+| **EU AI Act Art. 15** (accuracy, robustness, cybersecurity) | **Removed after reading it.** The draft of this document claimed Art. 15 on the strength of tamper-evidence. Art. 15(5) is about systems withstanding "attempts by unauthorised third parties to alter their use, outputs or performance by exploiting system vulnerabilities", and its enumerated measures are model-layer: data poisoning, model poisoning, adversarial examples, confidentiality attacks, model flaws. Kessa addresses none of these. Detecting alteration of the *record after the fact* is a different property from resisting alteration of the *system's outputs*, and conflating the two was an overclaim. Kessa governs authority, not content. |
 | RATS architecture (RFC 9334) and EAT | Kessa's audit export is its own format (`kessa-audit-export/v2`), not an EAT or any RATS-defined evidence format. There is no interoperability claim to make. |
 | OWASP Agentic AI Top 10 | Several items are plainly adjacent to what Kessa does, but the list's item identifiers and wording are still moving. A row citing an ID that later shifts is worse than no row. Revisit when the numbering is stable. |
 | SOC 2, ISO 27001 | Organizational controls audited against an operator, not properties of a piece of software. Kessa can be evidence inside such an audit; it cannot align with one. |
@@ -145,7 +155,7 @@ source" meant.
 |---|---|---|---|
 | NIST SP 800-207 | 2026-08-05 | The publication itself, 59 pages, August 2020, retrieved from `nvlpubs.nist.gov` and read directly. Tenet numbering and wording quoted from section 2.1. | Maintainer |
 | DORA (2022/2554) | 2026-08-05 | The Official Journal text, OJ L 333, 27.12.2022, 79 pages, read directly. Article 9's heading, its position in Chapter II, and the wording of paragraphs 2, 3(b) and 4(c) confirmed. | Maintainer |
-| EU AI Act (2024/1689) | **never** | Secondary sources only. EUR-Lex refuses automated retrieval (bot protection), so the Official Journal text has not been read. | |
+| EU AI Act (2024/1689) | 2026-08-05, **weaker** | Article 12 and 15 text read from `artificialintelligenceact.eu`, which states it reproduces the Official Journal version of 13 June 2024. The OJ PDF itself was **not** read: EUR-Lex refuses automated retrieval. Treat as a named-secondary check, not a primary one, and redo it against the OJ when someone has the text to hand. | Maintainer |
 
 **A row is only as good as its date.** When a standard is revised, re-read it and
 update both the row and this table, or delete the row. An out-of-date mapping
