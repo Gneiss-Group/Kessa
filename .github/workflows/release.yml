@@ -138,12 +138,14 @@ jobs:
             exit 1
           fi
 
-      - name: write the version and the changelog on a release branch
+      - name: write the version and the changelog on a signed release branch
         env:
           NEXT: ${{ steps.version.outputs.next }}
           TAG: ${{ steps.version.outputs.tag }}
           BRANCH: ${{ steps.version.outputs.branch }}
           DRY: ${{ inputs.dry_run }}
+          REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           prev="$(git tag --list 'v[0-9]*' --sort=-v:refname | head -n1)"
@@ -165,30 +167,76 @@ jobs:
           # is the known cause. This is the check that the cause was the only one.
           bash scripts/ci/prose-check.sh
 
-          git config user.name  "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git checkout -b "$BRANCH"
-          git add internal/version/version.go CHANGELOG.md
-          if git diff --cached --quiet; then
+          changed="$(git diff --name-only -- internal/version/version.go CHANGELOG.md)"
+          if [ -z "$changed" ]; then
             echo "::error::nothing to commit: the source already carries $NEXT and CHANGELOG is up to date."
             exit 1
           fi
-          # The subject IS the marker phase 2 keys off (release-publish.yml). Keep
-          # it as the PR title so the squash-merge commit carries it onto main.
-          git commit -m "build(release): $TAG"
 
           if [ "$DRY" = "true" ]; then
             {
               echo
-              echo "> **Dry run.** Computed \`$TAG\` and wrote the bump on a local branch, but pushed nothing."
+              echo "> **Dry run.** Computed \`$TAG\` and wrote the bump on the runner, but pushed nothing."
+              echo "> Files that would be committed: $(echo $changed | tr '\n' ' ')"
               echo "> Re-run with \`dry_run\` unchecked to push \`$BRANCH\` and get the PR link."
             } >>"$GITHUB_STEP_SUMMARY"
             exit 0
           fi
 
-          # Force-with-lease so re-preparing the same version overwrites a stale
-          # attempt but never clobbers unrelated work.
-          git push --force-with-lease origin "HEAD:refs/heads/$BRANCH"
+          # The commit is created through the API, NOT with `git commit` and a
+          # push, and that is the whole point: main requires signed commits, and a
+          # runner deliberately holds no signing key. A commit created through
+          # createCommitOnBranch is signed by GitHub itself, so the release branch
+          # satisfies the rule without a key ever existing on the runner.
+          #
+          # This is what blocked v0.0.1. The original design assumed the eventual
+          # squash-merge commit being GitHub-signed was enough, but the ruleset
+          # also evaluates the commits being merged, so an unsigned commit on the
+          # release branch blocks the merge before any squash happens.
+          #
+          # The branch is created at the checked-out commit only when it does not
+          # already exist, and an existing branch is committed ON TOP of rather
+          # than reset. Resetting a branch to its base leaves a moment where head
+          # equals base, and GitHub auto-closes any open pull request when that
+          # happens. Stacking is harmless here because the pull request is
+          # squash-merged: the subject that lands comes from the PR title, not
+          # from these commits. To start a version genuinely clean, delete the
+          # release branch first.
+          base_oid="$(git rev-parse HEAD)"
+          head_oid="$(gh api "repos/$REPO/git/ref/heads/$BRANCH" --jq .object.sha 2>/dev/null || true)"
+          if [ -z "$head_oid" ]; then
+            gh api -X POST "repos/$REPO/git/refs" -f ref="refs/heads/$BRANCH" -f sha="$base_oid" >/dev/null
+            head_oid="$base_oid"
+          fi
+
+          additions="$(for f in $changed; do
+            jq -n --arg p "$f" --arg c "$(base64 -w0 "$f")" '{path:$p, contents:$c}'
+          done | jq -s '.')"
+
+          # The subject IS the marker phase 2 keys off (release-publish.yml), and
+          # it is also the pre-filled PR title, so the squash-merge commit carries
+          # it onto main. GitHub appends " (#N)" to a squash subject; phase 2's
+          # pattern allows that suffix.
+          jq -n --arg repo "$REPO" --arg branch "$BRANCH" --arg oid "$head_oid" \
+                --arg headline "build(release): $TAG" --argjson additions "$additions" \
+            '{query:"mutation($input: CreateCommitOnBranchInput!){createCommitOnBranch(input:$input){commit{oid}}}",
+              variables:{input:{branch:{repositoryNameWithOwner:$repo, branchName:$branch},
+                                message:{headline:$headline},
+                                expectedHeadOid:$oid,
+                                fileChanges:{additions:$additions}}}}' >/tmp/commit.json
+
+          new_oid="$(gh api graphql --input /tmp/commit.json --jq '.data.createCommitOnBranch.commit.oid')"
+          echo "created $new_oid on $BRANCH"
+
+          # A signed commit is the entire reason for the API path, so confirm it
+          # rather than assume it. An unsigned commit here would block the merge.
+          verified="$(gh api "repos/$REPO/commits/$new_oid" --jq '.commit.verification.verified')"
+          if [ "$verified" != "true" ]; then
+            reason="$(gh api "repos/$REPO/commits/$new_oid" --jq '.commit.verification.reason')"
+            echo "::error::$new_oid is not signed (reason: $reason); main requires signed commits, so this branch could not be merged."
+            exit 1
+          fi
+          echo "signature verified on $new_oid"
 
       - name: the one-click PR link
         if: ${{ !inputs.dry_run }}

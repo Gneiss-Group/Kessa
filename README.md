@@ -315,7 +315,7 @@ files alone.
 Verify an image's provenance before trusting it:
 
 ```sh
-gh attest verify oci://ghcr.io/gneiss-group/kessa:latest --repo Gneiss-Group/Kessa
+gh attestation verify oci://ghcr.io/gneiss-group/kessa:latest --repo Gneiss-Group/Kessa
 ```
 
 The proxy's `serve` transport is still a documented mock (plain JSON over HTTP,

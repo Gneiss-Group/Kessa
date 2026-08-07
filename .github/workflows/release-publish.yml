@@ -11,7 +11,10 @@
 # How it knows a push is a release, without a bypass, a label, or a bot pushing a
 # tag: the release commit's subject is `build(release): vX.Y.Z` (release.yml sets
 # it, and pre-fills the PR title with it so the squash-merge carries it onto
-# main). Phase 2 reads that subject, confirms the version matches the source
+# main). GitHub appends the pull request number to a squash subject, so what
+# actually lands is `build(release): vX.Y.Z (#N)`; both forms are accepted, and
+# the missing suffix is why v0.0.1 had to be published by the manual recovery
+# path below. Phase 2 reads that subject, confirms the version matches the source
 # constant, and confirms no such tag exists yet. An ordinary push to main: a
 # normal merge, a docs fix, has neither the subject nor a missing tag, so this
 # is a no-op on everything except an actual release merge. `workflow_dispatch`
@@ -68,9 +71,21 @@ jobs:
             reason="manual workflow_dispatch"
           else
             subject="$(git log -1 --format=%s)"
-            # Marker: build(release): vX.Y.Z
-            if printf '%s' "$subject" | grep -Eq '^build\(release\): v[0-9]+\.[0-9]+\.[0-9]+$'; then
-              version="$(printf '%s' "$subject" | sed -E 's/^build\(release\): v//')"
+            # Marker: build(release): vX.Y.Z, optionally followed by the pull
+            # request reference GitHub appends to a squash-merge subject.
+            #
+            # That suffix is why the first release did not publish. Phase 1
+            # deliberately pre-fills the PR title with the marker so the squash
+            # commit carries it onto main, and GitHub then makes the subject
+            # "build(release): v0.0.1 (#38)". The pattern was anchored with $
+            # immediately after the version, so the marker this pipeline creates
+            # for itself never matched the commit it produces.
+            #
+            # The suffix stays OPTIONAL rather than required: workflow_dispatch
+            # and a direct push produce a subject without it, and both are
+            # supported paths.
+            if printf '%s' "$subject" | grep -Eq '^build\(release\): v[0-9]+\.[0-9]+\.[0-9]+( \(#[0-9]+\))?$'; then
+              version="$(printf '%s' "$subject" | sed -E 's/^build\(release\): v//; s/ \(#[0-9]+\)$//')"
               reason="release marker on the merged commit"
             else
               echo "not a release: head subject is '$subject'"
@@ -156,7 +171,7 @@ jobs:
         # Keyless signing via GitHub's OIDC identity (Sigstore under the hood):
         # each archive and the checksum file gets a signed SLSA provenance
         # statement binding it to this repository's release pipeline. Verify with
-        # `gh attest verify <file> --repo ${{ github.repository }}`.
+        # `gh attestation verify <file> --repo ${{ github.repository }}`.
         uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
         with:
           subject-path: |
@@ -319,5 +334,5 @@ jobs:
             echo "- \`ghcr.io/$OWNER/kessa-issuer:$VERSION\` (issuer, AGPL-3.0-only)"
             echo
             echo "All linux/amd64 + linux/arm64, distroless/static nonroot, SBOM + signed provenance."
-            echo "Verify: \`gh attest verify oci://ghcr.io/$OWNER/kessa:$VERSION --repo ${{ github.repository }}\`"
+            echo "Verify: \`gh attestation verify oci://ghcr.io/$OWNER/kessa:$VERSION --repo ${{ github.repository }}\`"
           } >>"$GITHUB_STEP_SUMMARY"
