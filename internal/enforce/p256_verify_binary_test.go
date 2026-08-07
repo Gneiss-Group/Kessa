@@ -97,9 +97,18 @@ func TestP256_CompiledVerifyBinary_EndToEnd(t *testing.T) {
 		}
 		return chain.Link{Credential: *c, IssuerProof: proof}
 	}
+	// The employee->agent hop is the cross-issuer status case, and it is the
+	// realistic one: the EMPLOYEE issues the hop (on-device issuance) while the ORG
+	// publishes the revocation list covering its whole subtree. The credential
+	// therefore names the org as its revocation authority (R6-01); without that it
+	// would default to its own issuer, the employee, who signs no list. That
+	// declaration is inside the issuance signature, so the employee is choosing it
+	// at mint time and cannot be talked out of it afterwards.
 	ch := &chain.Chain{Links: []chain.Link{
-		mk(employee, org, mEmployee, status.Reference{}),                               // org signs (Ed25519)
-		mk(agent, employee, mAgent, status.Reference{ListURL: acmeListURL, Index: 42}), // EMPLOYEE signs (P-256): on-device issuance
+		mk(employee, org, mEmployee, status.Reference{}), // org signs (Ed25519)
+		mk(agent, employee, mAgent, status.Reference{ // EMPLOYEE signs (P-256): on-device issuance
+			ListURL: acmeListURL, Index: 42, Issuer: org.DID(),
+		}),
 	}}
 
 	// Org publishes an all-clear status list and it is written to a file the binary

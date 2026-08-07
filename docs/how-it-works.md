@@ -118,10 +118,12 @@ Deliberately narrow, because this is trust infrastructure:
 > consequentiality, the rule that fired, and the policy version were all
 > **re-derived from the export's carried, signed policy** and match the entry's
 > own claims; and if that re-derivation says the action is consequential, every
-> hop whose issuer published a status list was checked, none is currently revoked,
-> and a valid human approval (bound to the action and entry position) was
-> obtained. The export's version, signer, policy identity, **entry count and log
-> tip** are covered by the enforcement point's envelope signature.
+> hop whose issuer published a status list was checked **against a list signed by
+> that credential's named revocation authority**, not merely by whoever the list
+> claims signed it, none is currently revoked, and a valid human approval (bound
+> to the action and entry position) was obtained. The export's version, signer,
+> policy identity, **entry count and log tip** are covered by the enforcement
+> point's envelope signature.
 
 Every field the verifier reads to reach a verdict is inside signed material it
 re-derives rather than trusts: version, policy identity, and the log's length and

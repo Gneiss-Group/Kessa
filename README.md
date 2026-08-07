@@ -194,9 +194,19 @@ Accepted, documented risks (current boundaries, not defects):
 - **VC wrapper is not the cross-org anchor.** Cross-org trust rests on the per-hop
   Ed25519 issuance signature, verified against public DID docs. The optional
   `VCWrapper` is an interop envelope only and is never verified in the trust path.
-- **Expiry caveats use the proxy-chosen action timestamp** with no independent
-  clock. An honest clock-trust assumption; a verifier-side time bound is the
-  mitigation path if needed.
+- **Expiry caveats are evaluated against a timestamp the CALLER supplies, so a
+  time-limited delegation does not currently expire** ([R6-05](docs/security-review.md#r6-2026-08-06)).
+  An `expiry` caveat is checked against `action.timestamp`, which arrives in the
+  request body from the agent the caveat is meant to constrain: set it to any
+  value and the caveat is satisfied. The proxy has its own clock and stamps it on
+  the audit entry, but never compares the two, and the verifier re-derives from
+  the same recorded field, so the entry passes. This was previously described here
+  as "the proxy-chosen action timestamp ... an honest clock-trust assumption",
+  which understated it: the problem is not that the clock is untrusted, it is that
+  the constrained party names its own expiry. Do not rely on `expiry` caveats
+  until this is closed; use caveats over fields the caller cannot restate in its
+  own favour. Fix direction is a skew bound against the proxy's clock at
+  enforcement time, plus the same bound re-derived at verification.
 - **`--fetch-dids` can be pointed at arbitrary URLs** (an SSRF surface). It is off
   by default and evaluator-driven; scheme is HTTPS-only per did:web.
 - **Committed keys are demo-only**, derived from fixed seeds for reproducibility,

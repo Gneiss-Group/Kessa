@@ -450,6 +450,57 @@ func enabledListeners(ls []listener) []listener {
 	return out
 }
 
+// Listener timeouts (R6-02). A zero-value http.Server, which is what
+// http.ListenAndServe builds and what this file used, applies NO timeout of any
+// kind: not to reading headers, not to reading a body, not to writing, not to an
+// idle keep-alive. A request whose headers simply never end therefore parks a
+// goroutine and a connection for as long as the client cares to hold them, at a
+// cost to the attacker of one TCP connection each. Two hundred of them survived
+// three minutes against this handler with no server-side close.
+//
+// The reason this is worth more than it looks: it sits IN FRONT OF the ingress
+// guards rather than behind them. checkIngress never runs on a request that never
+// completes, so the Origin and Content-Type work in ingress.go defends nothing
+// here. And the container documentation requires --allow-unauthenticated-remote,
+// because a container's loopback is unreachable through -p, so following our own
+// deployment instructions puts this on a routable address.
+const (
+	// readHeaderTimeout is the one that closes the attack above: headers must
+	// arrive complete within it or the connection is dropped.
+	readHeaderTimeout = 10 * time.Second
+	// readTimeout covers headers plus body. The body is separately capped at
+	// enforce.maxRequestBody (1 MiB), so this bounds a slow trickle of a legal
+	// body rather than a large one.
+	readTimeout = 30 * time.Second
+	// writeTimeout is deliberately generous rather than tight. GET /export
+	// serializes the entire audit history, so its response grows with the log and
+	// a tight bound would truncate a legitimate large export rather than refuse an
+	// attack. Revisit when the export path is made incremental (R6-03, UPCOMING).
+	writeTimeout = 120 * time.Second
+	// idleTimeout bounds a kept-alive connection between requests, so a client
+	// cannot hold connections open indefinitely by going quiet after one request.
+	idleTimeout = 60 * time.Second
+	// maxHeaderBytes is well under net/http's 1 MiB default. Nothing this
+	// transport speaks needs large headers, and the default is per-connection
+	// memory an attacker chooses to spend.
+	maxHeaderBytes = 64 << 10
+)
+
+// newServer builds a listener's http.Server with the timeouts above. Every
+// listener in this process is constructed here, so a new one cannot be added
+// with the zero-value timeouts by forgetting to set them.
+func newServer(addr string, h http.Handler) *http.Server {
+	return &http.Server{
+		Addr:              addr,
+		Handler:           h,
+		ReadHeaderTimeout: readHeaderTimeout,
+		ReadTimeout:       readTimeout,
+		WriteTimeout:      writeTimeout,
+		IdleTimeout:       idleTimeout,
+		MaxHeaderBytes:    maxHeaderBytes,
+	}
+}
+
 // serveAll starts every listener and blocks until the FIRST one returns. Each
 // shares the one Proxy, which guards its own invariants, so serving several is
 // safe. Fail-fast is deliberate: a chokepoint that was asked for two ports but
@@ -461,7 +512,7 @@ func serveAll(ls []listener) error {
 	errc := make(chan error, len(ls))
 	for _, l := range ls {
 		go func(l listener) {
-			errc <- fmt.Errorf("%s listener: %w", l.name, http.ListenAndServe(l.addr, l.handler))
+			errc <- fmt.Errorf("%s listener: %w", l.name, newServer(l.addr, l.handler).ListenAndServe())
 		}(l)
 	}
 	return <-errc

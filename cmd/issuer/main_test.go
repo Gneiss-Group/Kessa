@@ -113,11 +113,11 @@ func TestPublishedStatusListIsSignedByItsIssuer(t *testing.T) {
 	if list.Issuer != spec.Status.Issuer {
 		t.Fatalf("status list issuer = %q", list.Issuer)
 	}
-	pub, err := did.ResolveKey(did.FileResolver{Root: root}, list.Issuer)
+	pub, err := did.ResolveKey(did.FileResolver{Root: root}, spec.Status.Issuer)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := list.Verify(pub); err != nil {
+	if err := list.Verify(spec.Status.Issuer, pub); err != nil {
 		t.Fatalf("published status list must verify against its issuer's published DID doc: %v", err)
 	}
 	// Freshly published: nothing revoked.

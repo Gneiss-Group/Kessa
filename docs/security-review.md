@@ -36,6 +36,7 @@ rounds.
 | **R4** | 2026-08-01 | The whole on-device issuer surface: enrollment, Secure Enclave backend, signing daemon, agent wiring (`feat/issuer-enrollment`, merged 2026-08-01) | No critical or high. No false-PASS path in the verifier. Four findings plus two scope observations, all closed |
 | *(spec alignment)* | 2026-08-03 | Not a review round: see below. Conformance work bringing the MCP listener to revision 2026-07-28 | Surfaced one security-relevant defect (SA-01) as a by-product |
 | **R5** | 2026-08-03 | The ingress surface of both listeners, reviewed because it had just changed | Six findings. Five closed (R5-01 to R5-05, no critical or high). **R5-06 was High** and is closed *as to the attack* (possession became an attribution gate, so the harm is unreachable) while the property it rests on is unchanged by design. No false-ALLOW path in any of them |
+| **R6** | 2026-08-06 | Pre-publication pass over the whole product surface: end-to-end workflow logic, availability, the cryptographic primitives, and general application-security posture. Excluded the surrounding tooling (CI, licensing, REUSE) | Six findings. **R6-01 was High**: revocation lists were not bound to the party entitled to revoke, defeating revocation at both the proxy and the verifier. Closed, by a signed-format change, after the first fix attempted was wrong. Three more closed (R6-02, R6-04, R6-05), one deferred (R6-03), one informational (R6-06). No other false-ALLOW path was found in the verifier |
 
 **R1 and R2 predate this repository's first commit** (2026-07-23). Their fixes are
 contained in the initial publication, so no released or published version of Kessa
@@ -304,10 +305,88 @@ than an answer. See [`UPCOMING.md`](../UPCOMING.md).
 R5-01 and R5-05 also applied to the generic HTTP listener, which had not changed.
 They were fixed there too: a defence applied to one of two doors is not a defence.
 
+### R6: pre-publication pass over the product (2026-08-06)
+
+Scoped to the product itself rather than to a surface that had just changed, on
+the theory that the last review before a repository goes public should not be a
+narrow one: end-to-end workflow logic, availability under unsophisticated abuse,
+the cryptographic primitives, and general application-security posture. The
+surrounding tooling (CI, licensing, REUSE) was excluded.
+
+| ID | Sev | Area | Status |
+|---|---|---|---|
+| R6-01 | **High** | Revocation lists were verified against a key the list named for itself, so nothing bound a list to the party entitled to revoke | Closed; format change, see below |
+| R6-02 | Medium | No timeouts on any HTTP listener, so a half-open request parked a goroutine and a connection indefinitely | Closed |
+| R6-03 | Medium | `GET /export` is an unauthenticated amplifier that holds the enforcement lock | Deferred; see [`UPCOMING.md`](../UPCOMING.md) |
+| R6-04 | Medium | Caller-supplied proof-of-possession and approval bytes were unbounded and recorded verbatim into the signed log, on denied requests too | Closed |
+| R6-05 | Low | The documented expiry limitation understated itself: the timestamp is supplied by the party the caveat constrains, not merely by an untrusted clock | Closed: documentation |
+| R6-06 | Info | DID verification relationships (`authentication`, `assertionMethod`) are not enforced; the first verification method is used for every purpose | Open, informational |
+
+Two observations from the round are worth keeping, because they say something
+about where the previous five rounds were not looking.
+
+**R6-02 and R6-04 are the same shape**: a bound that was never set, on a resource
+an attacker chooses the size of. Neither is an authority bug and neither can
+produce a false ALLOW, which is likely why five rounds aimed at authority walked
+past them. Both are in the transport layer, which no earlier round had scoped.
+
+**R6-05 is a documentation finding and is recorded as one deliberately.** Nothing
+was newly broken; the stated limitation did not match the code, and it was wrong
+in the flattering direction. That is the same failure as the round-2 correction to
+`internal/credential`'s package doc, and it earns a finding number for the same
+reason: a limitation that understates itself is worse than the limitation.
+
+### R6-01: a revocation list was not bound to the party entitled to revoke (High, closed)
+
+A status list is a self-asserting artifact: it carries the DID of its own signer,
+and both trust paths resolved the verification key from that field. The check
+therefore confirmed that whoever a list claimed had signed it had in fact signed
+it, and established nothing about that party's authority to revoke. Revocation
+was defeatable at the proxy and at the verifier, and the resulting export
+re-derived as a clean, evidence-backed PASS.
+
+This is R5-06's shape rather than R5's. The R5 class was *a check that does not
+fire*; here the check fired every time and verified correctly while answering a
+question nobody had asked. The rule the two share, and the one worth carrying
+forward: **a self-asserting artifact cannot be allowed to name the key it is
+checked against.**
+
+**Reachability, stated so the severity is not read as worse than it is.** No
+network status resolver ships today; both the proxy and the verifier read
+operator-supplied files, so this was not remotely exploitable. It mattered at the
+verifier, where an auditor is routinely handed the export *and* its status lists
+by the party being audited, and it would have become directly exploitable the day
+an HTTPS status resolver shipped.
+
+**The first fix was wrong, which is why the finding is written up rather than
+tabulated.** Requiring a list's signer to equal each hop's own issuer broke the
+product's own primary example, because one organization publishing one revocation
+list for its whole delegation subtree is the intended design and is what the
+herd-privacy floor exists for. *Who minted a credential* and *who is authoritative
+for its revocation* are different questions, and the first fix assumed they were
+one. The test suite caught it, not review.
+
+**How it was closed.** Since neither the list nor the chain could answer the
+second question, the credential now does: a status reference names its revocation
+authority, read through a single accessor both trust paths call so they cannot
+disagree. The field sits inside the issuance signature (R2-01), so it is
+issuer-chosen and not holder-steerable; omitting it narrows to the credential's
+own issuer rather than relaxing the check, which is the opposite polarity to the
+`omitempty` shapes R5 was full of and has its own regression test. The format
+change and its retroactive-tightening consequence are recorded in
+[`CHANGELOG.md`](../CHANGELOG.md).
+
+Five regression tests cover both trust paths, including a genuine revocation still
+denying, without which a proxy that denied everything would satisfy the rest. All
+were confirmed to fail with the binding removed.
+
 ## Deferred, and why
 
 These are recorded as open rather than closed. All but the first are design
 decisions or scale-dependent work rather than unfixed defects:
+
+- **R6-03: `GET /export` amplification**, and with it the absence of any
+  connection-count cap on the listeners. See [`UPCOMING.md`](../UPCOMING.md).
 
 - **Caller authentication on the enforcement endpoint.** R5-06 is closed: an
   unattributable request can no longer cause a write, but the endpoint still does

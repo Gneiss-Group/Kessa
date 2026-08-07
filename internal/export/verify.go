@@ -28,8 +28,9 @@ const WhatIsProven = "For every ALLOWED action: it was within the delegated auth
 	"position); consequentiality, the rule that fired, and the policy version were all RE-DERIVED " +
 	"from the export's carried, signed policy and match the entry's own claims; and if that " +
 	"re-derivation says the action is consequential, every hop whose issuer published a status list " +
-	"was checked, none is currently revoked, and a valid human approval (bound to the action and " +
-	"entry position) was obtained. The export's version, signer, policy identity, ENTRY COUNT and " +
+	"was checked against a list signed by THAT CREDENTIAL'S NAMED REVOCATION AUTHORITY, not merely by " +
+	"whoever the list claims signed it, none is currently revoked, and a valid human approval (bound " +
+	"to the action and entry position) was obtained. The export's version, signer, policy identity, ENTRY COUNT and " +
 	"LOG TIP are covered by the enforcement point's envelope signature, so entries cannot be removed " +
 	"from a signed export after the fact."
 
@@ -472,18 +473,24 @@ func hopRevoked(c *credential.Credential, in Inputs) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	issuerKey, err := did.ResolveKey(in.DIDs, list.Issuer)
+	// The verifier accepts status lists from whoever handed it the export, so a
+	// list that nominated its own verifier let any resolvable principal, the
+	// credential's own subject included, publish an all-clear list and turn a
+	// revoked credential into a clean PASS (R6-01). The authority comes from the
+	// credential instead, which is inside the issuance signature.
+	authority := c.StatusAuthority()
+	authorityKey, err := did.ResolveKey(in.DIDs, authority)
 	if err != nil {
-		return false, fmt.Errorf("resolve status list issuer %q: %w", list.Issuer, err)
+		return false, fmt.Errorf("resolve status authority %q: %w", authority, err)
 	}
-	if err := verifyList(list, issuerKey); err != nil {
+	if err := verifyList(list, authority, authorityKey); err != nil {
 		return false, err
 	}
 	return list.Lookup(c.StatusRef.Index)
 }
 
-func verifyList(l *status.StatusList, pub crypto.PublicKey) error {
-	if err := l.Verify(pub); err != nil {
+func verifyList(l *status.StatusList, authority types.DID, pub crypto.PublicKey) error {
+	if err := l.Verify(authority, pub); err != nil {
 		return fmt.Errorf("status list does not verify: %w", err)
 	}
 	return nil

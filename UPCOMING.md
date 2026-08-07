@@ -100,6 +100,40 @@ For what the system does today, and for the limits of a clean verdict, the
   the org-root question first, or settle both together, but do not pick a caller
   authentication scheme that quietly assumes an answer to it.
 
+- **`GET /export` is an unauthenticated amplifier that holds the enforcement
+  lock** ([R6-03](docs/security-review.md#r6-2026-08-06), deferred rather than
+  closed). Every call takes `Proxy.mu`, rebuilds the whole envelope, re-signs it,
+  and serializes the entire audit history: measured at 5.7 ms and 704 KB per
+  request against a 500-entry log, both growing linearly with the log. Because the
+  work happens under the same lock `/enforce` needs, a client looping on `/export`
+  slows enforcement for everyone (3.3x at 500 entries, and the ratio grows with
+  the log).
+
+  Deferred, not dismissed, and the reason is that it is the only R6 finding the
+  loopback default genuinely mitigates: it costs an attacker nothing but it needs
+  network reach, whereas the timeout and evidence-size fixes closed things that
+  were reachable the moment anyone followed the container instructions. The fix is
+  also real work rather than a constant: cache the built export keyed on the log
+  tip (it only changes on append), snapshot entries under the lock and marshal
+  outside it, and decide whether the endpoint should paginate. Related: the
+  listeners still have no connection-count cap, which is the same shape as
+  [R4-01](docs/security-review.md#r4-on-device-issuer-2026-08-01) on the daemon
+  socket.
+
+  Note also that `/export` is an unauthenticated **read** of the whole signed
+  audit history. R5-01 closed the DNS-rebinding route to it; it did not make the
+  endpoint require anything, and the `Origin` guard is browser-scoped by
+  construction. That half belongs with caller authentication above.
+
+- **The audit log is unbounded in entry count.** [R6-04](docs/security-review.md#r6-2026-08-06)
+  capped how many attacker-chosen bytes one entry may carry, which is a per-entry
+  bound; it did nothing about how many entries there are. The in-memory log is
+  never trimmed, the WAL is read whole into memory at startup, and neither has
+  rotation or a ceiling, so sustained traffic still grows both without limit. A
+  retention or rotation design has to answer what it means to drop entries from a
+  log whose envelope signature commits to its length and tip, which is why it is a
+  design question and not a size constant.
+
 ## Coverage and evidence
 
 - **Tool-call payload coverage.** Kessa authorizes today: it records that an

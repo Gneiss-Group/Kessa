@@ -62,9 +62,35 @@ const (
 )
 
 // Reference is a credential's pointer into a published status list.
+//
+// Issuer names the principal entitled to publish revocations for this credential
+// (R6-01), and it exists because the list could not name that party for itself.
+// Verification resolves a key for the DID the reference names and checks the
+// list's signature under it; before this field, both trust paths resolved the key
+// from the DID THE LIST CARRIED, so the check confirmed that whoever a list
+// claimed had signed it had in fact signed it, and established nothing about
+// authority to revoke. Any principal resolvable under the trust root, including
+// the subject of the credential being revoked, could publish an all-clear list
+// that satisfied the sweep and produced a clean verifier PASS.
+//
+// It is a separate field from the credential's own Issuer because one
+// organization commonly publishes ONE list covering its whole delegation
+// subtree: that is what the 16 KiB herd-privacy floor is for, and it is what the
+// shipped issuer spec does, so a hop issued by an agent can legitimately point at
+// its org's list. Requiring the list's signer to equal each hop's own issuer
+// would forbid that.
+//
+// EMPTY MEANS THE CREDENTIAL'S OWN ISSUER, which is the STRICTEST reading, not a
+// skip. That direction matters: an omitted field can only narrow the set of keys
+// accepted, never widen it, so absence cannot be used to weaken the check. The
+// field is inside the whole-credential issuance signature (R2-01), so a holder
+// can neither add it nor repoint it without invalidating its own credential.
+// Resolve it through credential.Credential.StatusAuthority, never by reading it
+// directly, so the default lives in exactly one place.
 type Reference struct {
-	ListURL string `json:"listURL"` // where the signed bitstring is published
-	Index   int    `json:"index"`   // this credential's bit position
+	ListURL string    `json:"listURL"`          // where the signed bitstring is published
+	Index   int       `json:"index"`            // this credential's bit position
+	Issuer  types.DID `json:"issuer,omitempty"` // who may revoke; empty = the credential's issuer
 }
 
 // StatusList is an issuer-signed bitstring.
@@ -133,9 +159,30 @@ func (l *StatusList) Sign(s signer.Signer) error {
 	return nil
 }
 
-// Verify confirms the list meets the herd-privacy floor and that its signature
-// is valid under pub (which the caller resolves from l.Issuer's DID document).
-func (l *StatusList) Verify(pub crypto.PublicKey) error {
+// Verify confirms the list meets the herd-privacy floor, that it was issued by
+// authority, and that its signature is valid under pub, which the caller must
+// resolve from AUTHORITY's DID document and not from l.Issuer.
+//
+// Taking authority is the point of this signature (R6-01). A list is a
+// self-asserting artifact: it carries the DID of its own signer, so letting it
+// nominate the key it is checked against makes the check tautological. The caller
+// says which principal it is willing to accept a revocation decision from, and
+// that principal comes from the credential (see Reference.Issuer), which is
+// issuer-signed material a holder cannot steer.
+//
+// Both halves are kept even though the signature check alone is sufficient, since
+// signingInput covers l.Issuer and so a list naming a different issuer cannot
+// verify under this key anyway. The explicit comparison is what turns that into
+// "this list belongs to a different issuer" rather than an indistinguishable
+// "signature verification failed", which is the difference between an operator
+// diagnosing a misconfiguration and an operator diagnosing an attack.
+func (l *StatusList) Verify(authority types.DID, pub crypto.PublicKey) error {
+	if authority == "" {
+		return errors.New("status: cannot verify a list without naming the authority it must come from")
+	}
+	if l.Issuer != authority {
+		return fmt.Errorf("status: list is issued by %q but this credential's revocation authority is %q", l.Issuer, authority)
+	}
 	if l.Len() < MinBits {
 		return fmt.Errorf("status: list has %d bits, below herd-privacy minimum %d", l.Len(), MinBits)
 	}

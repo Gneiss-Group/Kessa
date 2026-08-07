@@ -32,6 +32,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/Gneiss-Group/Kessa/internal/version"
 )
@@ -232,7 +233,22 @@ func cmdServe(args []string, stdout, stderr io.Writer) int {
 		return exitUsage
 	}
 	fmt.Fprintf(stdout, "serving %s at http://%s (static files only)\n", site, *addr)
-	if err := http.ListenAndServe(*addr, http.FileServer(http.Dir(site))); err != nil {
+	// Timeouts, not http.ListenAndServe's zero-value server, for the same reason
+	// the proxy's listeners carry them (R6-02): without a ReadHeaderTimeout a
+	// request whose headers never end parks a goroutine and a connection
+	// indefinitely. This server only ever emits small static DID documents and
+	// status lists, so it can afford tighter bounds than the proxy's, whose
+	// /export response grows with the audit log.
+	srv := &http.Server{
+		Addr:              *addr,
+		Handler:           http.FileServer(http.Dir(site)),
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       60 * time.Second,
+		MaxHeaderBytes:    64 << 10,
+	}
+	if err := srv.ListenAndServe(); err != nil {
 		fmt.Fprintf(stderr, "kessa-issuer: %v\n", err)
 		return exitUsage
 	}

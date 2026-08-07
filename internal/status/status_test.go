@@ -136,7 +136,7 @@ func TestSignVerify_RoundTrip(t *testing.T) {
 	if l.Issuer != s.DID() {
 		t.Fatalf("Sign did not stamp issuer: got %q", l.Issuer)
 	}
-	if err := l.Verify(s.Public()); err != nil {
+	if err := l.Verify(s.DID(), s.Public()); err != nil {
 		t.Fatalf("Verify: %v", err)
 	}
 
@@ -149,7 +149,7 @@ func TestSignVerify_RoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Parse: %v", err)
 	}
-	if err := got.Verify(s.Public()); err != nil {
+	if err := got.Verify(s.DID(), s.Public()); err != nil {
 		t.Fatalf("Verify after round trip: %v", err)
 	}
 	if revoked, _ := got.Lookup(42); !revoked {
@@ -168,7 +168,7 @@ func TestVerify_TamperedBitFails(t *testing.T) {
 	}
 	// An attacker flips a revocation bit after signing.
 	l.Bits[100] ^= 0x01
-	if err := l.Verify(s.Public()); err == nil {
+	if err := l.Verify(s.DID(), s.Public()); err == nil {
 		t.Fatal("Verify should fail after a bit is flipped post-signature")
 	}
 }
@@ -180,7 +180,7 @@ func TestVerify_TamperedSignatureFails(t *testing.T) {
 		t.Fatal(err)
 	}
 	l.Signature[0] ^= 0xff
-	if err := l.Verify(s.Public()); err == nil {
+	if err := l.Verify(s.DID(), s.Public()); err == nil {
 		t.Fatal("Verify should fail with a tampered signature")
 	}
 }
@@ -192,7 +192,7 @@ func TestVerify_WrongIssuerKeyFails(t *testing.T) {
 	if err := l.Sign(signerA); err != nil {
 		t.Fatal(err)
 	}
-	if err := l.Verify(signerB.Public()); err == nil {
+	if err := l.Verify(signerA.DID(), signerB.Public()); err == nil {
 		t.Fatal("Verify should fail against a different issuer's key")
 	}
 }
@@ -206,13 +206,13 @@ func TestVerify_TamperedIssuerOrPurposeFails(t *testing.T) {
 	// Issuer is part of the signed input.
 	tamperedIssuer := *l
 	tamperedIssuer.Issuer = "did:web:localhost:orgs:evil"
-	if err := tamperedIssuer.Verify(s.Public()); err == nil {
+	if err := tamperedIssuer.Verify(tamperedIssuer.Issuer, s.Public()); err == nil {
 		t.Fatal("Verify should fail when Issuer is altered")
 	}
 	// Purpose is part of the signed input.
 	tamperedPurpose := *l
 	tamperedPurpose.Purpose = PurposeSuspension
-	if err := tamperedPurpose.Verify(s.Public()); err == nil {
+	if err := tamperedPurpose.Verify(s.DID(), s.Public()); err == nil {
 		t.Fatal("Verify should fail when Purpose is altered")
 	}
 }
@@ -225,7 +225,7 @@ func TestVerify_UndersizedListRejected(t *testing.T) {
 	if err := small.Sign(s); err != nil {
 		t.Fatal(err)
 	}
-	if err := small.Verify(s.Public()); err == nil {
+	if err := small.Verify(s.DID(), s.Public()); err == nil {
 		t.Fatal("Verify should reject a list below the herd-privacy minimum")
 	}
 }
@@ -252,7 +252,7 @@ func TestSaveLoad_RoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if err := got.Verify(s.Public()); err != nil {
+	if err := got.Verify(s.DID(), s.Public()); err != nil {
 		t.Fatalf("Verify after Save/Load: %v", err)
 	}
 	if revoked, _ := got.Lookup(7); !revoked {
