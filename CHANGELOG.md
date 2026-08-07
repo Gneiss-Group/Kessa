@@ -189,7 +189,7 @@ binding it to this repository's release pipeline:
 
 ```sh
 sha256sum -c SHA256SUMS
-gh attest verify kessa_*_linux_amd64.tar.gz --repo Gneiss-Group/Kessa
+gh attestation verify kessa_*_linux_amd64.tar.gz --repo Gneiss-Group/Kessa
 ./kessa --version
 ```
 
@@ -203,5 +203,5 @@ Multi-arch (linux/amd64 + arm64), distroless, signed with build provenance:
 ```sh
 docker pull ghcr.io/gneiss-group/kessa:VERSION          # verifier (Apache-2.0)
 docker pull ghcr.io/gneiss-group/kessa-proxy:VERSION    # enforcement proxy (AGPL-3.0-only)
-gh attest verify oci://ghcr.io/gneiss-group/kessa:VERSION --repo Gneiss-Group/Kessa
+gh attestation verify oci://ghcr.io/gneiss-group/kessa:VERSION --repo Gneiss-Group/Kessa
 ```

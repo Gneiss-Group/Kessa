@@ -41,7 +41,8 @@ is not carried by anything in this tree. The intended settings for `main`:
 - require a pull request before merging
 - require review from code owners
 - require the **CI** workflow to pass
-- require signed commits (the release lands via a squash-merge, which GitHub signs)
+- require signed commits (phase 1 creates the release commit through the GitHub
+  API so GitHub signs it; see [Releasing](#releasing))
 - disallow force pushes and deletion
 
 No bypass is needed: the release does not push to `main`, it opens a PR you
@@ -144,10 +145,34 @@ patch release if a golden moved, then writes the version constant and the
 changelog onto a `release/vX.Y.Z` branch and pushes it. It prints a one-click
 **PR link** (repository policy disables Actions-authored PRs, so you open it).
 
-**You** then open that PR, let CI pass, and **squash-merge** it. GitHub creates
-and signs the squash commit, which is how it satisfies the require-signed-commits
-rule with no signing key on any runner. The commit subject carries the marker
-`build(release): vX.Y.Z`.
+**You** then open that PR, let CI pass, and **squash-merge** it. The commit
+subject carries the marker `build(release): vX.Y.Z`, and GitHub appends the pull
+request number to a squash subject, so what lands on `main` is
+`build(release): vX.Y.Z (#N)`. Phase 2 accepts either form.
+
+### How signed commits are satisfied without a key on a runner
+
+Worth stating precisely, because the obvious answer is wrong and it blocked the
+first release.
+
+`main` requires signed commits. It is tempting to reason that the squash-merge
+commit is created and signed by GitHub, so nothing else needs a signature. That
+is true of the commit that *lands*, but the rule also evaluates **the commits
+being merged**, so an unsigned commit on the release branch blocks the merge
+before any squash happens.
+
+So phase 1 does not use `git commit` and a push. It writes the files on the
+runner, then creates the commit through the GitHub API (`createCommitOnBranch`),
+which GitHub signs with its own key. The runner still holds no signing key, and
+the release branch is mergeable. Phase 1 verifies the signature immediately after
+creating the commit rather than assuming it.
+
+One consequence worth knowing: an existing release branch is committed **on top
+of** rather than reset. Resetting a branch to its base leaves a moment where its
+head equals the base, and GitHub auto-closes any open pull request when that
+happens. Stacking is harmless because the PR is squash-merged, so the subject
+that lands comes from the PR title rather than from these commits. To start a
+version genuinely clean, delete the release branch first.
 
 **Phase 2: publish** ([`release-publish.yml`](../.github/workflows/release-publish.yml),
 the **Release (publish)** workflow). It fires automatically on the merge, detects
