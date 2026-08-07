@@ -309,124 +309,76 @@ They were fixed there too: a defence applied to one of two doors is not a defenc
 
 Scoped to the product itself rather than to a surface that had just changed, on
 the theory that the last review before a repository goes public should not be a
-narrow one. Four questions were put to it: where the end-to-end workflow breaks,
-whether the listeners survive unsophisticated abuse, whether the cryptographic
-primitives hold, and how the codebase reads against ordinary application-security
-expectations.
-
-Every finding below was reproduced by running code against the shipped fixtures,
-not inferred from reading. The three availability findings are the round's
-recurring theme and they are all in the same place: **the transport layer, which
-no previous round had scoped.** R1 through R5 attacked authority, evidence and
-ingress semantics; nobody had asked what one TCP connection could do.
+narrow one: end-to-end workflow logic, availability under unsophisticated abuse,
+the cryptographic primitives, and general application-security posture. The
+surrounding tooling (CI, licensing, REUSE) was excluded.
 
 | ID | Sev | Area | Status |
 |---|---|---|---|
-| R6-01 | **High** | Revocation lists are verified against a key the list names for itself, so nothing binds a list to the party entitled to revoke | Closed (signed-format change; the first fix was wrong, see below) |
-| R6-02 | Medium | No timeouts on any HTTP listener, so a half-open request parks a goroutine and a connection indefinitely | Closed |
+| R6-01 | **High** | Revocation lists were verified against a key the list named for itself, so nothing bound a list to the party entitled to revoke | Closed; format change, see below |
+| R6-02 | Medium | No timeouts on any HTTP listener, so a half-open request parked a goroutine and a connection indefinitely | Closed |
 | R6-03 | Medium | `GET /export` is an unauthenticated amplifier that holds the enforcement lock | Deferred; see [`UPCOMING.md`](../UPCOMING.md) |
-| R6-04 | Medium | Caller-supplied proof-of-possession and approval bytes are unbounded and are recorded verbatim into the signed log, on denied requests too | Closed |
-| R6-05 | Low | The documented expiry limitation understated itself: the timestamp is supplied by the party the caveat constrains, not merely by an untrusted clock | Closed (documentation) |
+| R6-04 | Medium | Caller-supplied proof-of-possession and approval bytes were unbounded and recorded verbatim into the signed log, on denied requests too | Closed |
+| R6-05 | Low | The documented expiry limitation understated itself: the timestamp is supplied by the party the caveat constrains, not merely by an untrusted clock | Closed: documentation |
 | R6-06 | Info | DID verification relationships (`authentication`, `assertionMethod`) are not enforced; the first verification method is used for every purpose | Open, informational |
 
-**R6-02 and R6-04 share a shape worth naming**: both are bounds that were never
-set, on resources an attacker chooses the size of. R6-02 is connections and
-goroutines, R6-04 is bytes in the log. Neither is an authority bug and neither can
-produce a false ALLOW, which is presumably why five rounds aimed at authority
-walked past them. A round that only asks "can someone get an authorization they
-should not have" will not find either.
+Two observations from the round are worth keeping, because they say something
+about where the previous five rounds were not looking.
 
-R6-04 also has a detail that generalises: a **denied** request still appends an
-entry, so an agent attenuated down to no effective authority could still write
-~1 MiB of chosen bytes into permanently-retained, fsynced state per request. The
-gate that makes the log trustworthy (possession, R5-06) is not the gate that makes
-it bounded. "Holds a key that can do nothing" has to mean it.
+**R6-02 and R6-04 are the same shape**: a bound that was never set, on a resource
+an attacker chooses the size of. Neither is an authority bug and neither can
+produce a false ALLOW, which is likely why five rounds aimed at authority walked
+past them. Both are in the transport layer, which no earlier round had scoped.
 
-**R6-05 is a documentation finding and is recorded as one deliberately.** The
-README described the expiry limitation as "the proxy-chosen action timestamp ...
-an honest clock-trust assumption". The timestamp is supplied by the caller, in the
-request body, so an `expiry` caveat is satisfied by whatever value the constrained
-agent chooses to send. Nothing was newly broken; what was wrong was the
-description, and it was wrong in the flattering direction. That is the same failure
-as the round-2 correction to `internal/credential`'s package doc, where a stated
-mechanism did not match the code, and it is worth a finding number for the same
+**R6-05 is a documentation finding and is recorded as one deliberately.** Nothing
+was newly broken; the stated limitation did not match the code, and it was wrong
+in the flattering direction. That is the same failure as the round-2 correction to
+`internal/credential`'s package doc, and it earns a finding number for the same
 reason: a limitation that understates itself is worse than the limitation.
 
 ### R6-01: a revocation list was not bound to the party entitled to revoke (High, closed)
 
-`StatusList.Verify` takes the public key of `list.Issuer`, the DID **the list
-names for itself**. Both trust paths, the proxy's live sweep and the independent
-verifier's step 6, resolve the key that way. So the check confirms that whoever
-the list claims signed it did sign it, and establishes nothing about that party's
-authority to revoke the credential in question.
+A status list is a self-asserting artifact: it carries the DID of its own signer,
+and both trust paths resolved the verification key from that field. The check
+therefore confirmed that whoever a list claimed had signed it had in fact signed
+it, and established nothing about that party's authority to revoke. Revocation
+was defeatable at the proxy and at the verifier, and the resulting export
+re-derived as a clean, evidence-backed PASS.
 
-Demonstrated end to end on the demo chain: a status list signed by
-`did:web:localhost:agents:helper`, **the agent whose own credential the sweep is
-checking**, is accepted in place of the org's list. The revoked credential is
-treated as live, the action is ALLOWED, and `kessa verify` re-derives the
-resulting export as a clean, evidence-backed PASS. Any principal resolvable under
-the trust root can do this for any credential.
-
-This is R5-06's shape, not R5's. The R5 class was *a check that does not fire*.
-Here the check fires every time and verifies correctly; it simply answers a
-question nobody asked. The general rule the two share, and the one worth carrying
+This is R5-06's shape rather than R5's. The R5 class was *a check that does not
+fire*; here the check fired every time and verified correctly while answering a
+question nobody had asked. The rule the two share, and the one worth carrying
 forward: **a self-asserting artifact cannot be allowed to name the key it is
 checked against.**
 
 **Reachability, stated so the severity is not read as worse than it is.** No
-network status resolver ships today: both the proxy and the verifier read
-operator-supplied files, so this is not remotely exploitable now. It bites in two
-places. The verifier is the live one, because an auditor is routinely handed the
-export *and* its status lists by the party being audited, and status-list
-provenance is the one input class the `KnownCaveats` list does not mention. The
-second is prospective: the package doc already contemplates an HTTPS status
-resolver, and the day one ships this becomes directly exploitable by whoever
-controls the URL's content.
+network status resolver ships today; both the proxy and the verifier read
+operator-supplied files, so this was not remotely exploitable. It mattered at the
+verifier, where an auditor is routinely handed the export *and* its status lists
+by the party being audited, and it would have become directly exploitable the day
+an HTTPS status resolver shipped.
 
-**The obvious fix was wrong, and it is recorded because the reason is the
-finding.** The two-line version, require `list.Issuer == credential.Issuer`, was
-written first and **broke the product's own primary example.**
-`examples/issuer/spec.json`, the chain the README walkthrough mints, declares one
-`status.issuer` for the whole spec and assigns every hop an index in that one
-list, including hop 2, which `worker` issues but which carries **acme's** list.
-That is deliberate rather than sloppy: one organization publishes one revocation
-list covering its entire delegation subtree, which is also what herd privacy
-wants, since many credentials sharing one list is the point of the 16 KiB floor.
-Per-hop issuer binding forbids it. The test suite caught this, not review.
-
-The mistake worth naming: *who minted this credential* and *who is authoritative
+**The first fix was wrong, which is why the finding is written up rather than
+tabulated.** Requiring a list's signer to equal each hop's own issuer broke the
+product's own primary example, because one organization publishing one revocation
+list for its whole delegation subtree is the intended design and is what the
+herd-privacy floor exists for. *Who minted a credential* and *who is authoritative
 for its revocation* are different questions, and the first fix assumed they were
-the same one.
+one. The test suite caught it, not review.
 
 **How it was closed.** Since neither the list nor the chain could answer the
-second question, the credential now answers it. `status.Reference` gained an
-`Issuer` field naming the principal entitled to revoke, resolved through
-`credential.StatusAuthority`, which is the single source of truth both trust paths
-call so they cannot disagree about which key may sign a revocation.
+second question, the credential now does: a status reference names its revocation
+authority, read through a single accessor both trust paths call so they cannot
+disagree. The field sits inside the issuance signature (R2-01), so it is
+issuer-chosen and not holder-steerable; omitting it narrows to the credential's
+own issuer rather than relaxing the check, which is the opposite polarity to the
+`omitempty` shapes R5 was full of and has its own regression test. The format
+change and its retroactive-tightening consequence are recorded in
+[`CHANGELOG.md`](../CHANGELOG.md).
 
-Three properties make the field safe to add rather than a new lever:
-
-- **It is inside the issuance signature.** R2-01 put the whole credential under
-  the issuer's signature, so a holder can neither add the field nor repoint it
-  without invalidating its own credential. It is issuer-chosen at mint time.
-- **Omission narrows, never widens.** Absent means the credential's own issuer:
-  exactly one acceptable key, the strictest available reading. This matters
-  because an `omitempty` field whose absence relaxes a check is the R5 class all
-  over again, and this one has the opposite polarity. There is a regression test
-  for the absence case specifically, asserting that an undeclared hop refuses a
-  list its issuer did not sign.
-- **It does not move the frozen goldens.** The issuer writes it only where it
-  would differ from the hop's own issuer, so the redundant case stays byte
-  identical and `make fixtures` remains a no-op in git. The format change is
-  recorded in `CHANGELOG.md` regardless, along with the retroactive-tightening
-  consequence for any pre-existing cross-issuer chain.
-
-Five regression tests, covering both trust paths: the proxy refusing a list signed
-by the credential's subject, the verifier refusing the same substitution in an
-export, the legitimate cross-issuer case still passing, the undeclared case
-failing closed, and a genuine revocation still denying (without that last one, a
-proxy that denied everything would satisfy the others). All were confirmed to fail
-with the binding removed.
+Five regression tests cover both trust paths, including a genuine revocation still
+denying, without which a proxy that denied everything would satisfy the rest. All
+were confirmed to fail with the binding removed.
 
 ## Deferred, and why
 
