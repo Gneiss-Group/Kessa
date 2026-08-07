@@ -39,8 +39,10 @@ on:
         type: boolean
         default: true
 
+# Read-only by default, so a job added to this file later starts with no write
+# and has to ask. release-publish.yml is arranged the same way.
 permissions:
-  contents: write  # push the release/* branch (never main)
+  contents: read
 
 concurrency:
   group: release-prepare
@@ -51,6 +53,11 @@ jobs:
     name: verify, version, open release branch
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    permissions:
+      # Scoped to this job rather than the file: the only write this workflow
+      # performs is pushing the release/* branch. It never writes main, which is
+      # why the branch ruleset needs no bypass for it.
+      contents: write
 
     steps:
       - name: Only the repository owner prepares a release, and only from main
