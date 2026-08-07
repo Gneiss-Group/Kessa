@@ -153,6 +153,18 @@ jobs:
           bash scripts/release/version.sh "$NEXT"
           bash scripts/release/changelog.sh /tmp/notes.md
 
+          # Re-check house style now that the changelog EXISTS. The gate above ran
+          # before this file was written, so it could say nothing about it, and a
+          # generated changelog that breaks the rule would otherwise sail past here
+          # and fail on the release PR, where the gate is a required check. That
+          # leaves a release that cannot merge and cannot be fixed without hand
+          # editing generated output. Validate before the side effect, and the side
+          # effect here is the push below, not the generation above.
+          #
+          # notes.sh already normalises subjects lifted from commit messages, which
+          # is the known cause. This is the check that the cause was the only one.
+          bash scripts/ci/prose-check.sh
+
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout -b "$BRANCH"

@@ -56,26 +56,11 @@ go run ./scripts/reusecheck
 echo "OK"
 
 step "no em dashes (house style, enforced not remembered)"
-# House style: em dashes are not used anywhere in this repository. The rule and
-# the replacement marks are in docs/go-standards.md under "Prose style"; this is
-# the enforcement half. It exists because the rule was stated repeatedly and kept
-# being broken: a convention that lives only in someone's memory is a convention
-# that decays. Encoding it here makes it survive a new contributor, a new
-# session, and a tired afternoon.
-#
-# LICENSE and LICENSES/ are third-party legal text and are never edited.
-# The character is built from its code point rather than written literally, so
-# this file does not trip its own check.
-em="$(printf '\342\200\224')"
-emdash="$(git ls-files | grep -vE '^(LICENSE$|LICENSES/)' | xargs grep -lF "$em" 2>/dev/null || true)"
-if [ -n "$emdash" ]; then
-  echo "em dashes (U+2014) found in:"
-  printf '  %s\n' $emdash
-  echo
-  echo "Use a comma, a colon, a semicolon, or parentheses. Never an em dash."
-  exit 1
-fi
-echo "OK"
+# The check itself lives in scripts/ci/prose-check.sh because release.yml calls
+# it a second time, after it generates CHANGELOG.md and before it pushes the
+# release branch. The gate runs at the START of a release, so it cannot speak for
+# a file the release has not written yet. One implementation, two moments.
+bash scripts/ci/prose-check.sh
 
 step "go vet"
 make vet
