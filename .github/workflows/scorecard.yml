@@ -30,10 +30,17 @@ jobs:
     name: Scorecard analysis
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # A job-level permissions block replaces the top-level one outright rather
+    # than adding to it, so every scope Scorecard needs has to be named here.
+    # Each read below is what a specific check queries, not defensive breadth.
     permissions:
       security-events: write  # upload findings to the Code scanning tab
       id-token: write         # OIDC token to publish results to the OpenSSF API
       contents: read
+      actions: read           # query the Actions API, per the action's own documented set
+      issues: read            # ListCommits resolves each commit's linked issues
+      pull-requests: read     # ListCommits resolves each commit's PR and reviews
+      checks: read            # detect which SAST tools run on a PR
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
