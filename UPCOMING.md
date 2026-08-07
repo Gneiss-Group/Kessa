@@ -155,6 +155,23 @@ For what the system does today, and for the limits of a clean verdict, the
   themselves are deferred: their content should come from design partners rather
   than from guessing what a vertical considers consequential.
 
+- **No fuzzing.** Every parser in this repository is fed bytes chosen by someone
+  else: the export and credential JSON the verifier reads, the macaroon and caveat
+  decoding, the policy loader, and the enforcement endpoint's request body. Those
+  are exactly the surfaces a fuzzer is good at and a hand-written table test is
+  not, and R6-04 (an evidence field bounded only by the request cap) is the shape
+  of thing that shows up there. Deferred on cost, not on doubt about the value.
+
+  Worth recording so the size is not re-estimated from scratch: Go has had native
+  fuzzing in the standard library since 1.18, so this needs **no new dependency**
+  and does not touch the verifier's dependency closure, which is the usual reason
+  tooling gets rejected here. The real work is writing targets that assert
+  something meaningful rather than "does not panic" (for the export parser, the
+  property worth fuzzing is that no input produces a clean `PASS` without valid
+  evidence), building a seed corpus from `testdata/`, and deciding where fuzzing
+  runs, since an unbounded fuzz job does not belong in the PR gate. A separate
+  scheduled workflow is the likely shape.
+
 - **Named third-party security audit.** The adversarial review rounds were
   **self-run** AI red-team passes, not third-party; they are registered in the
   [security review record](docs/security-review.md). An independent, named audit
