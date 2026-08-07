@@ -248,6 +248,77 @@ type Result struct {
 	Entry    *audit.Entry   `json:"entry"`
 }
 
+// Evidence size caps (R6-04). PoP.Nonce, PoP.Signature and Approval are
+// caller-supplied byte strings that are recorded VERBATIM into the sealed,
+// signed, hash-chained entry, which is then held in memory for the process's
+// life, fsynced to the WAL, and re-serialized into every export.
+//
+// They were bounded only by maxRequestBody (1 MiB per request), and that bound is
+// per request while the log is cumulative and never trimmed. So an agent could
+// spend ~1 MiB of attacker-chosen bytes per entry, and, because a policy or
+// authority DENIAL is still an entry, an agent attenuated down to no effective
+// authority at all could do it: three denied requests produced a 2.9 MB export.
+// "Holds a key that can do nothing" must not mean "can exhaust the chokepoint".
+//
+// WHICH FIELD IS ACTUALLY THE VECTOR, since the three are not equivalent and
+// treating them as one would overstate what this closes:
+//
+//   - PoP.Nonce is the real one. It is inside popInput, so a holder can sign over
+//     a nonce of ANY size and the proof verifies: every other gate passes and the
+//     bytes land in the entry. Nothing else stops it.
+//   - Approval is the second. On a non-consequential action nothing reads it (see
+//     decide: verifyApproval runs only when the policy says consequential), but
+//     Handle records it regardless, so it is unverified attacker bytes copied
+//     straight into signed, durable state.
+//   - PoP.Signature is NOT a real vector and is capped as hygiene only. A
+//     signature of the wrong length cannot verify, so the possession gate already
+//     refuses it. The cap is here so the size rule is uniform and so a future path
+//     that records a signature before checking it does not inherit a hole, not
+//     because it is load-bearing today.
+//
+// The values are what the shipped algorithms actually need, not round numbers:
+//
+//   - A nonce is 32 random bytes from credential.Challenge. 128 leaves room for a
+//     caller that uses a UUID or a longer random value without being a budget.
+//   - A signature is 64 bytes (Ed25519) or at most 72 (P-256 ASN.1 DER). 512 is
+//     generous for both. RAISE THIS DELIBERATELY if a larger-signature algorithm
+//     is ever added to the signer seam: an ML-DSA signature is 2420 bytes at the
+//     smallest parameter set, so adding it means changing this constant in the
+//     same commit, and the refusal message says so rather than leaving a
+//     mystery.
+//
+// What this does NOT do, stated so the cap is not mistaken for more: it bounds
+// the bytes PER ENTRY, not the number of entries. The log is unbounded in count
+// and has no rotation, so sustained traffic still grows it without limit; see
+// UPCOMING.md.
+const (
+	maxPoPNonceBytes  = 128
+	maxSignatureBytes = 512
+)
+
+// checkEvidenceSize refuses caller-supplied evidence that is larger than any
+// legitimate value can be. It runs FIRST in Handle, ahead of chain verification
+// and therefore ahead of every side effect (the seal, the durable write, the
+// append), which is the standing rule: a gate that guards an irreversible step
+// belongs in front of it, not after it.
+//
+// It reports a plain malformed-request error rather than an UnattributableError,
+// matching the empty-chain check it sits beside: this is not a failed attempt to
+// attribute a request, it is a request that is not well formed enough to consider,
+// and it produces no entry and no attribution telemetry.
+func checkEvidenceSize(req Request) error {
+	if n := len(req.PoP.Nonce); n > maxPoPNonceBytes {
+		return fmt.Errorf("proxy: proof-of-possession nonce is %d bytes, limit %d (a challenge nonce is 32; see maxPoPNonceBytes)", n, maxPoPNonceBytes)
+	}
+	if n := len(req.PoP.Signature); n > maxSignatureBytes {
+		return fmt.Errorf("proxy: proof-of-possession signature is %d bytes, limit %d (Ed25519 is 64, P-256 at most 72; raise maxSignatureBytes when adding a larger-signature algorithm)", n, maxSignatureBytes)
+	}
+	if n := len(req.Approval); n > maxSignatureBytes {
+		return fmt.Errorf("proxy: approval signature is %d bytes, limit %d (Ed25519 is 64, P-256 at most 72; raise maxSignatureBytes when adding a larger-signature algorithm)", n, maxSignatureBytes)
+	}
+	return nil
+}
+
 // Handle runs the full enforcement pipeline for one request and appends exactly
 // one audit entry describing the outcome (allow or deny). It returns an error
 // only when the request is too malformed to attribute, in which case nothing is
@@ -256,6 +327,10 @@ type Result struct {
 func (p *Proxy) Handle(req Request) (*Result, error) {
 	if req.Chain == nil || len(req.Chain.Links) == 0 {
 		return nil, errors.New("proxy: request has no delegation chain")
+	}
+	// Before anything is verified, sealed, persisted or appended (R6-04).
+	if err := checkEvidenceSize(req); err != nil {
+		return nil, err
 	}
 
 	// Gate 0 (pre-log): the chain must verify against public DID docs. This is
