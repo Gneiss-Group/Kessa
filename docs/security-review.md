@@ -36,6 +36,7 @@ rounds.
 | **R4** | 2026-08-01 | The whole on-device issuer surface: enrollment, Secure Enclave backend, signing daemon, agent wiring (`feat/issuer-enrollment`, merged 2026-08-01) | No critical or high. No false-PASS path in the verifier. Four findings plus two scope observations, all closed |
 | *(spec alignment)* | 2026-08-03 | Not a review round: see below. Conformance work bringing the MCP listener to revision 2026-07-28 | Surfaced one security-relevant defect (SA-01) as a by-product |
 | **R5** | 2026-08-03 | The ingress surface of both listeners, reviewed because it had just changed | Six findings. Five closed (R5-01 to R5-05, no critical or high). **R5-06 was High** and is closed *as to the attack* (possession became an attribution gate, so the harm is unreachable) while the property it rests on is unchanged by design. No false-ALLOW path in any of them |
+| **R6** | 2026-08-06 | Pre-publication pass over the whole product surface: end-to-end workflow logic, availability, the cryptographic primitives, and general application-security posture. Excluded the surrounding tooling (CI, licensing, REUSE) | Six findings. **R6-01 is High and OPEN**: revocation lists are not bound to the issuer whose credentials they revoke, and the first fix attempted was wrong (see below). Three closed (R6-02, R6-04, R6-05), one deferred (R6-03), one informational (R6-06). No false-ALLOW path found in the verifier's re-derivation logic other than the one R6-01 opens |
 
 **R1 and R2 predate this repository's first commit** (2026-07-23). Their fixes are
 contained in the initial publication, so no released or published version of Kessa
@@ -304,10 +305,123 @@ than an answer. See [`UPCOMING.md`](../UPCOMING.md).
 R5-01 and R5-05 also applied to the generic HTTP listener, which had not changed.
 They were fixed there too: a defence applied to one of two doors is not a defence.
 
+### R6: pre-publication pass over the product (2026-08-06)
+
+Scoped to the product itself rather than to a surface that had just changed, on
+the theory that the last review before a repository goes public should not be a
+narrow one. Four questions were put to it: where the end-to-end workflow breaks,
+whether the listeners survive unsophisticated abuse, whether the cryptographic
+primitives hold, and how the codebase reads against ordinary application-security
+expectations.
+
+Every finding below was reproduced by running code against the shipped fixtures,
+not inferred from reading. The three availability findings are the round's
+recurring theme and they are all in the same place: **the transport layer, which
+no previous round had scoped.** R1 through R5 attacked authority, evidence and
+ingress semantics; nobody had asked what one TCP connection could do.
+
+| ID | Sev | Area | Status |
+|---|---|---|---|
+| R6-01 | **High** | Revocation lists are verified against a key the list names for itself, so nothing binds a list to the issuer whose credentials it revokes | **OPEN.** See below: the obvious fix is wrong |
+| R6-02 | Medium | No timeouts on any HTTP listener, so a half-open request parks a goroutine and a connection indefinitely | Closed |
+| R6-03 | Medium | `GET /export` is an unauthenticated amplifier that holds the enforcement lock | Deferred; see [`UPCOMING.md`](../UPCOMING.md) |
+| R6-04 | Medium | Caller-supplied proof-of-possession and approval bytes are unbounded and are recorded verbatim into the signed log, on denied requests too | Closed |
+| R6-05 | Low | The documented expiry limitation understated itself: the timestamp is supplied by the party the caveat constrains, not merely by an untrusted clock | Closed (documentation) |
+| R6-06 | Info | DID verification relationships (`authentication`, `assertionMethod`) are not enforced; the first verification method is used for every purpose | Open, informational |
+
+**R6-02 and R6-04 share a shape worth naming**: both are bounds that were never
+set, on resources an attacker chooses the size of. R6-02 is connections and
+goroutines, R6-04 is bytes in the log. Neither is an authority bug and neither can
+produce a false ALLOW, which is presumably why five rounds aimed at authority
+walked past them. A round that only asks "can someone get an authorization they
+should not have" will not find either.
+
+R6-04 also has a detail that generalises: a **denied** request still appends an
+entry, so an agent attenuated down to no effective authority could still write
+~1 MiB of chosen bytes into permanently-retained, fsynced state per request. The
+gate that makes the log trustworthy (possession, R5-06) is not the gate that makes
+it bounded. "Holds a key that can do nothing" has to mean it.
+
+**R6-05 is a documentation finding and is recorded as one deliberately.** The
+README described the expiry limitation as "the proxy-chosen action timestamp ...
+an honest clock-trust assumption". The timestamp is supplied by the caller, in the
+request body, so an `expiry` caveat is satisfied by whatever value the constrained
+agent chooses to send. Nothing was newly broken; what was wrong was the
+description, and it was wrong in the flattering direction. That is the same failure
+as the round-2 correction to `internal/credential`'s package doc, where a stated
+mechanism did not match the code, and it is worth a finding number for the same
+reason: a limitation that understates itself is worse than the limitation.
+
+### R6-01: a revocation list is not bound to the issuer it revokes for (High, OPEN)
+
+`StatusList.Verify` takes the public key of `list.Issuer`, the DID **the list
+names for itself**. Both trust paths, the proxy's live sweep and the independent
+verifier's step 6, resolve the key that way. So the check confirms that whoever
+the list claims signed it did sign it, and establishes nothing about that party's
+authority to revoke the credential in question.
+
+Demonstrated end to end on the demo chain: a status list signed by
+`did:web:localhost:agents:helper`, **the agent whose own credential the sweep is
+checking**, is accepted in place of the org's list. The revoked credential is
+treated as live, the action is ALLOWED, and `kessa verify` re-derives the
+resulting export as a clean, evidence-backed PASS. Any principal resolvable under
+the trust root can do this for any credential.
+
+This is R5-06's shape, not R5's. The R5 class was *a check that does not fire*.
+Here the check fires every time and verifies correctly; it simply answers a
+question nobody asked. The general rule the two share, and the one worth carrying
+forward: **a self-asserting artifact cannot be allowed to name the key it is
+checked against.**
+
+**Reachability, stated so the severity is not read as worse than it is.** No
+network status resolver ships today: both the proxy and the verifier read
+operator-supplied files, so this is not remotely exploitable now. It bites in two
+places. The verifier is the live one, because an auditor is routinely handed the
+export *and* its status lists by the party being audited, and status-list
+provenance is the one input class the `KnownCaveats` list does not mention. The
+second is prospective: the package doc already contemplates an HTTPS status
+resolver, and the day one ships this becomes directly exploitable by whoever
+controls the URL's content.
+
+**Why it is still open, and why the obvious fix is wrong.** The two-line fix,
+require `list.Issuer == credential.Issuer`, was written, and it **breaks the
+product's own primary example.** `examples/issuer/spec.json`, the chain the README
+walkthrough mints, declares one `status.issuer` for the whole spec and assigns
+every hop an index in that one list, including hop 2, which `worker` issues but
+which carries **acme's** list. That is deliberate: one organization publishes one
+revocation list covering its entire delegation subtree, which is also what herd
+privacy wants (many credentials sharing one list is the point of the 16 KiB
+floor). Per-hop issuer binding forbids it.
+
+So the finding stands and the fix does not. The correct binding needs the
+credential to **name its revocation authority in issuer-signed material**, because
+there is no existing signed field that carries it: `StatusRef` holds only a URL
+and an index, `Macaroon.Location` is informational, and `VCWrapper` is explicitly
+not load-bearing. The shape that fits is a `status.Reference.Issuer` field,
+`omitempty`, absent meaning the credential's own issuer, covered by the
+whole-credential issuance signature (R2-01) so a holder cannot steer it. Absence
+then defaults to the strict reading rather than a permissive one, which keeps it
+fail-closed, and because the field is omitted when unused it does not by itself
+move the v2 golden.
+
+That is a change to a signed format, not a constant, and it lands with the
+fixture, changelog and version discipline that implies. It is recorded here as
+**open** rather than quietly rescoped, because the gap between "reviewed and
+closed" and "reviewed, understood, and scheduled" is exactly the kind of thing
+this register exists to keep honest.
+
 ## Deferred, and why
 
-These are recorded as open rather than closed. All but the first are design
+These are recorded as open rather than closed. All but the first two are design
 decisions or scale-dependent work rather than unfixed defects:
+
+- **R6-01: revocation lists are not bound to the issuer they revoke for.** The
+  only unfixed defect in this list, and the only High currently open. The fix is
+  a signed-format change rather than a code constant; the shape is settled and
+  the reasoning is above.
+
+- **R6-03: `GET /export` amplification**, and with it the absence of any
+  connection-count cap on the listeners. See [`UPCOMING.md`](../UPCOMING.md).
 
 - **Caller authentication on the enforcement endpoint.** R5-06 is closed: an
   unattributable request can no longer cause a write, but the endpoint still does
