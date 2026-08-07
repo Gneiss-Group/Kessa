@@ -74,7 +74,22 @@ jobs:
           # else. It is not a source branch, is never merged, and its history is
           # the signature record.
           branch: cla-signatures
-          allowlist: dependabot[bot]
+          # Who does not need to sign, and why each entry is here rather than a
+          # convenience. The CLA exists so that contributions from OTHERS can be
+          # offered under the separate commercial licence; it is a grant the
+          # project needs from someone who would not otherwise have given it.
+          #
+          # dependabot[bot] authors no copyrightable contribution: it bumps
+          # pinned versions, and there is no human whose rights a signature
+          # would be recording.
+          #
+          # raphaelGneiss is the copyright holder. Gneiss Group already holds
+          # the rights the CLA asks a contributor to grant, so a self-signature
+          # would record nothing that is not already true, while an unsignable
+          # gate on every maintainer pull request would make the check
+          # meaningless: a gate that always blocks teaches people to route
+          # around it. Remove this entry if ownership of the project ever moves.
+          allowlist: dependabot[bot],raphaelGneiss
           # The phrase a contributor comments to sign. Fixed and explicit on
           # purpose: signing has to be a deliberate act, distinguishable from any
           # other comment they might leave on the pull request.
