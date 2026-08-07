@@ -43,6 +43,11 @@ jobs:
       # the Code scanning tab; everything else stays read-only.
       security-events: write
       contents: read
+      # actions: read lets the analyze step read its own workflow run. Without
+      # it the scan itself succeeds and uploads, then the run is marked a
+      # configuration error on the status report, so the job goes red on a
+      # missing scope rather than on a finding.
+      actions: read
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
