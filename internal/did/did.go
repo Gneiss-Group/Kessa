@@ -39,6 +39,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Gneiss-Group/Kessa/internal/webhost"
 	"github.com/Gneiss-Group/Kessa/pkg/types"
 )
 
@@ -377,20 +378,19 @@ func didWebToURL(did types.DID, scheme string) (string, error) {
 	if scheme == "" {
 		scheme = "https"
 	}
-	var b strings.Builder
-	b.WriteString(scheme)
-	b.WriteString("://")
-	b.WriteString(host)
+	// Built with net/url rather than concatenated. parseDIDWeb has already
+	// rejected a host that could carry structure, and this is the second half of
+	// the same property: url.URL escapes the path, so a segment cannot become a
+	// query, a fragment, or another path component. Concatenation is what let
+	// "?" and "#" swallow /.well-known/did.json and redirect the fetch to "/".
+	var path string
 	if len(segs) == 0 {
-		b.WriteString("/.well-known/did.json")
+		path = "/.well-known/did.json"
 	} else {
-		for _, s := range segs {
-			b.WriteByte('/')
-			b.WriteString(s)
-		}
-		b.WriteString("/did.json")
+		path = "/" + strings.Join(segs, "/") + "/did.json"
 	}
-	return b.String(), nil
+	u := url.URL{Scheme: scheme, Host: host, Path: path}
+	return u.String(), nil
 }
 
 // parseDIDWeb splits a did:web identifier into its host (with any percent-encoded
@@ -412,11 +412,13 @@ func parseDIDWeb(did types.DID) (host string, segs []string, err error) {
 	if err != nil {
 		return "", nil, fmt.Errorf("did: decode host in %q: %w", did, err)
 	}
-	if host == "" {
-		return "", nil, fmt.Errorf("did: %q has empty host", did)
-	}
-	if host == "." || host == ".." || strings.ContainsAny(host, `/\`) {
-		return "", nil, fmt.Errorf("did: %q has an unsafe host", did)
+	// An allowlist grammar, not a check for the delimiters we happen to know
+	// about. This previously rejected "/", "\", "." and ".." and accepted the
+	// rest, which let "@", "?" and "#" through: a host could then carry URL
+	// structure, so the DID did not determine the URL fetched. See
+	// internal/webhost for the specific inputs that exploited it.
+	if err := webhost.Validate(host); err != nil {
+		return "", nil, fmt.Errorf("did: %q has an unsafe host: %w", did, err)
 	}
 	for _, f := range fields[1:] {
 		if f == "" {

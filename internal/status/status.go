@@ -41,6 +41,7 @@ import (
 	"strings"
 
 	"github.com/Gneiss-Group/Kessa/internal/signer"
+	"github.com/Gneiss-Group/Kessa/internal/webhost"
 	"github.com/Gneiss-Group/Kessa/pkg/types"
 )
 
@@ -288,10 +289,33 @@ func PublishPath(root, listURL string) (string, error) {
 	if u.Host == "" {
 		return "", fmt.Errorf("status: list URL %q has no host", listURL)
 	}
-	// The host becomes a path segment beneath root, so reject a traversal there
-	// too, not just in the path (F5). Mirrors did.parseDIDWeb's host check.
-	if u.Host == "." || u.Host == ".." || strings.ContainsAny(u.Host, `/\`) {
-		return "", fmt.Errorf("status: list URL %q has an unsafe host %q", listURL, u.Host)
+	// Userinfo, query and fragment are rejected rather than ignored, and the
+	// difference matters. url.Parse lifts them out of Host and Path, so the host
+	// grammar below sees a clean value and this function happily maps the URL to
+	// a directory that does not correspond to what the URL says: with userinfo,
+	// "https://acme.example@169.254.169.254/s.json" publishes under
+	// 169.254.169.254 while reading as acme.example. A published status list is a
+	// static file at a plain URL. Anything that makes the URL mean something other
+	// than it appears to is not a form we should silently normalise, especially
+	// since this URL comes from a credential and any future fetcher would follow
+	// the part that was dropped here.
+	if u.User != nil {
+		return "", fmt.Errorf("status: list URL %q must not carry userinfo", listURL)
+	}
+	if u.RawQuery != "" || u.ForceQuery {
+		return "", fmt.Errorf("status: list URL %q must not carry a query string", listURL)
+	}
+	if u.Fragment != "" {
+		return "", fmt.Errorf("status: list URL %q must not carry a fragment", listURL)
+	}
+	// The host becomes a path segment beneath root, so it has to be safe as a
+	// directory name, not merely free of traversal (F5). This shares the grammar
+	// with did.parseDIDWeb rather than mirroring it: the two previously carried
+	// separate copies of the same denylist, and when that denylist turned out to
+	// let "@", "?" and "#" through, it was wrong in both places at once. One
+	// allowlist, one place to fix.
+	if err := webhost.Validate(u.Host); err != nil {
+		return "", fmt.Errorf("status: list URL %q has an unsafe host %q: %w", listURL, u.Host, err)
 	}
 	clean := strings.Trim(u.Path, "/")
 	if clean == "" {
