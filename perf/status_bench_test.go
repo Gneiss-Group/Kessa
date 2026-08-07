@@ -65,11 +65,13 @@ func BenchmarkStatusReRead_Full(b *testing.B) {
 				if err != nil {
 					b.Fatalf("resolve: %v", err)
 				}
-				key, err := did.ResolveKey(dids, list.Issuer)
+				// Mirror the proxy: the key comes from the authority the credential
+				// names, not from the DID the list names for itself (R6-01).
+				key, err := did.ResolveKey(dids, didAcme)
 				if err != nil {
-					b.Fatalf("resolve issuer key: %v", err)
+					b.Fatalf("resolve authority key: %v", err)
 				}
-				if err := list.Verify(key); err != nil {
+				if err := list.Verify(didAcme, key); err != nil {
 					b.Fatalf("verify: %v", err)
 				}
 				if _, err := list.Lookup(42); err != nil {
@@ -119,7 +121,7 @@ func BenchmarkStatusReRead_VerifyOnly(b *testing.B) {
 		b.Run(sz.name, func(b *testing.B) {
 			b.ReportAllocs()
 			for i := 0; i < b.N; i++ {
-				if err := list.Verify(key); err != nil {
+				if err := list.Verify(didAcme, key); err != nil {
 					b.Fatalf("verify: %v", err)
 				}
 			}

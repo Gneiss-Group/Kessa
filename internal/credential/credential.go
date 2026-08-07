@@ -219,6 +219,29 @@ func (c *Credential) HolderContext() macaroon.Context {
 	return macaroon.Context{HolderField: jwkValue(c.HolderKey)}
 }
 
+// StatusAuthority returns the principal entitled to publish revocations for this
+// credential: the status reference's named issuer, or, when it names none, the
+// credential's own issuer (R6-01).
+//
+// This is the single source of truth for that default, and it must stay that way
+// for the same reason types.Action.Context is: the enforcement proxy resolves the
+// authority to decide, and the independent verifier resolves it to re-derive that
+// decision. If the two ever disagreed about which key may sign a revocation, one
+// of them would accept a list the other would refuse, which is precisely the
+// split this check exists to prevent.
+//
+// Defaulting to c.Issuer is the strict direction. A credential that names no
+// authority accepts revocations only from the party that minted it, so an omitted
+// field narrows the accepted key set to one rather than leaving it open. Both the
+// field and c.Issuer are inside the issuance signature (R2-01), so neither is
+// something a holder can edit to point the check at a key it controls.
+func (c *Credential) StatusAuthority() types.DID {
+	if c.StatusRef.Issuer != "" {
+		return c.StatusRef.Issuer
+	}
+	return c.Issuer
+}
+
 // ---- proof of possession --------------------------------------------------
 
 // PoP is a holder's proof that it controls the private key bound in a credential.

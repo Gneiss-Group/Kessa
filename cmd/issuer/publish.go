@@ -216,6 +216,20 @@ func publish(spec *Spec, ks Keystore, root, chainOut string) (*Result, error) {
 		var ref status.Reference
 		if hop.StatusIndex != nil {
 			ref = status.Reference{ListURL: spec.Status.URL, Index: *hop.StatusIndex}
+			// One spec publishes ONE list for the whole chain, so a hop issued by an
+			// agent can legitimately point at its org's list. Where that happens, the
+			// credential must SAY so, because verification will only accept a list
+			// signed by the authority the credential names (R6-01), and the default
+			// when it names none is the hop's own issuer.
+			//
+			// Written only when it actually differs. Stamping it unconditionally
+			// would put a redundant field inside signed, content-addressed material
+			// on every credential, and the omitted form already means exactly this
+			// value. Omission narrows rather than widens, so leaving it off where it
+			// agrees costs nothing.
+			if spec.Status.Issuer != hop.Issuer {
+				ref.Issuer = spec.Status.Issuer
+			}
 		}
 		cred, err := credential.New(credential.Options{
 			Subject:   hop.Subject,

@@ -748,11 +748,16 @@ func (p *Proxy) anyHopRevoked(ch *chain.Chain) (revoked bool, where string, chec
 		if err != nil {
 			return false, "", checked, err
 		}
-		key, err := did.ResolveKey(p.dids, list.Issuer)
+		// The key comes from the authority the CREDENTIAL names, not from the DID
+		// the list names for itself (R6-01). Reading it off the list let the list
+		// nominate its own verifier, so the sweep confirmed a self-consistent
+		// artifact instead of an authority's revocation decision.
+		authority := c.StatusAuthority()
+		key, err := did.ResolveKey(p.dids, authority)
 		if err != nil {
-			return false, "", checked, fmt.Errorf("resolve status issuer %q: %w", list.Issuer, err)
+			return false, "", checked, fmt.Errorf("resolve status authority %q: %w", authority, err)
 		}
-		if err := list.Verify(key); err != nil {
+		if err := list.Verify(authority, key); err != nil {
 			return false, "", checked, err
 		}
 		isRevoked, err := list.Lookup(c.StatusRef.Index)

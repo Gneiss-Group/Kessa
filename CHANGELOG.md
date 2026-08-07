@@ -49,6 +49,26 @@ clean version refusal. That is only acceptable because no such export exists
 outside regenerable goldens. Once a version ships, this option is gone and a
 format change means a new version string.
 
+**Round 6 added one field to signed material** (R6-01): a credential's status
+reference now carries an optional `issuer`, naming the principal entitled to
+publish revocations for that credential. It is covered by the whole-credential
+issuance signature, so a holder can neither add it nor repoint it. Omitted means
+the credential's own issuer, which is the strictest reading, so a credential that
+says nothing accepts revocations from exactly one key rather than from any key.
+
+Because it is omitted whenever it would restate the issuer, **the frozen goldens
+did not move**: `make fixtures` is still a no-op in git, and this entry is
+recorded because the format changed rather than because the guard demanded it.
+
+It is nonetheless a **retroactive tightening**, stated plainly for the same reason
+the round-2 trade is. An export minted before this change, whose chain routed a
+hop through an issuer other than its own (one organization publishing one list for
+its whole delegation subtree, which the shipped issuer spec does), now fails
+verification: the credential names no authority, so the default applies and the
+list's signer no longer matches. Re-mint such a chain with the field set. This is
+acceptable only because nothing has been released; once a version ships, a change
+of this kind means a new version string rather than a quiet tightening.
+
 The authoritative statement of the current format is
 [`internal/export`](internal/export/export.go); the findings behind the round-2
 changes are in the [security review record](docs/security-review.md).

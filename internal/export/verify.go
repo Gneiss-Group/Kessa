@@ -472,18 +472,24 @@ func hopRevoked(c *credential.Credential, in Inputs) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	issuerKey, err := did.ResolveKey(in.DIDs, list.Issuer)
+	// The verifier accepts status lists from whoever handed it the export, so a
+	// list that nominated its own verifier let any resolvable principal, the
+	// credential's own subject included, publish an all-clear list and turn a
+	// revoked credential into a clean PASS (R6-01). The authority comes from the
+	// credential instead, which is inside the issuance signature.
+	authority := c.StatusAuthority()
+	authorityKey, err := did.ResolveKey(in.DIDs, authority)
 	if err != nil {
-		return false, fmt.Errorf("resolve status list issuer %q: %w", list.Issuer, err)
+		return false, fmt.Errorf("resolve status authority %q: %w", authority, err)
 	}
-	if err := verifyList(list, issuerKey); err != nil {
+	if err := verifyList(list, authority, authorityKey); err != nil {
 		return false, err
 	}
 	return list.Lookup(c.StatusRef.Index)
 }
 
-func verifyList(l *status.StatusList, pub crypto.PublicKey) error {
-	if err := l.Verify(pub); err != nil {
+func verifyList(l *status.StatusList, authority types.DID, pub crypto.PublicKey) error {
+	if err := l.Verify(authority, pub); err != nil {
 		return fmt.Errorf("status list does not verify: %w", err)
 	}
 	return nil
