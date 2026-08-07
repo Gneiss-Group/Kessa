@@ -290,3 +290,37 @@ func TestPublishPath_RejectsTraversal(t *testing.T) {
 		t.Fatalf("PublishPath(%q) = %q, want it beneath the host dir", good, p)
 	}
 }
+
+// TestPublishPath_RejectsStructuredHost covers the gap the traversal test above
+// did not: the host check rejected "/", "\", "." and ".." and accepted everything
+// else, so a host could still carry URL structure and become a strange directory
+// name. The same denylist in did.parseDIDWeb was the request-forgery finding, and
+// the two now share one allowlist grammar (internal/webhost) so a hole cannot be
+// closed in one and left open in the other.
+//
+// This is a filesystem sink rather than a network one, so the impact differs, but
+// the input is equally attacker-supplied: the URL comes from a credential's status
+// reference.
+func TestPublishPath_RejectsStructuredHost(t *testing.T) {
+	root := "/srv/public"
+	for _, u := range []string{
+		"https://acme.example@169.254.169.254/status.json",
+		"https://acme.example%20space/status.json",
+		"https://-acme.example/status.json",
+		"https://acme..example/status.json",
+		"https://acme.example:0/status.json",
+		"https://acme.example:99999/status.json",
+		"https://acme.example/status.json?x=y",
+		"https://acme.example/status.json#frag",
+	} {
+		if p, err := PublishPath(root, u); err == nil {
+			t.Errorf("PublishPath(%q) should be rejected, got %q", u, p)
+		}
+	}
+
+	// A port is legitimate and must survive: the demo publishes on localhost.
+	withPort := "https://localhost:8443/orgs/acme/status.json"
+	if _, err := PublishPath(root, withPort); err != nil {
+		t.Errorf("PublishPath(%q) should succeed: %v", withPort, err)
+	}
+}

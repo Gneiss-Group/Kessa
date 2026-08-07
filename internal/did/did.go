@@ -39,6 +39,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Gneiss-Group/Kessa/internal/webhost"
 	"github.com/Gneiss-Group/Kessa/pkg/types"
 )
 
@@ -348,7 +349,13 @@ func (r HTTPResolver) Resolve(did types.DID) (*Document, error) {
 	if client == nil {
 		client = &http.Client{Timeout: 10 * time.Second}
 	}
-	resp, err := client.Get(u)
+	// Redirects are constrained, and the constraint is applied to a COPY so a
+	// caller-supplied client is still governed by it without being mutated.
+	// Overriding a CheckRedirect the caller may have set is deliberate: this one
+	// is a trust-model rule, not a preference.
+	c := *client
+	c.CheckRedirect = checkRedirect(did)
+	resp, err := c.Get(u)
 	if err != nil {
 		return nil, fmt.Errorf("did: fetch %q: %w", u, err)
 	}
@@ -367,6 +374,65 @@ func (r HTTPResolver) Resolve(did types.DID) (*Document, error) {
 	return &doc, nil
 }
 
+// maxRedirects caps a redirect chain. Go's default is 10; a did:web document is
+// a static file at a fixed path, so a chain longer than a canonicalisation hop
+// or two is a sign of something other than document serving.
+const maxRedirects = 3
+
+// checkRedirect refuses to follow a redirect off the host the DID names, or down
+// from https to http.
+//
+// A did:web identifier IS a host plus a path: that binding is the entire identity
+// mechanism, and the TLS certificate of whoever answers is the trust anchor. A
+// cross-host redirect therefore moves the trust anchor to a server the DID never
+// mentioned. The document check in Resolve does not catch this, because it
+// validates the CONTENT (doc.ID must match) and says nothing about who served it.
+//
+// This is also what stops a redirect from being a way around any future
+// destination policy: a permitted host that answers with a 302 to an internal
+// address cannot launder the request through this. Refusing here is correct
+// regardless of what that policy eventually is, which is why it does not wait for
+// it.
+//
+// Same-host redirects stay allowed, since trailing-slash and path
+// canonicalisation are ordinary web-server behaviour and carry no such move.
+func checkRedirect(did types.DID) func(*http.Request, []*http.Request) error {
+	return func(req *http.Request, via []*http.Request) error {
+		if len(via) >= maxRedirects {
+			return fmt.Errorf("did: %q redirected more than %d times", did, maxRedirects)
+		}
+		origin := via[0].URL
+		if !sameHost(origin, req.URL) {
+			return fmt.Errorf("did: %q is served by %s but redirected to %s; a did:web document must come from the host the DID names",
+				did, origin.Host, req.URL.Host)
+		}
+		// A same-host downgrade still strips the trust anchor this relies on.
+		if origin.Scheme == "https" && req.URL.Scheme != "https" {
+			return fmt.Errorf("did: %q redirected from https to %s", did, req.URL.Scheme)
+		}
+		return nil
+	}
+}
+
+// sameHost compares two URL hosts, treating an explicit default port as equal to
+// an absent one so a server that canonicalises to ":443" is not mistaken for a
+// different host.
+func sameHost(a, b *url.URL) bool {
+	norm := func(u *url.URL) string {
+		host := strings.ToLower(u.Hostname())
+		port := u.Port()
+		switch {
+		case port == "",
+			u.Scheme == "https" && port == "443",
+			u.Scheme == "http" && port == "80":
+			return host
+		default:
+			return host + ":" + port
+		}
+	}
+	return norm(a) == norm(b)
+}
+
 // didWebToURL converts a did:web identifier to its HTTPS document URL per the
 // did:web method spec.
 func didWebToURL(did types.DID, scheme string) (string, error) {
@@ -377,20 +443,19 @@ func didWebToURL(did types.DID, scheme string) (string, error) {
 	if scheme == "" {
 		scheme = "https"
 	}
-	var b strings.Builder
-	b.WriteString(scheme)
-	b.WriteString("://")
-	b.WriteString(host)
+	// Built with net/url rather than concatenated. parseDIDWeb has already
+	// rejected a host that could carry structure, and this is the second half of
+	// the same property: url.URL escapes the path, so a segment cannot become a
+	// query, a fragment, or another path component. Concatenation is what let
+	// "?" and "#" swallow /.well-known/did.json and redirect the fetch to "/".
+	var path string
 	if len(segs) == 0 {
-		b.WriteString("/.well-known/did.json")
+		path = "/.well-known/did.json"
 	} else {
-		for _, s := range segs {
-			b.WriteByte('/')
-			b.WriteString(s)
-		}
-		b.WriteString("/did.json")
+		path = "/" + strings.Join(segs, "/") + "/did.json"
 	}
-	return b.String(), nil
+	u := url.URL{Scheme: scheme, Host: host, Path: path}
+	return u.String(), nil
 }
 
 // parseDIDWeb splits a did:web identifier into its host (with any percent-encoded
@@ -412,11 +477,13 @@ func parseDIDWeb(did types.DID) (host string, segs []string, err error) {
 	if err != nil {
 		return "", nil, fmt.Errorf("did: decode host in %q: %w", did, err)
 	}
-	if host == "" {
-		return "", nil, fmt.Errorf("did: %q has empty host", did)
-	}
-	if host == "." || host == ".." || strings.ContainsAny(host, `/\`) {
-		return "", nil, fmt.Errorf("did: %q has an unsafe host", did)
+	// An allowlist grammar, not a check for the delimiters we happen to know
+	// about. This previously rejected "/", "\", "." and ".." and accepted the
+	// rest, which let "@", "?" and "#" through: a host could then carry URL
+	// structure, so the DID did not determine the URL fetched. See
+	// internal/webhost for the specific inputs that exploited it.
+	if err := webhost.Validate(host); err != nil {
+		return "", nil, fmt.Errorf("did: %q has an unsafe host: %w", did, err)
 	}
 	for _, f := range fields[1:] {
 		if f == "" {
