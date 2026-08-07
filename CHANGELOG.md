@@ -74,3 +74,134 @@ The authoritative statement of the current format is
 changes are in the [security review record](docs/security-review.md).
 
 <!-- releases below; newest first -->
+
+## v0.0.1: 2026-08-07
+
+_First tagged release._
+
+### Breaking changes
+
+- make possession an attribution gate, closing R5-06
+- bring the MCP listener to revision 2026-07-28
+- algorithm-agile verification + scoped P-256 employee key
+- serve dual, independently configurable listeners
+- Signer.Public() and did.ResolveKey now return crypto.PublicKey;
+- the proxy serve --addr flag is renamed to --http-addr. Update any deployment that passed --addr (the Docker CMD and repo scripts are updated in this change).
+
+### Features
+
+- publish the CLA and wire up the signing flow
+- grant the Section 7 additional permission
+- designate plug points by in-code marker, not by list
+- bring the MCP listener to revision 2026-07-28
+- issuer image + containerized end-to-end demo
+- enforce hardware-backed approval keys + load enrolled keys (R4-02, SO-2)
+- B4 on-device enrollment + employee->credential mapping
+- on-device signing daemon + agent socket wiring
+- macOS Secure Enclave backend for the employee/device key
+- algorithm-agile verification + scoped P-256 employee key
+- durable log-before-act audit WAL
+- serve dual, independently configurable listeners
+- add MCP-native listener adapter
+
+### Fixes
+
+- check house style AFTER generating the changelog, before pushing (#37)
+- apply house style to text lifted from commit messages (#36)
+- write signatures to their own branch, and open the project
+- keep the guardrail test's fixture headers out of its own licensing
+- correct what the demo and its GIF actually show
+- run DID-uniqueness gate before side effects (R4-03)
+
+### Security
+
+- bind a revocation list to the party entitled to revoke (R6-01)
+- bound caller-supplied evidence before it reaches the log (R6-04)
+- give every listener read, write and idle timeouts (R6-02)
+- restore R2-04 concurrency coverage; qualify the R5-06 closure
+- make possession an attribution gate, closing R5-06
+- name R5-06, an export is a bearer artifact (High, open)
+- close the ingress checks that do not fire (R5-01..R5-05)
+
+### Documentation
+
+- trim the R6 entries to register depth
+- state that a status list must come from the credential's named authority
+- record the export amplifier and the unbounded log as deferred (R6-03)
+- the expiry timestamp is caller-supplied, not proxy-chosen (R6-05)
+- invite the commercial licence conversation rather than advertise a product
+- publish the corporate terms, not a form nobody can sign
+- state every departure from the Apache agreements, and make the corporate one executable
+- drop "complete", scope "what matters", link the finding IDs, reorder
+- drop a method claim that implied the other checks were weaker
+- surface the standards mapping as a summary table
+- lead with what Kessa does, and add the row that was missing
+- read the AI Act articles, and drop Article 15 as an overclaim
+- verify DORA Article 9 against the Official Journal text
+- verify NIST 800-207 against the publication, and date every claim
+- licensing statement, standards mapping, navigation, and a next step
+- stop publishing the substance of legal advice in comments
+- adopt counsel's wording for the permission notice
+- drop the briefing cross-reference from the notice-check comments
+- say where a file's licence actually lives, and stop calling internal seams pluggable
+- record the export format history, and the caller-auth/root-of-trust coupling
+- state the AI-assisted development posture
+- coverage checks exclude explicitly, and mutation-check concurrency tests
+- move the house style into go-standards, out of the front page
+- state R5-06 in distribution-model terms, and bound its reach
+- state the audit-write property separately from "no false-ALLOW"
+- register SA-01 and R5, and mark how each was found
+- drop citations to the private design note, keep the reasoning
+- prune interim comments that outlived what they pointed at
+- publish severity ratings for rounds 1 and 2
+- ground the review register in the retained working notes
+- add the security review record and fix the reporting-channel gap
+- stop stating a fixed count of security review rounds
+- separate the plugin interface grant from the combination question
+- fix stale review-doc pointers, surface the signing docs, state prerequisites
+- reclassify the macOS app-bundle packaging residual as §2a (open), not §2b
+- persistence mechanism validated on hardware (free team)
+- correct the persistence-signing requirement (empirical)
+- add signer.md, code-grounded Signer seam behavior reference
+
+### Other changes
+
+- scope the release token, document the CLA scopes, and fix a release guard that could never pass (#35)
+- exempt the copyright holder from signing his own CLA (#34)
+- grant CodeQL and Scorecard the token scopes they actually query (#30)
+- drop the transitional tier lists from the licence check
+- check REUSE conformance in Go, and stop REUSE.toml contradicting a header
+- drop the same entry from .dockerignore
+- drop the ignore entry for a file that no longer lives here
+- name the dash characters by code point in CLAUDE.md
+- remove every em dash, and enforce it so it cannot come back
+- Bump the github-actions group with 4 updates
+- rename audit.Record to audit.EntryDraft
+- cover docker/demo/ in the licence annotations
+- server idle deadline, root key from file, remote org-DID preflight
+- Initial commit to Github
+
+### Verifying what you downloaded
+
+Each archive is listed in `SHA256SUMS`, every binary answers `--version`
+without running anything, and every artifact carries signed build provenance
+binding it to this repository's release pipeline:
+
+```sh
+sha256sum -c SHA256SUMS
+gh attest verify kessa_*_linux_amd64.tar.gz --repo Gneiss-Group/Kessa
+./kessa --version
+```
+
+The verifier bundle (`kessa_*`) is Apache-2.0; the server bundle
+(`kessa-server_*`) is AGPL-3.0-only. See `LICENSING.md`.
+
+### Container images
+
+Multi-arch (linux/amd64 + arm64), distroless, signed with build provenance:
+
+```sh
+docker pull ghcr.io/gneiss-group/kessa:VERSION          # verifier (Apache-2.0)
+docker pull ghcr.io/gneiss-group/kessa-proxy:VERSION    # enforcement proxy (AGPL-3.0-only)
+gh attest verify oci://ghcr.io/gneiss-group/kessa:VERSION --repo Gneiss-Group/Kessa
+```
