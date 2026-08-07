@@ -28,8 +28,9 @@ const WhatIsProven = "For every ALLOWED action: it was within the delegated auth
 	"position); consequentiality, the rule that fired, and the policy version were all RE-DERIVED " +
 	"from the export's carried, signed policy and match the entry's own claims; and if that " +
 	"re-derivation says the action is consequential, every hop whose issuer published a status list " +
-	"was checked, none is currently revoked, and a valid human approval (bound to the action and " +
-	"entry position) was obtained. The export's version, signer, policy identity, ENTRY COUNT and " +
+	"was checked against a list signed by THAT CREDENTIAL'S NAMED REVOCATION AUTHORITY, not merely by " +
+	"whoever the list claims signed it, none is currently revoked, and a valid human approval (bound " +
+	"to the action and entry position) was obtained. The export's version, signer, policy identity, ENTRY COUNT and " +
 	"LOG TIP are covered by the enforcement point's envelope signature, so entries cannot be removed " +
 	"from a signed export after the fact."
 
