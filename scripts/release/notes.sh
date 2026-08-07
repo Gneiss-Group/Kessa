@@ -35,6 +35,35 @@ fi
 
 DATE="$(date -u +%Y-%m-%d)"
 
+# house_style: apply the repository's prose rules to text taken from commit
+# messages.
+#
+# The no-em-dash rule (docs/go-standards.md) is enforced by scripts/ci/gate.sh
+# against tracked FILES. Nothing checks commit messages, so a subject written
+# with an em dash is legitimate history. This script transcribes subjects into
+# CHANGELOG.md, which IS tracked, so without this filter the generator converts
+# text the gate never checked into a violation of a rule it does check.
+#
+# That failure lands at the worst possible moment, which is why it is filtered
+# here rather than left to be noticed: phase 1 runs the gate BEFORE writing the
+# changelog, so the release branch pushes clean and the gate fails on the release
+# PR, where it is a required status check. The release then cannot merge without
+# hand-editing generated output, and hand-edited generated output is the thing
+# this whole pipeline exists to avoid.
+#
+# A comma rather than a colon: a conventional subject already carries a colon
+# after the type, and a second one reads as a nested clause. The dash is almost
+# always introducing an appositive, which a comma renders correctly.
+#
+# The characters are built from their code points, the same way gate.sh does it,
+# so this file does not contain the thing it removes.
+house_style() {
+  local em en
+  em="$(printf '\342\200\224')"  # U+2014 em dash
+  en="$(printf '\342\200\223')"  # U+2013 en dash
+  sed -E "s/ *${em} */, /g; s/ *${en} */, /g"
+}
+
 # section <heading> <subject-pattern>: print the matching subjects as bullets,
 # with the conventional prefix stripped so the line reads as prose.
 section() {
@@ -42,7 +71,8 @@ section() {
   local body
   body="$(git log --no-merges --format='%s' "$RANGE" \
     | grep -E "$pattern" \
-    | sed -E 's/^[a-z]+(\([^)]*\))?!?: */- /' || true)"
+    | sed -E 's/^[a-z]+(\([^)]*\))?!?: */- /' \
+    | house_style || true)"
   if [ -n "$body" ]; then
     printf '### %s\n\n%s\n\n' "$heading" "$body"
   fi
@@ -59,8 +89,8 @@ fi
 # Breaking first, and stated as breaking: pre-1.0 the version number cannot carry
 # that signal (a 0.x breaking change bumps the minor), so this section is the
 # only place a consumer learns it.
-breaking="$(git log --no-merges --format='%s' "$RANGE" | grep -E '^[a-z]+(\([^)]*\))?!:' | sed -E 's/^[a-z]+(\([^)]*\))?!: */- /' || true)"
-footers="$(git log --no-merges --format='%B' "$RANGE" | grep -E '^BREAKING[ -]CHANGE: ' | sed -E 's/^BREAKING[ -]CHANGE: */- /' || true)"
+breaking="$(git log --no-merges --format='%s' "$RANGE" | grep -E '^[a-z]+(\([^)]*\))?!:' | sed -E 's/^[a-z]+(\([^)]*\))?!: */- /' | house_style || true)"
+footers="$(git log --no-merges --format='%B' "$RANGE" | grep -E '^BREAKING[ -]CHANGE: ' | sed -E 's/^BREAKING[ -]CHANGE: */- /' | house_style || true)"
 if [ -n "$breaking$footers" ]; then
   printf '### Breaking changes\n\n'
   [ -n "$breaking" ] && printf '%s\n' "$breaking"
@@ -80,7 +110,8 @@ section 'Documentation' '^docs(\([^)]*\))?!?: '
 other="$(git log --no-merges --format='%s' "$RANGE" \
   | grep -Ev '^(feat|fix|sec|perf|docs)(\([^)]*\))?!?: ' \
   | sed -E 's/^[a-z]+(\([^)]*\))?!?: *//' \
-  | sed -E 's/^/- /' || true)"
+  | sed -E 's/^/- /' \
+  | house_style || true)"
 if [ -n "$other" ]; then
   printf '### Other changes\n\n%s\n\n' "$other"
 fi
