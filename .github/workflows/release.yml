@@ -9,7 +9,8 @@
 # created and SIGNED by GitHub itself, which is how a "require signed commits"
 # rule is satisfied without giving a runner a signing key.
 #
-# This phase is manual and owner-only. It runs the full gate again, derives the
+# This phase is manual and restricted to a named release manager. It runs the
+# full gate again, derives the
 # next version, writes the version constant and the changelog, and pushes a
 # `release/vX.Y.Z` branch. It does NOT open the PR (repository policy disables
 # Actions-authored PRs), it prints the one-click "create PR" link instead. You
@@ -60,14 +61,30 @@ jobs:
       contents: write
 
     steps:
-      - name: Only the repository owner prepares a release, and only from main
+      - name: Only a release manager prepares a release, and only from main
         env:
           ACTOR: ${{ github.actor }}
-          OWNER: ${{ github.repository_owner }}
           REF: ${{ github.ref }}
+          # Comma-separated logins permitted to cut a release.
+          #
+          # This was `github.actor != github.repository_owner`, which could never
+          # pass: this repository is owned by an ORGANISATION, so that context is
+          # "Gneiss-Group", and no user login ever equals it. The guard refused
+          # every release including the owner's own. It failed closed, so nothing
+          # shipped that should not have, but phase 1 could not run at all, and
+          # because no release had ever been attempted, nothing surfaced it. Same
+          # shape as the CLA workflow: a gate nobody could pass, invisible because
+          # the path was never exercised.
+          #
+          # GitHub already limits workflow_dispatch to accounts with write access.
+          # This list is the narrower question layered on top: of those accounts,
+          # which may cut a release.
+          RELEASE_MANAGERS: raphaelGneiss
         run: |
-          if [ "$ACTOR" != "$OWNER" ]; then
-            echo "::error::$ACTOR is not the repository owner ($OWNER); releases are owner-only."
+          # -x and -F: whole-line, fixed-string. A substring match would let
+          # "raphtheb" satisfy a list containing "raphaelGneiss".
+          if ! printf '%s' "$RELEASE_MANAGERS" | tr ',' '\n' | grep -qxF "$ACTOR"; then
+            echo "::error::$ACTOR is not a release manager ($RELEASE_MANAGERS); releases are restricted."
             exit 1
           fi
           if [ "$REF" != "refs/heads/main" ]; then
