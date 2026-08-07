@@ -168,6 +168,7 @@ jobs:
           cat /tmp/notes.md >>"$GITHUB_STEP_SUMMARY"
 
       - name: attest build provenance for the release artifacts
+        id: attest
         # Keyless signing via GitHub's OIDC identity (Sigstore under the hood):
         # each archive and the checksum file gets a signed SLSA provenance
         # statement binding it to this repository's release pipeline. Verify with
@@ -178,6 +179,45 @@ jobs:
             dist/*.tar.gz
             dist/*.zip
             dist/SHA256SUMS
+
+      - name: ship the provenance bundle as a file, not only as an API record
+        # The attestation above is stored in GitHub's attestation API, which is
+        # what `gh attestation verify` queries by default. That has two costs the
+        # bundle file removes.
+        #
+        # It is invisible to anyone working offline or without the GitHub API, and
+        # a verifier that can only be run against the vendor hosting the artifact
+        # is a weaker claim than this project should make.
+        #
+        # It is also invisible to OpenSSF Scorecard, whose Signed-Releases check
+        # reads a release's ASSETS. v0.0.1 scored ZERO on "does not have
+        # provenance" while the provenance demonstrably existed and verified. A
+        # correct property that no one can observe is not doing its job.
+        #
+        # One attestation covers every subject, so the bundle is byte-identical
+        # for each artifact. It is still copied per artifact, because next to the
+        # file it describes is where a verifier looks, the same convention as a
+        # detached .sig, and it lets someone download one archive and its bundle
+        # rather than the whole release.
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BUNDLE: ${{ steps.attest.outputs.bundle-path }}
+        run: |
+          set -euo pipefail
+          test -s "$BUNDLE" || { echo "::error::attest-build-provenance produced no bundle at '${BUNDLE:-<empty>}'"; exit 1; }
+
+          for f in dist/*.tar.gz dist/*.zip dist/SHA256SUMS; do
+            cp "$BUNDLE" "$f.intoto.jsonl"
+          done
+
+          # Prove the shipped bundle actually verifies the shipped artifact,
+          # rather than trusting that copying a file was enough. --bundle is the
+          # offline path, so this checks the exact thing a user does.
+          probe="dist/kessa_${NEXT}_linux_amd64.tar.gz"
+          gh attestation verify "$probe" --bundle "$probe.intoto.jsonl" \
+            --repo "$GITHUB_REPOSITORY" \
+            || { echo "::error::the bundle shipped next to $probe does not verify it"; exit 1; }
+          echo "provenance bundle verifies $probe offline"
 
       - name: keep the artifacts on the workflow run
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
