@@ -155,22 +155,43 @@ For what the system does today, and for the limits of a clean verdict, the
   themselves are deferred: their content should come from design partners rather
   than from guessing what a vertical considers consequential.
 
-- **No fuzzing.** Every parser in this repository is fed bytes chosen by someone
-  else: the export and credential JSON the verifier reads, the macaroon and caveat
-  decoding, the policy loader, and the enforcement endpoint's request body. Those
-  are exactly the surfaces a fuzzer is good at and a hand-written table test is
-  not, and R6-04 (an evidence field bounded only by the request cap) is the shape
-  of thing that shows up there. Deferred on cost, not on doubt about the value.
+- **Fuzzing: started, partial.** Native Go fuzz targets now exist for the parsers
+  that read bytes chosen by someone else. No new dependency: `testing.F` is
+  standard library, so the verifier's dependency closure is untouched, which was
+  always the condition for doing this at all.
 
-  Worth recording so the size is not re-estimated from scratch: Go has had native
-  fuzzing in the standard library since 1.18, so this needs **no new dependency**
-  and does not touch the verifier's dependency closure, which is the usual reason
-  tooling gets rejected here. The real work is writing targets that assert
-  something meaningful rather than "does not panic" (for the export parser, the
-  property worth fuzzing is that no input produces a clean `PASS` without valid
-  evidence), building a seed corpus from `testdata/`, and deciding where fuzzing
-  runs, since an unbounded fuzz job does not belong in the PR gate. A separate
-  scheduled workflow is the likely shape.
+  Covered today, with the property each target asserts:
+
+  | Target | Package | Property under test |
+  |---|---|---|
+  | `FuzzParse` | `internal/export` | Only `{v1, v2}` are accepted; a v1 envelope carries no v2 evidence; a carried policy is one `policy.Validate` also accepts; an accepted export survives its own serializer |
+  | `FuzzMCPIngress` | `internal/enforce` | A JSON-RPC *result* is reachable only through the complete guard set (Origin, content type, `jsonrpc`, non-null id, both mirrored headers, `_meta` protocol version and client capabilities) |
+  | `FuzzDocumentPath` | `internal/did` | A `did:web` identifier can never name a path outside the publication root |
+  | `FuzzDIDWebToURL` | `internal/did` | The identifier determines the host fetched, with no smuggled userinfo, query, or fragment |
+  | `FuzzPublishPath` | `internal/status` | A status-list URL from a credential can never name a path outside the publication root |
+  | `FuzzNarrowsIsSound` | `internal/macaroon` | If `narrows` calls a caveat a subset, no context satisfies the child and not the parent, so an attenuation can never broaden authority |
+  | `FuzzAttenuateAgreesWithExtends` | `internal/macaroon` | Anything `Attenuate` mints at delegation time, `Extends` accepts at verification time; `Attenuate` never mutates its input; a caveat dropped or rewritten breaks the HMAC chain |
+
+  The targets assert properties rather than "does not panic", which was the part
+  that made this worth doing: two of the seven found something on their first
+  bounded run.
+
+  The macaroon package has no parser, so the untrusted input there is the caveat
+  values rather than a byte stream, and the property worth searching is the
+  narrowing lattice: inclusive against exclusive endpoints, sets, and a value
+  grammar that is RFC3339-or-float. That is arithmetic a table of examples tests
+  thinly.
+
+  **Not yet covered:** credential JSON decoding (`internal/credential`) and the
+  audit-log recovery path (`internal/enforce` WAL replay). Those are the next
+  targets, not a decision to stop here.
+
+  **Where it runs.** `make fuzz-smoke` (ten seconds per target, wired into CI) is
+  a liveness check, not discovery: it keeps the targets compiling and their seed
+  corpora loading on every PR. Real discovery is a bounded run at minutes per
+  target, driven by hand today. An unbounded fuzz job still does not belong in
+  the PR gate, and a scheduled workflow for longer campaigns remains the likely
+  shape and is not built.
 
 - **Named third-party security audit.** The adversarial review rounds were
   **self-run** AI red-team passes, not third-party; they are registered in the

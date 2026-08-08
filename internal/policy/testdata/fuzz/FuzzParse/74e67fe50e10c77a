@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("{\"version\": \"0\",\"rules\": [{\"nAme\": \"0\",\"when\": [{ \"field\": \"amount\", \"op\": \"!=\", \"vAlue\": \"0\"}]}],\"defAult\":{\"reAson\":\"0\"}} ")

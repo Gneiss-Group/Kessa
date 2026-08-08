@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("{\"version\":\"v1\",\"rules\":[{\"name\":\"big transfers\",\"when\":[{\"field\":\"amount\",\"op\":\">=\",\"value\":\"50\"}]}],\"default\":{\"allowed\":false,\"reason\":\"denied by default\"}}")
