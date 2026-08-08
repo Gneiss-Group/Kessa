@@ -187,6 +187,23 @@ func (p *Policy) Validate() error {
 				return fmt.Errorf("policy %s: rule %q: %w", p.Ver, r.Name, err)
 			}
 		}
+		// A rule's reason is required for the same reason the default's is, one
+		// level down. When a rule fires, Evaluate copies r.Reason straight into
+		// the Decision, and that Decision is written verbatim into a signed,
+		// hash-chained audit entry. Without this, a policy can be accepted that
+		// records an ALLOW on a consequential action whose stated cause is the
+		// empty string: an entry that verifies perfectly and explains nothing.
+		//
+		// Checked AFTER the conditions so a rule that is wrong in both ways is
+		// reported by the more specific complaint (a typo'd operator) rather than
+		// by this one.
+		//
+		// Found by this package's FuzzParse, which asserts that Evaluate always
+		// returns a stated reason. The default block's version of this rule was
+		// already here; nobody had applied the same argument to rules.
+		if strings.TrimSpace(r.Reason) == "" {
+			return fmt.Errorf("policy %s: rule %q has no reason", p.Ver, r.Name)
+		}
 	}
 	return nil
 }

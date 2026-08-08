@@ -173,8 +173,14 @@ For what the system does today, and for the limits of a clean verdict, the
   | `FuzzAttenuateAgreesWithExtends` | `internal/macaroon` | Anything `Attenuate` mints at delegation time, `Extends` accepts at verification time; `Attenuate` never mutates its input; a caveat dropped or rewritten breaks the HMAC chain |
 
   The targets assert properties rather than "does not panic", which was the part
-  that made this worth doing: two of the seven found something on their first
-  bounded run.
+  that made this worth doing: two of the eight found a real defect on their
+  first bounded run, both fixed in the same branch. `FuzzDIDWebToURL` found
+  `webhost.Validate` accepting bracketed literals that are not IPv6 addresses
+  (`[0]`, `[ffff]`, `[1.2.3.4]`), a character-class check standing in for
+  parsing the address. `FuzzParse` found that a policy RULE needed no reason,
+  only the default block did, so a firing rule could write an ALLOW into a
+  signed audit entry whose stated cause was the empty string. Both failing
+  inputs stay in `testdata/fuzz/` as permanent regression seeds.
 
   The macaroon package has no parser, so the untrusted input there is the caveat
   values rather than a byte stream, and the property worth searching is the

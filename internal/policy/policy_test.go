@@ -163,6 +163,21 @@ func TestParse_Validation(t *testing.T) {
 		{"non-scalar bound", `{"version":"v1","rules":[{"name":"r","when":[{"field":"amount","op":">=","value":"lots"}]}]` + okDefault + `}`, "not a scalar"},
 		{"empty eq value", `{"version":"v1","rules":[{"name":"r","when":[{"field":"x","op":"==","value":""}]}]` + okDefault + `}`, "empty value"},
 
+		// A RULE's reason, which is the same requirement as the default block's
+		// one level down. When a rule fires, Evaluate copies its reason into the
+		// Decision and the Decision is written verbatim into a signed audit
+		// entry, so a rule with no reason produces an entry that verifies
+		// perfectly and explains nothing. These two are otherwise entirely
+		// well-formed policies: name, conditions and operator are all valid, so
+		// the reason is the only thing left to reject them for. Found by this
+		// package's FuzzParse.
+		{"rule without reason", `{"version":"v1","rules":[{"name":"big transfers","when":[{"field":"amount","op":">=","value":"50"}]}]` + okDefault + `}`, `rule "big transfers" has no reason`},
+		{"whitespace rule reason", `{"version":"v1","rules":[{"name":"r","when":[{"field":"amount","op":">=","value":"50"}],"reason":"   "}]` + okDefault + `}`, `rule "r" has no reason`},
+		// Ordering: a rule that is wrong in two ways is reported by the more
+		// specific complaint. Without this, tightening the reason rule would have
+		// silently changed what every malformed-condition case above reports.
+		{"bad operator outranks missing reason", `{"version":"v1","rules":[{"name":"r","when":[{"field":"amount","op":"~=","value":"1"}]}]` + okDefault + `}`, "unknown operator"},
+
 		// The default block itself (§2.1). An omitted default is not a neutral
 		// omission, Evaluate would deny every unmatched action with a blank reason.
 		{"missing default block", `{"version":"v1","rules":[]}`, `missing required "default" block`},
