@@ -36,6 +36,7 @@ package webhost
 
 import (
 	"fmt"
+	"net/netip"
 	"strconv"
 	"strings"
 )
@@ -155,10 +156,36 @@ func validateHostname(name string) error {
 	return nil
 }
 
-// validateIPv6Literal accepts "[" hexdigits-and-colons "]". The contents are not
-// parsed into an address: the caller hands this to net/url and the network stack,
-// both of which reject a malformed address, and the job here is to guarantee the
-// value cannot carry URL or path structure.
+// validateIPv6Literal accepts "[" ipv6-address "]", and it PARSES the address
+// rather than checking which characters it is spelled with.
+//
+// It used to do the latter: every byte inside the brackets had to be a hex
+// digit, a colon, or a dot. That admits "[0]", "[ffff]", "[::1::2]" and "[.]",
+// none of which is an address, and it is the same mistake one layer down as the
+// denylist this package was written to replace. A character class is a
+// description of how a value LOOKS; the property actually needed is what it
+// MEANS, and the two come apart at exactly the inputs nobody enumerated.
+//
+// The old shape was defended on the grounds that net/url and the network stack
+// reject a malformed address anyway, so this only had to stop URL structure
+// getting through. That is true and it still fails the caller badly: the refusal
+// lands inside net/url, phrased in terms of a URL the caller never wrote, rather
+// than here where it can say which host was unsafe and why. Deferring a check to
+// a layer that happens to also catch it is how a rule ends up enforced nowhere
+// once that layer changes. See internal/did's FuzzDIDWebToURL, which found it.
+//
+// The accepted set is exactly net/url's, verified case by case, so a value that
+// passes here can always be built into a URL:
+//
+//   - It must parse as an IP address.
+//   - It must not be IPv4. An IPv4 address is a perfectly good address but is
+//     not an IPv6 literal, and net/url refuses it in brackets.
+//   - It must not carry a zone id ("%eth0"). A zone only has meaning for a
+//     link-local address on one specific interface of one specific machine,
+//     which can never be a published did:web location, and it would admit an
+//     arbitrary interface-name string into a value that becomes both a URL and a
+//     filesystem path. netip.ParseAddr accepts a zone, so this stays an explicit
+//     refusal rather than something the parser does for us.
 func validateIPv6Literal(name string) error {
 	if !strings.HasSuffix(name, "]") {
 		return fmt.Errorf("IPv6 literal %q is missing its closing bracket", name)
@@ -167,18 +194,15 @@ func validateIPv6Literal(name string) error {
 	if inner == "" {
 		return fmt.Errorf("empty IPv6 literal")
 	}
-	for i := 0; i < len(inner); i++ {
-		c := inner[i]
-		isHex := (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')
-		// '.' allows the IPv4-mapped form. A zone id ("%eth0") is deliberately
-		// NOT allowed: a zone only has meaning for a link-local address on one
-		// specific interface of one specific machine, which can never be a
-		// published did:web location, and allowing '%' would admit an arbitrary
-		// interface-name string into a value that becomes both a URL and a
-		// filesystem path.
-		if !isHex && c != ':' && c != '.' {
-			return fmt.Errorf("IPv6 literal %q contains %q", name, c)
-		}
+	addr, err := netip.ParseAddr(inner)
+	if err != nil {
+		return fmt.Errorf("IPv6 literal %q is not an IP address: %w", name, err)
+	}
+	if addr.Is4() {
+		return fmt.Errorf("IPv6 literal %q is an IPv4 address; write it without brackets", name)
+	}
+	if addr.Zone() != "" {
+		return fmt.Errorf("IPv6 literal %q carries a zone id %q", name, addr.Zone())
 	}
 	return nil
 }

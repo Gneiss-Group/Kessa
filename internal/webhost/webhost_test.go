@@ -59,8 +59,23 @@ func TestValidateRejectsURLStructure(t *testing.T) {
 		{"unclosed bracket", "[::1", "closing bracket"},
 		{"junk after bracket", "[::1]junk", "after the IPv6 literal"},
 		{"empty ipv6", "[]", "empty IPv6"},
-		{"ipv6 with structure", "[::1@evil]", "contains '@'"},
-		{"ipv6 zone id", "[fe80::1%eth0]", "contains"},
+		{"ipv6 with structure", "[::1@evil]", "not an IP address"},
+		{"ipv6 zone id", "[fe80::1%eth0]", "zone id"},
+
+		// Bracketed values that are made only of the characters an IPv6 literal
+		// may contain, but are not IPv6 addresses. The check was previously a
+		// character class, so every one of these passed here and then failed
+		// later inside net/url, which put the refusal in the wrong place and
+		// described it in terms of a URL the caller never wrote. Found by
+		// internal/did's FuzzDIDWebToURL.
+		{"ipv6 single digit", "[0]", "not an IP address"},
+		{"ipv6 bare hex group", "[ffff]", "not an IP address"},
+		{"ipv6 two double colons", "[::1::2]", "not an IP address"},
+		{"ipv6 dot only", "[.]", "not an IP address"},
+		{"ipv6 colon only", "[:]", "not an IP address"},
+		// An IPv4 address is a valid IP but is not an IPv6 literal, and net/url
+		// refuses it in brackets. Rejecting it here keeps the two agreeing.
+		{"ipv4 in brackets", "[1.2.3.4]", "IPv4 address"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
