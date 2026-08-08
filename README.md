@@ -105,7 +105,7 @@ network access `kessa` can make, and it is off by default.
 Kessa works end to end and is under active development. Seven scenarios run start
 to finish (`make demo`), and multiple adversarial security review rounds are closed
 with every finding fixed. All rounds were **self-run AI red-team passes, not a
-third-party audit**; no external audit has been commissioned yet. It is
+third-party audit**; no external audit has been commissioned yet. It is Go
 standard-library only, with no third-party dependencies.
 
 Four things carry the central claim, and all four are built: provable attenuation,
