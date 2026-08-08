@@ -315,6 +315,18 @@ func Parse(data []byte) (*Export, error) {
 		// silent retroactive tightening here. Adding a rule to policy.Validate after
 		// that point WILL invalidate exports in the field, treat this comment as the
 		// tripwire for that.
+		//
+		// THE TRIPWIRE HAS FIRED ONCE, and this is the record of it. Validate
+		// gained a rule requiring every RULE to carry a reason, not only the
+		// default block (found by internal/policy's FuzzParse). It was checked
+		// against the condition above before landing rather than assumed: no
+		// signed export exists outside the regenerable goldens, every shipped
+		// example policy already carried rule reasons, and both goldens still
+		// reproduce byte for byte. So it was still free, and it is the LAST one
+		// that will be. The next tightening needs the versioned migration
+		// described above, whatever the state of the field, because "still free"
+		// is a claim that gets harder to verify every release and this comment
+		// should not be read as licence to keep re-deciding it.
 		if e.Policy != nil {
 			if err := e.Policy.Validate(); err != nil {
 				return nil, fmt.Errorf("export: carried policy is invalid: %w", err)

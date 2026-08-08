@@ -41,6 +41,14 @@ path = [
   "cmd/shadow/README.md",
   "examples/**",
   "testdata/**",
+  # Fuzz corpus entries. The Go fuzzing engine writes these itself, in its own
+  # format, with no room for a comment, so they are licensed here rather than
+  # inline. The glob is deliberate where the docs/ list above is deliberately
+  # not: these files are MACHINE-written, one per finding, at a path the engine
+  # chooses, so naming them individually would mean a failing input could not be
+  # committed without also editing this file, and the failing input is the
+  # evidence. See scripts/ci/fuzz-smoke.sh.
+  "**/testdata/fuzz/**",
   "scripts/demo.sh",
   "scripts/license-check.sh",
   "scripts/verify-scene.sh",

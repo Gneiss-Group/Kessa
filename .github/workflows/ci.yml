@@ -77,6 +77,14 @@ jobs:
 
       # ---- CI-only extras beyond the shared gate --------------------------
 
+      - name: fuzz targets still build and still fuzz
+        # A liveness check, not a discovery run: ten seconds per target keeps
+        # them compiling and their seed corpora loading on every PR. A fuzz
+        # target that silently stopped building is a check that passes by not
+        # running, and it would sit unnoticed until the next long campaign.
+        # Discovery happens in bounded runs at minutes per target, not here.
+        run: make fuzz-smoke
+
       - name: build every binary
         run: make build
 

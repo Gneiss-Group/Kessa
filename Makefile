@@ -6,7 +6,7 @@
 GO      ?= go
 BINDIR  ?= bin
 
-.PHONY: all build test test-race-condition test-fast vet license-check notice fixtures demo stories stories-capture stories-images verify version release-version release-check release-artifacts clean test-enclave-signed
+.PHONY: all build test test-race-condition test-fast fuzz-smoke vet license-check notice fixtures demo stories stories-capture stories-images verify version release-version release-check release-artifacts clean test-enclave-signed
 
 all: build
 
@@ -41,6 +41,24 @@ test-race-condition:
 # what a change should be merged on.
 test-fast:
 	$(GO) test ./...
+
+# fuzz-smoke runs every native fuzz target for a few seconds each. It is a
+# LIVENESS check, not a discovery run: it keeps the targets building and their
+# seed corpora loading on every PR, so a target that quietly stopped compiling
+# is caught the same day rather than at the next long campaign.
+#
+# The targets are derived from the test binaries, never listed. Discovery is a
+# separate, bounded run at minutes per target:
+#
+#   make fuzz-smoke FUZZTIME=30m
+#   go test ./internal/export -run FuzzParse -fuzz FuzzParse -fuzztime 30m
+#
+# Note that `go test ./...` (and therefore `make test`) already replays every
+# committed seed and every saved failing input as ordinary test cases. This
+# target is what adds actual mutation.
+FUZZTIME ?= 10s
+fuzz-smoke:
+	@bash scripts/ci/fuzz-smoke.sh $(FUZZTIME)
 
 vet:
 	$(GO) vet ./...
