@@ -38,6 +38,42 @@ these are the highest priority:
   log line.
 - **Path traversal** from a crafted DID or status identifier.
 
+## How severity is decided
+
+One rule: **a finding's severity is how far it goes toward invalidating the
+claim Kessa exists to make**, which is that a verdict can be re-derived from
+signed evidence without trusting the system that produced it.
+
+That is the classification. It is deliberately not CVSS, and it is deliberately
+not a scanner's label. **CodeQL and Scorecard severities are treated as input to
+this judgement, never as the judgement**, because those tools rate a code pattern
+in the abstract and have no way to know which of this project's invariants a given
+line is holding up. The same rule can be Critical in the verifier and irrelevant in
+a test helper.
+
+- **Critical.** Breaks an invariant in [What matters most](#what-matters-most-in-scope).
+  A verdict that should not have been reachable becomes reachable, or evidence
+  that should be re-derivable stops being so. If a reader could point at the
+  finding and say "then the central claim is false", it is Critical.
+- **High.** Defeats a control the invariants rest on, without directly producing
+  a false verdict. A revocation that does not revoke, an authority check that
+  checks the wrong thing, a gate that admits input it should refuse.
+- **Medium.** Real and reachable, but bounded: needs an unusual configuration, a
+  non-default flag, or an attacker position that is already privileged. Denial of
+  service from pathological input lands here by default.
+- **Low.** Correct to fix and hard to exploit, or exploitable only against a setup
+  that is already broken for other reasons.
+- **Informational.** A limitation worth recording that no attacker gains from.
+
+Two consequences worth stating, since both have already come up:
+
+- A tool's Critical can be our High. The `go/request-forgery` finding in the
+  did:web resolver is rated High in its advisory, not Critical, because it needs a
+  non-default flag and produces no false verdict.
+- Our Critical can be a tool's nothing. Most invariant breaks in this project are
+  logic, not memory safety, and no scanner has ever flagged one of them. Every
+  Critical to date came from a review round.
+
 ## Known boundaries (not findings on their own)
 
 - The **software keystore and software signer are POC mocks** (labeled as such in
@@ -45,6 +81,24 @@ these are the highest priority:
   in itself. A leak of a mock boundary into a shipping path *is* worth reporting.
 - **Denial of service** from pathological inputs is welcome, but rated below an
   invariant break.
+- **Capacity hints on append-only buffers** are not allocation-overflow
+  vulnerabilities here. `make([]byte, 0, len(a)+len(b))` allocates length zero and
+  the code appends; `append` is memory-safe and grows as needed, a wrong capacity
+  costs a reallocation rather than a corruption, and a negative one panics rather
+  than under-allocating. Overflowing `int` on 64-bit needs the summed lengths to
+  reach roughly 9.2 exabytes of already-resident memory, and every release target
+  is 64-bit. Static analysis reports this pattern regularly; it is dismissed as a
+  class, not case by case.
+- **Scorecard checks that a solo-maintained project cannot satisfy** are not
+  findings. `Code-Review` requires a second human, and most of `Branch-Protection`
+  requires reviewers or code owners. These are accurately reported and accurately
+  unfixable today, and turning them on would mean bypassing them on every merge,
+  which is worse than scoring zero honestly.
+
+This list grows by **class, not by instance**. A class named here covers every
+future report of the same shape, which is what keeps the
+[security review record](docs/security-review.md) a record of decisions rather
+than a log of scanner output.
 
 ## Committed demo material (deliberate, not a leak)
 
@@ -84,3 +138,22 @@ flaw to anyone still running an unfixed version.
 
 Findings from pre-release hardening are documented directly in that record
 instead, since no released version ever carried them.
+
+### What this policy does not commit to yet
+
+There is **no embargo clock and no severity threshold** that routes a finding into
+a particular handling path. Stating one now would be a promise to reporters and
+users who do not exist yet, on a project with no revenue and a single maintainer,
+and a promise on a clock is worth less than no promise if it is made before anyone
+can keep it reliably.
+
+There is also **no private-fix workflow in practice**. GitHub's advisory flow
+offers a private fork so a fix can be developed unseen and published with its
+advisory. Kessa does not use it today: fixes land as ordinary public pull requests
+and the advisory follows. A reader should know that, because it means the fix for a
+reported issue may be visible in the commit history before the advisory describing
+it is published.
+
+Both are deliberate deferrals rather than oversights. They earn their cost when
+volume or stakes make case-by-case judgement unreliable, and this project is not
+there. Until then, a report gets a prompt, honest, human answer.
