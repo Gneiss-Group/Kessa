@@ -218,7 +218,7 @@ func TestPublishedRootResolvesOverDIDWebHTTPS(t *testing.T) {
 		t.Fatalf("publish: %v", err)
 	}
 
-	r := did.HTTPResolver{Scheme: "http"}
+	r := did.HTTPResolver{Scheme: "http", AllowedHosts: []string{addr}}
 	for _, d := range []types.DID{org, agent} {
 		doc, err := r.Resolve(d)
 		if err != nil {

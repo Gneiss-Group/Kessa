@@ -52,7 +52,10 @@ func TestResolve_RefusesCrossHostRedirect(t *testing.T) {
 	redirHost := mustHost(t, redirector.URL)
 	did = types.DID("did:web:" + strings.ReplaceAll(redirHost, ":", "%3A"))
 
-	r := HTTPResolver{Scheme: "http"}
+	// The DID's own host is permitted; the redirect TARGET is not the point here.
+	// The allowlist passes, and the cross-host refusal is what must still fire,
+	// which is how this stays a test of the redirect rule rather than of the list.
+	r := HTTPResolver{Scheme: "http", AllowedHosts: []string{redirHost}}
 	_, err := r.Resolve(did)
 	if err == nil {
 		t.Fatal("Resolve followed a redirect to a host the DID does not name")
@@ -83,8 +86,9 @@ func TestResolve_AllowsSameHostRedirect(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 
-	did = types.DID("did:web:" + strings.ReplaceAll(mustHost(t, srv.URL), ":", "%3A"))
-	r := HTTPResolver{Scheme: "http"}
+	host := mustHost(t, srv.URL)
+	did = types.DID("did:web:" + strings.ReplaceAll(host, ":", "%3A"))
+	r := HTTPResolver{Scheme: "http", AllowedHosts: []string{host}}
 	if _, err := r.Resolve(did); err != nil {
 		t.Fatalf("a same-host redirect should still resolve: %v", err)
 	}
@@ -100,8 +104,9 @@ func TestResolve_CapsRedirectChain(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 
-	did = types.DID("did:web:" + strings.ReplaceAll(mustHost(t, srv.URL), ":", "%3A"))
-	r := HTTPResolver{Scheme: "http"}
+	host := mustHost(t, srv.URL)
+	did = types.DID("did:web:" + strings.ReplaceAll(host, ":", "%3A"))
+	r := HTTPResolver{Scheme: "http", AllowedHosts: []string{host}}
 	_, err := r.Resolve(did)
 	if err == nil {
 		t.Fatal("an endless same-host redirect chain should be refused")
