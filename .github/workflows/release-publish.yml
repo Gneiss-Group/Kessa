@@ -173,7 +173,7 @@ jobs:
         # each archive and the checksum file gets a signed SLSA provenance
         # statement binding it to this repository's release pipeline. Verify with
         # `gh attestation verify <file> --repo ${{ github.repository }}`.
-        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-path: |
             dist/*.tar.gz
@@ -296,7 +296,7 @@ jobs:
             org.opencontainers.image.licenses=Apache-2.0
 
       - name: attest the verifier image
-        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-name: ghcr.io/${{ steps.o.outputs.owner }}/kessa
           subject-digest: ${{ steps.verifier.outputs.digest }}
@@ -326,7 +326,7 @@ jobs:
             org.opencontainers.image.licenses=AGPL-3.0-only
 
       - name: attest the proxy image
-        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-name: ghcr.io/${{ steps.o.outputs.owner }}/kessa-proxy
           subject-digest: ${{ steps.proxy.outputs.digest }}
@@ -356,7 +356,7 @@ jobs:
             org.opencontainers.image.licenses=AGPL-3.0-only
 
       - name: attest the issuer image
-        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-name: ghcr.io/${{ steps.o.outputs.owner }}/kessa-issuer
           subject-digest: ${{ steps.issuer.outputs.digest }}
