@@ -207,8 +207,19 @@ Accepted, documented risks (current boundaries, not defects):
   until this is closed; use caveats over fields the caller cannot restate in its
   own favour. Fix direction is a skew bound against the proxy's clock at
   enforcement time, plus the same bound re-derived at verification.
-- **`--fetch-dids` can be pointed at arbitrary URLs** (an SSRF surface). It is off
-  by default and evaluator-driven; scheme is HTTPS-only per did:web.
+- **`--fetch-dids` reaches only hosts you name, at paths the DID chooses.** It is
+  off by default, HTTPS-only per did:web, and requires `--did-hosts`: an empty
+  list means *no* hosts rather than all of them, so forgetting it resolves
+  nothing instead of everything. Three things bound it: the host must pass an
+  allowlist grammar, it must appear on your list (checked before any request is
+  made), and a redirect may not leave that host. What remains is that the DID's
+  path segments become the URL path, so an export you were handed can cause a GET
+  to a path of its choosing on a host you already trust. That request is blind
+  and shaped: GET only, always ending in `/did.json`, no segment may traverse or
+  carry URL structure, and the response is discarded unless it parses as a DID
+  document whose `id` is the DID requested. This bullet previously read "can be
+  pointed at arbitrary URLs", which stopped being true with the fixes above and
+  is corrected here rather than quietly dropped.
 - **Committed keys are demo-only**, derived from fixed seeds for reproducibility,
   and are never referenced by any non-test path.
 
