@@ -318,6 +318,11 @@ Verify an image's provenance before trusting it:
 gh attestation verify oci://ghcr.io/gneiss-group/kessa:latest --repo Gneiss-Group/Kessa
 ```
 
+Pointing an MCP client at the proxy: the listener speaks MCP revision
+**`2026-07-28`** and accepts no other, with no negotiation and no `initialize`
+handshake. What every request must carry, and the two reserved tools that carry
+the wire protocol, are in [the MCP listener reference](docs/mcp.md).
+
 The proxy's `serve` transport is still a documented mock (plain JSON over HTTP,
 no mTLS); the image is for **evaluation and development** deployments, not a
 production-hardened enforcement endpoint. See [Known limits](#known-limits).
@@ -357,6 +362,7 @@ everything else:
 
 | Document | What it is |
 |----------|------------|
+| [The MCP-native listener](docs/mcp.md) | The MCP revision spoken (`2026-07-28`, the only one accepted), the headers and `_meta` every request must carry, and the two reserved tools. Read before pointing an MCP client at the proxy. |
 | [Signing backends](docs/signer.md) | The `Signer` seam: software keystore, macOS Secure Enclave, and precisely what each one does and does not prove. |
 | [Enrollment](docs/enrollment.md) | How a device gets its own key and credential. |
 | [Signing daemon](docs/daemon.md) | The long-running signer, its socket, and its trust boundary. |

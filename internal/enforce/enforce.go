@@ -183,16 +183,13 @@ func NewProxy(c Config) (*Proxy, error) {
 // defense-in-depth and an operator convenience, turning "resume, then emit an export
 // the verifier rejects" into "refuse to start now, with a clear message".
 //
-// It is NOT a building block for hot-reloadable policy (§7 of the deployment note),
-// and must not be extended into one. Its semantics are the opposite of what a reload
-// needs (it REFUSES a differing policy rather than accepting a newly authorized one),
-// and it encodes the current single-policy-per-export assumption, which is exactly
-// the assumption a reload has to dismantle: because one export carries one policy and
-// every entry must pin it, a log that spans two policies needs the export format and
-// the verifier to carry multiple content-addressed policies and pin per entry. That
-// is a format-and-verifier change, not a loader tweak, and it is where §7 must
-// actually be designed. This guard's refusal to resume under a changed policy is that
-// constraint surfacing, not a solution to it.
+// It is NOT a building block for hot-reloadable policy, and must not be extended
+// into one: its semantics are the opposite of what a reload needs, since it REFUSES
+// a differing policy rather than accepting a newly authorized one, and it encodes
+// the single-policy-per-export assumption a reload has to dismantle. Its refusal to
+// resume under a changed policy is that constraint surfacing, not a solution to it.
+// Why a reload is a format-and-verifier change rather than a loader tweak is written
+// up in UPCOMING.md, which is where it should be designed.
 func (p *Proxy) recoverFrom(w *WAL) error {
 	recs := w.Recovered()
 	if len(recs) == 0 {

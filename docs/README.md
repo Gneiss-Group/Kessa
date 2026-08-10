@@ -11,6 +11,12 @@ how the system is built, how its signing backends work, and how to run the demo.
 | [Go standards](go-standards.md) | The rules this codebase is written to, including the ones that exist because of what the verifier claims. |
 | [Branching, commits, and releases](branching.md) | Short-lived branches off `main`, Conventional Commits, semantic versioning, and the manual owner-only release. |
 
+## Integrating
+
+| Document | What it is |
+|----------|------------|
+| [The MCP-native listener](mcp.md) | The revision spoken, what every request must carry, the two reserved tools, and the errors a client will see. Read this before pointing an MCP client at the proxy. |
+
 ## Keys, devices, and signing
 
 | Document | What it is |
