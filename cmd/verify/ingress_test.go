@@ -30,7 +30,13 @@ import (
 // The complete, intended flag surface of `kessa verify`. `color` is a pure
 // presentation control: it is read only after export.Verify has returned and
 // cannot reach the verification path, so it does not widen what steers a verdict.
-var wantFlags = []string{"color", "dids", "export", "fetch-dids", "quiet", "status"}
+//
+// `did-hosts` is in the same class as `dids`: it names the trust root rather than
+// steering classification. It can only NARROW what `fetch-dids` would otherwise
+// reach, since before it existed network resolution would contact any host a DID
+// named. It can cause resolution to fail, which produces no verdict; it cannot
+// turn a verdict from FAIL into PASS.
+var wantFlags = []string{"color", "did-hosts", "dids", "export", "fetch-dids", "quiet", "status"}
 
 // substrings that would suggest a flag can steer classification
 var policyish = []string{"policy", "rule", "default", "verdict", "eval", "classif", "consequen"}

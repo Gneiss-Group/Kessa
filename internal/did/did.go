@@ -336,11 +336,63 @@ type HTTPResolver struct {
 	// Scheme defaults to "https". Overridable to "http" only for tests against
 	// httptest servers; production did:web is HTTPS by definition.
 	Scheme string
+
+	// AllowedHosts is the set of did:web hosts this resolver may contact.
+	//
+	// It exists because network resolution is the one place where the PRESENTING
+	// side chooses the trust root. A DID arrives inside an export supplied by the
+	// party being audited, so without this the export decides which hosts get
+	// contacted and therefore whose web-PKI identity is trusted. That inverts the
+	// property the rest of the system holds to, that trust is granted locally by
+	// the receiving side and never asserted by the presenter (see UPCOMING.md).
+	// Naming the hosts moves that decision back to the deployment: an attacker
+	// controls the DID, never this list.
+	//
+	// EMPTY MEANS NONE, NOT ALL. That polarity is deliberate and is the whole
+	// safety of the design: a caller that forgets to set it resolves nothing
+	// rather than everything, so an omission cannot silently widen the check.
+	//
+	// Entries are matched exactly against the DID's host after lowercasing, port
+	// included. "acme.example" does not permit "acme.example:8443", because those
+	// are different endpoints and guessing which the operator meant is not this
+	// package's business.
+	//
+	// A host-level list is sufficient rather than needing an address policy: the
+	// redirect rule below keeps a fetch on the host the DID names, so an allowed
+	// host cannot bounce the resolver somewhere else. Whatever an allowed host
+	// resolves to is then the operator's own decision, deliberately made, which
+	// is why no private-address blocklist is needed and why an internal did:web
+	// deployment works unchanged.
+	AllowedHosts []string
+}
+
+// hostAllowed reports whether host may be contacted.
+func (r HTTPResolver) hostAllowed(host string) error {
+	if len(r.AllowedHosts) == 0 {
+		return fmt.Errorf("did: network resolution is enabled but no did:web hosts are permitted, so %q cannot be resolved; name the hosts this deployment trusts", host)
+	}
+	want := strings.ToLower(host)
+	for _, h := range r.AllowedHosts {
+		if strings.ToLower(strings.TrimSpace(h)) == want {
+			return nil
+		}
+	}
+	return fmt.Errorf("did: %q is not a permitted did:web host (permitted: %s)", host, strings.Join(r.AllowedHosts, ", "))
 }
 
 var _ Resolver = HTTPResolver{}
 
 func (r HTTPResolver) Resolve(did types.DID) (*Document, error) {
+	// Validate before the side effect: the host is checked before a URL is built
+	// and long before anything is dialled, so a refused host produces no request
+	// at all rather than one that is abandoned late.
+	host, _, err := parseDIDWeb(did)
+	if err != nil {
+		return nil, err
+	}
+	if err := r.hostAllowed(host); err != nil {
+		return nil, err
+	}
 	u, err := didWebToURL(did, r.Scheme)
 	if err != nil {
 		return nil, err
@@ -515,4 +567,14 @@ func parseDocument(did types.DID, data []byte) (*Document, error) {
 		return nil, fmt.Errorf("did: document id %q does not match requested %q", doc.ID, did)
 	}
 	return &doc, nil
+}
+
+// ParseWebHost returns the host and path segments of a did:web identifier,
+// applying the same validation the resolvers use.
+//
+// Exported for callers that need the host before resolving, notably to derive
+// which host a resolver may contact when the DID itself is the operator's own
+// input rather than something carried in an audited artifact.
+func ParseWebHost(did types.DID) (host string, segs []string, err error) {
+	return parseDIDWeb(did)
 }

@@ -99,7 +99,7 @@ func TestHTTPResolver_ResolvesOverNetwork(t *testing.T) {
 	host := srv.Listener.Addr().String() // 127.0.0.1:PORT
 	did = types.DID("did:web:" + encodeHost(host) + ":orgs:acme")
 
-	r := HTTPResolver{Scheme: "http"}
+	r := HTTPResolver{Scheme: "http", AllowedHosts: []string{host}}
 	doc, err := r.Resolve(did)
 	if err != nil {
 		t.Fatalf("Resolve over http: %v", err)

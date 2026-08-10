@@ -138,7 +138,19 @@ func cmdEnroll(args []string, stdout, stderr io.Writer) int {
 	// SO-1: preflight the org DID over the network (real did:web reachability)
 	// instead of the local publication root, when asked.
 	if *fetchOrgDID {
-		cfg.Resolver = did.HTTPResolver{}
+		// The permitted host is DERIVED from the org DID rather than configured,
+		// and that is the whole difference between this call site and the
+		// verifier's. Here the only DID resolved is the one the operator just
+		// named on the command line, so the host it implies is already an operator
+		// decision and asking for it twice would be ceremony. In the verifier the
+		// DIDs come from the export under audit, so the hosts have to be named
+		// separately or the artifact would choose its own trust root.
+		host, _, err := did.ParseWebHost(types.DID(*orgDID))
+		if err != nil {
+			fmt.Fprintf(stderr, "kessa-issuer: --fetch-org-did: %v\n", err)
+			return exitUsage
+		}
+		cfg.Resolver = did.HTTPResolver{AllowedHosts: []string{host}}
 	}
 	res, err := enroll.Enroll(cfg)
 	if err != nil {

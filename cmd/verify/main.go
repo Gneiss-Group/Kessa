@@ -80,6 +80,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	exportPath := fs.String("export", "", "path to the audit export file (required)")
 	didsDir := fs.String("dids", "", "directory of published did:web documents: THIS IS THE TRUST ROOT: every signature is checked against a key from here, so a verdict is only as good as the directory's provenance (required unless -fetch-dids)")
 	fetchDIDs := fs.Bool("fetch-dids", false, "resolve did:web documents over HTTPS instead of from -dids, making web PKI the trust root instead of the local directory; the only network access this tool can ever make, and it is off by default")
+	didHosts := fs.String("did-hosts", "", "comma-separated did:web hosts this verification may contact (required with -fetch-dids): the export chooses the DIDs, so the deployment must choose the hosts")
 	quiet := fs.Bool("quiet", false, "print only the final verdict")
 	colorMode := fs.String("color", "auto", "colorize the PASS/FAIL outcomes: auto (only on a terminal), always, or never")
 	var lists statusFlag
@@ -111,8 +112,22 @@ func run(args []string, stdout, stderr io.Writer) int {
 	var resolver did.Resolver = did.FileResolver{Root: *didsDir}
 	trustRoot := fmt.Sprintf("the directory %s", *didsDir)
 	if *fetchDIDs {
-		resolver = did.HTTPResolver{}
-		trustRoot = "HTTPS fetches of each did:web host (web PKI)"
+		// Network resolution requires naming the hosts. Refusing rather than
+		// warning, because the export being verified chooses the DIDs, so without
+		// a list the artifact under audit would pick the trust root. An operator
+		// who wants network resolution knows which hosts their org publishes;
+		// the auditor handed a hostile export does not know they need protecting.
+		hosts := splitHosts(*didHosts)
+		if len(hosts) == 0 {
+			fmt.Fprintln(stderr, "kessa: --fetch-dids requires --did-hosts: name the did:web hosts this verification may contact, comma separated")
+			fmt.Fprintln(stderr, "       (the export chooses the DIDs, so it would otherwise choose the trust root)")
+			return exitUsage
+		}
+		resolver = did.HTTPResolver{AllowedHosts: hosts}
+		trustRoot = fmt.Sprintf("HTTPS fetches of %s (web PKI)", strings.Join(hosts, ", "))
+	} else if *didHosts != "" {
+		fmt.Fprintln(stderr, "kessa: --did-hosts only applies with --fetch-dids")
+		return exitUsage
 	}
 	statusResolver, err := lists.resolver()
 	if err != nil {
@@ -392,4 +407,17 @@ func (r *statusLists) ResolveStatus(listURL string) (*status.StatusList, error) 
 		return r.fallback, nil
 	}
 	return nil, fmt.Errorf("no status list supplied for %q (pass --status %s=<file>)", listURL, listURL)
+}
+
+// splitHosts parses the comma-separated -did-hosts value, dropping empty
+// entries so a trailing comma or a stray space cannot silently produce an entry
+// that matches nothing (or, worse, an empty host).
+func splitHosts(s string) []string {
+	var out []string
+	for _, h := range strings.Split(s, ",") {
+		if h = strings.TrimSpace(h); h != "" {
+			out = append(out, h)
+		}
+	}
+	return out
 }
