@@ -5,6 +5,7 @@
 package webhost
 
 import (
+	"net/url"
 	"strings"
 	"testing"
 )
@@ -52,9 +53,20 @@ func TestValidateRejectsURLStructure(t *testing.T) {
 
 		{"port zero", "example.com:0", "out of range"},
 		{"port too high", "example.com:99999", "out of range"},
-		{"port negative", "example.com:-1", "out of range"},
+		{"port overflows an int", "example.com:" + strings.Repeat("9", 25), "out of range"},
 		{"port not a number", "example.com:abc", "not a number"},
 		{"port empty", "example.com:", "not a number"},
+
+		// A signed port is a GRAMMAR violation, not a range violation, which is
+		// why these say "not a number" rather than "out of range". strconv.Atoi
+		// accepts a leading sign, so "+1" parsed as 1 and passed the range check
+		// while net/url refuses ":+1" outright: did:web:0%3A+1 validated here and
+		// produced a URL the caller could not parse. Found by internal/did's
+		// FuzzDIDWebToURL.
+		{"port with plus sign", "example.com:+1", "not a number"},
+		{"port negative", "example.com:-1", "not a number"},
+		{"port with underscore", "example.com:1_0", "not a number"},
+		{"port with leading space", "example.com: 1", "not a number"},
 		{"unbracketed ipv6", "::1", "must be bracketed"},
 		{"unclosed bracket", "[::1", "closing bracket"},
 		{"junk after bracket", "[::1]junk", "after the IPv6 literal"},
@@ -102,7 +114,21 @@ func TestValidateRejectsURLStructure(t *testing.T) {
 // conflating the two would put a network policy decision somewhere it cannot be
 // enforced correctly.
 func TestValidateAcceptsRealHosts(t *testing.T) {
-	for _, host := range []string{
+	for _, host := range acceptedHosts() {
+		t.Run(host, func(t *testing.T) {
+			if err := Validate(host); err != nil {
+				t.Errorf("Validate(%q) rejected a legitimate host: %v", host, err)
+			}
+		})
+	}
+}
+
+// acceptedHosts is the shared list of hosts that must pass. It is a function
+// rather than a literal inside one test because two tests assert different
+// things about the same set: that each is accepted, and that each accepted value
+// can then be built into a URL.
+func acceptedHosts() []string {
+	return []string{
 		"example.com",
 		"sub.example.co.uk",
 		"localhost",
@@ -120,10 +146,45 @@ func TestValidateAcceptsRealHosts(t *testing.T) {
 		"a",
 		strings.Repeat("a", 63) + ".com",
 		"under_score.example.com",
-	} {
+	}
+}
+
+// TestAcceptedHostAlwaysBuildsAParseableURL states the invariant the two
+// instance fixes above were each half of, so the next one is caught as a class.
+//
+// A host that clears Validate is built straight into a URL and fetched; nothing
+// asks again. So Validate must accept NO MORE than net/url does, and both
+// defects found here were that rule broken in different places: a character
+// class admitting "[0]" as an IPv6 literal, and strconv.Atoi admitting "+1" as a
+// port. Each was fixed on its own terms, and neither fix would have caught the
+// other. This asserts the shared property directly.
+//
+// It runs over the accepted table above, so a host added there gets checked
+// against net/url for free, which is the point: the guard has to sit on the list
+// people extend.
+func TestAcceptedHostAlwaysBuildsAParseableURL(t *testing.T) {
+	hosts := acceptedHosts()
+	if len(hosts) == 0 {
+		t.Fatal("no accepted hosts to check; this test would pass vacuously")
+	}
+	for _, host := range hosts {
 		t.Run(host, func(t *testing.T) {
 			if err := Validate(host); err != nil {
-				t.Errorf("Validate(%q) rejected a legitimate host: %v", host, err)
+				t.Fatalf("Validate(%q) rejected a host the accepted table names: %v", host, err)
+			}
+			raw := "https://" + host + "/.well-known/did.json"
+			u, err := url.Parse(raw)
+			if err != nil {
+				t.Fatalf("Validate accepted %q but net/url cannot parse %q: %v\n\n"+
+					"Validate must accept no more than net/url does: an accepted host is "+
+					"built into a URL and fetched without being asked again, so a value "+
+					"that only fails later fails in the wrong place.", host, raw, err)
+			}
+			// The host must also survive the round trip unchanged. A URL that
+			// parses but reports a different host would be the host-confusion
+			// class this package exists to close.
+			if u.Host != host {
+				t.Fatalf("Validate accepted %q but net/url reads the host as %q", host, u.Host)
 			}
 		})
 	}

@@ -182,6 +182,22 @@ For what the system does today, and for the limits of a clean verdict, the
   signed audit entry whose stated cause was the empty string. Both failing
   inputs stay in `testdata/fuzz/` as permanent regression seeds.
 
+  A third arrived later and from an unexpected direction: the ten-second CI
+  smoke run, which exists as a liveness check rather than for discovery, failed
+  on an unrelated documentation branch. `FuzzDIDWebToURL` had found
+  `webhost.Validate` accepting `+1` as a port, because `strconv.Atoi` tolerates a
+  leading sign while `net/url` refuses `:+1` outright, so `did:web:0%3A+1`
+  validated and then built a URL nothing could parse. Same shape as the bracket
+  defect and the denylist before it: a check that describes a value rather than
+  matching the grammar of the layer that consumes it. The fix is a digit rule
+  plus a test asserting the shared invariant (anything `Validate` accepts,
+  `net/url` can parse), so the next instance is caught as a class.
+
+  Worth knowing operationally: because the smoke run explores randomly, it can
+  surface a genuine `main` defect on a branch that did not cause it. A red gate
+  on an unrelated PR is therefore not automatically flaky, and should be read
+  before it is re-run.
+
   The macaroon package has no parser, so the untrusted input there is the caveat
   values rather than a byte stream, and the property worth searching is the
   narrowing lattice: inclusive against exclusive endpoints, sets, and a value

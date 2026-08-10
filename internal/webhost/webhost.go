@@ -76,14 +76,50 @@ func Validate(host string) error {
 	}
 
 	if hasPort {
-		p, err := strconv.Atoi(port)
-		if err != nil {
+		if err := validatePort(port); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// validatePort accepts a decimal port, and it enforces the GRAMMAR before the
+// range rather than delegating both to strconv.
+//
+// strconv.Atoi is not the rule this needs: it accepts a leading sign, so "+1"
+// parses as 1 and satisfies any range check, while net/url refuses ":+1" as a
+// port outright. did:web:0%3A+1 therefore passed validation here and produced
+// "https://0:+1/.well-known/did.json", which the caller could not parse. Found
+// by internal/did's FuzzDIDWebToURL.
+//
+// That is the same mistake as the character-class IPv6 check this package
+// already had to replace, arriving from the other direction: there a check
+// described how a value LOOKS instead of what it MEANS, and here a parser was
+// let stand in for a grammar it does not implement. The rule in both cases is
+// that what this package accepts must be exactly what net/url accepts, because
+// a value that passes here is built into a URL without being asked again.
+//
+// So: digits only. A sign is a grammar violation, not a range violation, and is
+// reported as one, which is why "-1" is refused here rather than by the range
+// check below.
+func validatePort(port string) error {
+	// Explicitly, because a loop over an empty string checks nothing: without
+	// this, "example.com:" clears the digit rule vacuously and is refused by the
+	// range check with an error naming a port it does not have.
+	if port == "" {
+		return fmt.Errorf("port %q is not a number", port)
+	}
+	for i := 0; i < len(port); i++ {
+		if port[i] < '0' || port[i] > '9' {
 			return fmt.Errorf("port %q is not a number", port)
 		}
-		// Port 0 means "any free port" to a listener and is never a destination.
-		if p < 1 || p > 65535 {
-			return fmt.Errorf("port %d is out of range 1 to 65535", p)
-		}
+	}
+	// A digit-only string still overflows if it is long enough, and Atoi reports
+	// that as an error rather than a value; both land on the same refusal.
+	p, err := strconv.Atoi(port)
+	// Port 0 means "any free port" to a listener and is never a destination.
+	if err != nil || p < 1 || p > 65535 {
+		return fmt.Errorf("port %q is out of range 1 to 65535", port)
 	}
 	return nil
 }
