@@ -30,6 +30,25 @@ For what the system does today, and for the limits of a clean verdict, the
   Whether to adopt Cedar or Rego, and at what cost to the verifier's dependency
   closure, is undecided. Both spikes are unstarted.
 
+- **Policy hot-reload is an export-format change, not a loader feature.** A proxy
+  loads one policy at startup, and every audit entry pins that policy's
+  content-address, so one export carries exactly one policy and the verifier
+  re-derives every allowed entry against it. Reloading a policy into a running
+  proxy therefore produces a log spanning two policies, which the current export
+  format cannot represent. Making it work means the export carrying multiple
+  content-addressed policies and the verifier pinning per entry rather than per
+  export: a format-and-verifier change on the Apache-tier side, which is the
+  expensive kind, and it is where this has to be designed rather than worked
+  around.
+
+  What exists today is **not a head start.** `Proxy.recoverFrom` refuses to
+  resume a durable log whose entries were written under a policy whose
+  content-address differs from the one now loaded. That guard has the opposite
+  polarity to a reload (it refuses a differing policy rather than admitting a
+  newly authorized one) and it encodes the single-policy-per-export assumption a
+  reload has to dismantle. It is that constraint surfacing, not progress against
+  it, and it must not be extended into a reload mechanism.
+
 - **Joint or dual authorization.** Consequential actions today require exactly
   one human approver, by design and for now. Requiring two, or requiring a
   specific pair, is not modeled.

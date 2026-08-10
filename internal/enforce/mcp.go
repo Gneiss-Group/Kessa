@@ -270,6 +270,14 @@ func (s *mcpServer) handlePost(w http.ResponseWriter, r *http.Request) {
 	// define header requirements for a notification POST, so one is acknowledged
 	// without the request-metadata validation below rather than refused on a rule
 	// the spec does not state.
+	//
+	// What makes that safe is the return, not the reasoning: the 202 is written
+	// BEFORE dispatch, so no method runs and no enforcement path is reached, and
+	// the skipped validation is guarding nothing. The day a revision defines a
+	// client-to-server notification, or one is added here, that stops being true
+	// and this branch becomes a dispatch path with no metadata check in front of
+	// it. Anyone giving a notification a body to act on must move the validation
+	// above the branch in the same change.
 	if req.isNotification() {
 		w.WriteHeader(http.StatusAccepted)
 		return
