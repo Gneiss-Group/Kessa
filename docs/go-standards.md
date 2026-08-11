@@ -207,6 +207,24 @@ Comment density in this repository is high and deliberately so. The convention:
 - **Do not comment what the code says.** The bar is: would a reviewer have had to
   reconstruct this reasoning themselves?
 
+## Standing rule: open items are recorded in UPCOMING.md only
+
+A new open item is created in UPCOMING.md, never solely in a code comment,
+a citation to a private document, or left implicit in a PR description. If
+the reasoning needs more room than a comment allows, the comment points at
+UPCOMING.md, not the reverse. This does not require moving already-settled
+register content; it applies only to where a *new* open item first gets
+written down.
+
+## Known gap, not yet a rule: stale docs outside the touching PR
+
+Documents describing current system behavior or limits (README claims,
+mcp.md, etc.) are not self-auditing. Nothing catches drift in a document
+that a given PR didn't itself touch, even when that PR is exactly what made
+the document's claim false. Three instances found in one 2026-08-11 session
+alone, all pre-existing text describing a state the code had already left
+behind. No mechanism proposed yet. Revisit if a fourth instance appears.
+
 ## Prose style
 
 Comments, documentation, and commit messages are written to be read, so the same
