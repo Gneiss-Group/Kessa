@@ -40,6 +40,7 @@ import (
 	"github.com/Gneiss-Group/Kessa/internal/keystore"
 	"github.com/Gneiss-Group/Kessa/internal/policy"
 	"github.com/Gneiss-Group/Kessa/internal/signer"
+	"github.com/Gneiss-Group/Kessa/internal/signerd"
 	"github.com/Gneiss-Group/Kessa/internal/status"
 	"github.com/Gneiss-Group/Kessa/internal/version"
 	"github.com/Gneiss-Group/Kessa/pkg/types"
@@ -82,35 +83,27 @@ func run(args []string, stdout, stderr io.Writer) int {
 	}
 }
 
-// buildProxy assembles the shared enforcement engine from CLI flags. now, if
+// buildProxy assembles the shared enforcement engine around an already-resolved
+// enforcement-point signer (see keystoreSigner and brokeredSigner: where that key
+// comes from is a separate decision from what the engine does with it). now, if
 // non-nil, fixes the audit entry timestamp for deterministic runs. sink, if
 // non-nil, forwards each audit entry to an external destination (see buildSink).
-func buildProxy(policyPath, didsDir, epDID, ksPath string, statuses statusFlag, now func() time.Time, sink auditsink.AuditSink, wal *enforce.WAL, stderr io.Writer) (*enforce.Proxy, keystore.Keystore, bool) {
-	for name, v := range map[string]string{"policy": policyPath, "dids": didsDir, "enforcement-point": epDID, "keystore": ksPath} {
+func buildProxy(policyPath, didsDir string, ep signer.Signer, statuses statusFlag, now func() time.Time, sink auditsink.AuditSink, wal *enforce.WAL, stderr io.Writer) (*enforce.Proxy, bool) {
+	for name, v := range map[string]string{"policy": policyPath, "dids": didsDir} {
 		if v == "" {
 			fmt.Fprintf(stderr, "kessa-proxy: --%s is required\n", name)
-			return nil, nil, false
+			return nil, false
 		}
-	}
-	ks, err := keystore.Load(ksPath)
-	if err != nil {
-		fmt.Fprintf(stderr, "kessa-proxy: %v\n", err)
-		return nil, nil, false
-	}
-	ep, err := ks.Signer(types.DID(epDID))
-	if err != nil {
-		fmt.Fprintf(stderr, "kessa-proxy: enforcement point: %v\n", err)
-		return nil, nil, false
 	}
 	pol, err := policy.Load(policyPath)
 	if err != nil {
 		fmt.Fprintf(stderr, "kessa-proxy: %v\n", err)
-		return nil, nil, false
+		return nil, false
 	}
 	statusResolver, err := statuses.resolver()
 	if err != nil {
 		fmt.Fprintf(stderr, "kessa-proxy: %v\n", err)
-		return nil, nil, false
+		return nil, false
 	}
 	px, err := enforce.NewProxy(enforce.Config{
 		EnforcementPoint: ep,
@@ -123,9 +116,79 @@ func buildProxy(policyPath, didsDir, epDID, ksPath string, statuses statusFlag, 
 	})
 	if err != nil {
 		fmt.Fprintf(stderr, "kessa-proxy: %v\n", err)
+		return nil, false
+	}
+	return px, true
+}
+
+// keystoreSigner materializes the enforcement point's signer from the MOCK
+// keystore, and returns the keystore itself because batch mode needs it for a
+// second, unrelated purpose (minting the fixture requests' proof-of-possession
+// and approval signatures).
+//
+// This path holds the enforcement point's private key as a hex seed in a file the
+// proxy reads, which internal/keystore's own package doc says not to copy into
+// anything real. It stays because it is what makes `make demo` and the batch
+// fixtures reproducible, not because it is a deployment story.
+func keystoreSigner(ksPath, epDID string, stderr io.Writer) (signer.Signer, keystore.Keystore, bool) {
+	ks, err := keystore.Load(ksPath)
+	if err != nil {
+		fmt.Fprintf(stderr, "kessa-proxy: %v\n", err)
 		return nil, nil, false
 	}
-	return px, ks, true
+	ep, err := ks.Signer(types.DID(epDID))
+	if err != nil {
+		fmt.Fprintf(stderr, "kessa-proxy: enforcement point: %v\n", err)
+		return nil, nil, false
+	}
+	return ep, ks, true
+}
+
+// brokeredSigner connects to a running signing daemon and returns a signer whose
+// private key never enters this process: Sign round-trips over the socket. This
+// is the path a deployment should use, and the reason the mock keystore is not a
+// secrets story that a config file or a Terraform variable could fix.
+//
+// Two things gate the socket, both on the daemon's side: 0700 directory and 0600
+// socket permissions, and a per-connection peer-uid check against the daemon's
+// owner. The consequence for a deployment is that the proxy must run as the same
+// uid as the daemon and share the socket's filesystem, which for containers means
+// one uid and a shared volume, not two unrelated service accounts.
+//
+// Dial round-trips immediately to confirm the daemon holds this DID, so a missing
+// daemon or a daemon holding the wrong key is a startup failure rather than a
+// surprise at the first request.
+func brokeredSigner(sockPath, epDID string, stderr io.Writer) (signer.Signer, bool) {
+	ep, err := signerd.Dial(sockPath, types.DID(epDID))
+	if err != nil {
+		fmt.Fprintf(stderr, "kessa-proxy: enforcement point: %v\n", err)
+		return nil, false
+	}
+	return ep, true
+}
+
+// enforcementPointSigner picks the one key source `serve` will use. Exactly one
+// of --keystore and --signer-sock, never both and never neither: defaulting
+// either way would pick a key custody model on the operator's behalf, and the two
+// have materially different properties.
+func enforcementPointSigner(ksPath, sockPath, epDID string, stderr io.Writer) (signer.Signer, bool) {
+	if epDID == "" {
+		fmt.Fprintln(stderr, "kessa-proxy: --enforcement-point is required")
+		return nil, false
+	}
+	switch {
+	case ksPath == "" && sockPath == "":
+		fmt.Fprintln(stderr, "kessa-proxy: one of --keystore or --signer-sock is required: the enforcement point needs a signing key")
+		return nil, false
+	case ksPath != "" && sockPath != "":
+		fmt.Fprintln(stderr, "kessa-proxy: --keystore and --signer-sock are mutually exclusive; name the one key source to use")
+		return nil, false
+	case sockPath != "":
+		return brokeredSigner(sockPath, epDID, stderr)
+	default:
+		ep, _, ok := keystoreSigner(ksPath, epDID, stderr)
+		return ep, ok
+	}
 }
 
 // buildSink turns the --audit-log flag into a sink and a closer. The flag
@@ -203,6 +266,20 @@ func cmdRun(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stderr, "kessa-proxy: --requests is required")
 		return exitUsage
 	}
+	// Batch mode stays on the mock keystore, and deliberately gains no
+	// --signer-sock. It needs the keystore regardless: loadRequests mints each
+	// fixture's proof-of-possession and human approval from it, which is the agent's
+	// and the human's key, not the enforcement point's. A brokered enforcement-point
+	// key here would swap one of the three for a daemon and leave the other two as
+	// seeds in a file, which buys nothing.
+	if *epDID == "" {
+		fmt.Fprintln(stderr, "kessa-proxy: --enforcement-point is required")
+		return exitUsage
+	}
+	if *ksPath == "" {
+		fmt.Fprintln(stderr, "kessa-proxy: --keystore is required")
+		return exitUsage
+	}
 	now, err := parseNow(*nowStr)
 	if err != nil {
 		fmt.Fprintf(stderr, "kessa-proxy: %v\n", err)
@@ -224,7 +301,11 @@ func cmdRun(args []string, stdout, stderr io.Writer) int {
 	if closeWAL != nil {
 		defer func() { _ = closeWAL() }()
 	}
-	px, ks, ok := buildProxy(*policyPath, *didsDir, *epDID, *ksPath, statuses, now, sink, wal, stderr)
+	ep, ks, ok := keystoreSigner(*ksPath, *epDID, stderr)
+	if !ok {
+		return exitUsage
+	}
+	px, ok := buildProxy(*policyPath, *didsDir, ep, statuses, now, sink, wal, stderr)
 	if !ok {
 		return exitUsage
 	}
@@ -322,7 +403,8 @@ func cmdServe(args []string, stdout, stderr io.Writer) int {
 	policyPath := fs.String("policy", "", "policy file (required)")
 	didsDir := fs.String("dids", "", "directory of published did:web documents (required)")
 	epDID := fs.String("enforcement-point", "", "DID of this enforcement point (required)")
-	ksPath := fs.String("keystore", "", "MOCK keystore JSON (required)")
+	ksPath := fs.String("keystore", "", "MOCK keystore JSON holding this enforcement point's seed in the clear; evaluation only. Exactly one of --keystore or --signer-sock is required")
+	sockPath := fs.String("signer-sock", "", "Unix socket of a running `kessa-issuer daemon` that brokers this enforcement point's key. The private key stays in the daemon and never enters this process; the proxy must run as the daemon's owner uid. Exactly one of --keystore or --signer-sock is required")
 	httpAddr := fs.String("http-addr", "127.0.0.1:8181", "address for the generic HTTP listener; empty to disable it")
 	mcpAddr := fs.String("mcp-addr", "127.0.0.1:8182", "address for the MCP-native (Streamable HTTP JSON-RPC) listener; empty to disable it")
 	exportOut := fs.String("export", "", "if set, write the accumulated export here on shutdown")
@@ -340,22 +422,12 @@ func cmdServe(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "kessa-proxy: %v\n", err)
 		return exitUsage
 	}
-	sink, closeSink, err := buildSink(*auditLog)
-	if err != nil {
-		fmt.Fprintf(stderr, "kessa-proxy: %v\n", err)
-		return exitUsage
-	}
-	if closeSink != nil {
-		defer func() { _ = closeSink() }()
-	}
-	wal, closeWAL, err := buildWAL(*walPath)
-	if err != nil {
-		fmt.Fprintf(stderr, "kessa-proxy: %v\n", err)
-		return exitUsage
-	}
-	if closeWAL != nil {
-		defer func() { _ = closeWAL() }()
-	}
+	// Everything refusable is checked before anything is created. buildSink and
+	// buildWAL both open (and create) files, so running them first meant a serve
+	// that was going to be rejected for its bind address or its key source had
+	// already left an audit-log file behind on the operator's disk. Validate, then
+	// act, in that order.
+	//
 	// A non-loopback bind is refused unless the operator explicitly accepts what it
 	// means. The listeners have no caller authentication, so binding a reachable
 	// address publishes the enforcement endpoint to anyone who can route to it,
@@ -374,7 +446,29 @@ func cmdServe(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprint(stderr, msg)
 	}
 
-	px, _, ok := buildProxy(*policyPath, *didsDir, *epDID, *ksPath, statuses, now, sink, wal, stderr)
+	ep, ok := enforcementPointSigner(*ksPath, *sockPath, *epDID, stderr)
+	if !ok {
+		return exitUsage
+	}
+
+	sink, closeSink, err := buildSink(*auditLog)
+	if err != nil {
+		fmt.Fprintf(stderr, "kessa-proxy: %v\n", err)
+		return exitUsage
+	}
+	if closeSink != nil {
+		defer func() { _ = closeSink() }()
+	}
+	wal, closeWAL, err := buildWAL(*walPath)
+	if err != nil {
+		fmt.Fprintf(stderr, "kessa-proxy: %v\n", err)
+		return exitUsage
+	}
+	if closeWAL != nil {
+		defer func() { _ = closeWAL() }()
+	}
+
+	px, ok := buildProxy(*policyPath, *didsDir, ep, statuses, now, sink, wal, stderr)
 	if !ok {
 		return exitUsage
 	}

@@ -29,6 +29,17 @@ kessa-issuer daemon --mapping ~/.kessa/enrollment-map.json
 - `--keystore` keys are brokered as **Routine** (proof-of-possession). A software
   key is acceptable here: a PoP signature is bound by the proxy to one action at
   one chain slot.
+- `--attestation-key <DID>` (repeatable) reclassifies one of those keystore keys
+  as an **Attestation** key: an enforcement point's own audit-signing key, which
+  is what `kessa-proxy serve --signer-sock` asks the daemon for. Also software-
+  permitted, and the distinction is not a security boundary: it is so the key
+  table below says which key attests a log and which proves possession. A named
+  DID the keystore does not hold is refused rather than ignored, because ignoring
+  it would broker the intended key as `Routine` and still report success.
+- Entries in a keystore file whose key is not a DID (the shipped fixtures carry a
+  `_comment` documenting that the file is mock key management) are skipped rather
+  than treated as principals. They were not, until 2026-08-11, which is why the
+  daemon could not load either keystore in this repository.
 - `--mapping` loads each non-revoked enrolled key by its keychain tag and brokers
   it as an **Approval**-capable key (the employee key issues and approves). These
   **must be hardware-backed**: the daemon refuses to start if a mapping entry is a
@@ -63,6 +74,37 @@ kessa-agent attempt --agent-sock ~/.kessa/issuer.sock \
 With `--agent-sock`, the agent fetches its actor (and approver) key from the
 daemon instead of a local keystore; `--keystore` is not needed. Everything
 downstream is identical: the socket-backed signer is a drop-in `signer.Signer`.
+
+## Using it from the proxy
+
+```bash
+kessa-issuer daemon --keystore keystore.json \
+  --attestation-key did:web:localhost:proxies:gatekeeper --sock /run/kessa/s
+
+kessa-proxy serve --signer-sock /run/kessa/s \
+  --enforcement-point did:web:localhost:proxies:gatekeeper \
+  --policy policy.json --dids ./public
+```
+
+`serve` takes exactly one of `--keystore` and `--signer-sock`, never both and
+never neither: defaulting either way would pick a key custody model on the
+operator's behalf, and the two differ in whether the enforcement point's private
+key is in the proxy's process at all. With `--signer-sock` it is not; the proxy
+holds no key material and every audit entry and export envelope is signed over
+the socket.
+
+`Dial` round-trips immediately to confirm the daemon holds that DID, so a missing
+daemon, or one holding the wrong key, is a **startup** failure. A proxy that
+started and could not sign would already have accepted traffic it cannot record.
+
+**Deployment consequence of the peer-uid gate below:** the proxy must run as the
+*same uid* as the daemon and be able to reach the socket's path. Same host, or
+same pod with a shared volume and one uid, not two unrelated service accounts.
+
+Batch mode (`kessa-proxy run`) deliberately has no `--signer-sock`. It needs the
+keystore regardless, to mint each fixture request's proof-of-possession and
+approval, so brokering only the enforcement point's key there would swap one of
+three keys for a daemon and leave the other two as seeds in a file.
 
 ## Access control
 

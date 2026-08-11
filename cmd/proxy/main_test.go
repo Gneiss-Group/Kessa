@@ -205,7 +205,11 @@ func readJSONL(t *testing.T, path string) []auditsink.AuditRecord {
 // The serve command is a thin shell over enforce.Handler; confirm buildProxy
 // wires up and the handler answers /export with a v2 envelope.
 func TestServe_Wiring(t *testing.T) {
-	px, _, ok := buildProxy(commercePol, didsRoot, epDID, ksExample,
+	ep, _, ok := keystoreSigner(ksExample, epDID, io.Discard)
+	if !ok {
+		t.Fatal("keystoreSigner failed")
+	}
+	px, ok := buildProxy(commercePol, didsRoot, ep,
 		statusFlag{acmeListURL + "=" + acmeStatus}, nil, nil, nil, io.Discard)
 	if !ok {
 		t.Fatal("buildProxy failed")

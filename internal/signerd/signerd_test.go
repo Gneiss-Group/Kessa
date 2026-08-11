@@ -209,3 +209,73 @@ func startDaemonKeys(t *testing.T, keys ...HeldKey) string {
 	t.Cleanup(func() { _ = l.Close() })
 	return sock
 }
+
+// TestNewKeys_AttestationPolicy pins what the third policy does and, just as
+// importantly, what it does not. An attestation key is an enforcement point's own
+// audit-signing key: software is acceptable (there is no human present to make a
+// per-use gesture, so Approval's hardware rule would buy something different from
+// what it exists to buy), and it is brokered end to end like any other key.
+func TestNewKeys_AttestationPolicy(t *testing.T) {
+	soft := softwareSigner(t, "did:web:localhost:proxies:gatekeeper", 0x51)
+
+	if _, err := NewKeys([]HeldKey{{Signer: soft, Policy: Attestation}}); err != nil {
+		t.Fatalf("a software attestation key must be accepted: %v", err)
+	}
+	// Hardware backing is permitted, never required: the policy must not quietly
+	// acquire Approval's rule.
+	if _, err := NewKeys([]HeldKey{{Signer: hwSigner{soft}, Policy: Attestation}}); err != nil {
+		t.Fatalf("a hardware-backed attestation key must be accepted: %v", err)
+	}
+
+	sock := startDaemonKeys(t, HeldKey{Signer: soft, Policy: Attestation})
+	cl, err := Dial(sock, soft.DID())
+	if err != nil {
+		t.Fatalf("Dial: %v", err)
+	}
+	sig, err := cl.Sign([]byte("an audit entry"))
+	if err != nil {
+		t.Fatalf("Sign through an attestation key: %v", err)
+	}
+	if len(sig) == 0 {
+		t.Fatal("brokered attestation signature is empty")
+	}
+}
+
+// TestNewKeys_RefusesUnknownPolicy is the guard on the shape of the hardware
+// check rather than on any one policy. The check asks the policy whether it needs
+// hardware instead of testing for Approval, so a value this package does not
+// define has no answer and must be refused. Testing `p == Approval` would have
+// let this through as software-acceptable, which is the permissive answer arrived
+// at by never being asked.
+func TestNewKeys_RefusesUnknownPolicy(t *testing.T) {
+	soft := softwareSigner(t, "did:web:localhost:employees:mallory", 0x52)
+
+	for _, p := range []KeyPolicy{KeyPolicy(99), KeyPolicy(-1)} {
+		if _, err := NewKeys([]HeldKey{{Signer: soft, Policy: p}}); err == nil {
+			t.Fatalf("policy %s must be refused, not brokered", p)
+		}
+		// Even a hardware-backed signer must not rescue an undefined policy: the
+		// objection is that nobody decided how to handle it, not that the key is weak.
+		if _, err := NewKeys([]HeldKey{{Signer: hwSigner{soft}, Policy: p}}); err == nil {
+			t.Fatalf("policy %s must be refused even with a hardware-backed key", p)
+		}
+	}
+}
+
+// TestKeyPolicyString keeps the operator-facing names stable: the daemon prints
+// them in its key table, and an unrecognized value must render rather than vanish.
+func TestKeyPolicyString(t *testing.T) {
+	for _, tc := range []struct {
+		p    KeyPolicy
+		want string
+	}{
+		{Routine, "routine"},
+		{Approval, "approval"},
+		{Attestation, "attestation"},
+		{KeyPolicy(99), "unknown(99)"},
+	} {
+		if got := tc.p.String(); got != tc.want {
+			t.Errorf("KeyPolicy(%d).String() = %q, want %q", int(tc.p), got, tc.want)
+		}
+	}
+}

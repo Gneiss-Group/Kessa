@@ -145,9 +145,37 @@ hardware-backed.** A key registered with `Policy: Approval` must satisfy the
 implements and software signers do not. A software approval key is rejected at
 construction. Concretely, `kessa-issuer daemon --mapping` loads enrolled Enclave
 keys as `Approval` and **refuses to start** if a mapping entry is software-backed;
-`--keystore` keys are always `Routine`. This is code-enforced (R4-02), so the
-integrity of "a human deliberately approved this" cannot silently degrade to an
-unenforced convention just because a software key was handed in.
+`--keystore` keys are `Routine` unless `--attestation-key` names one. This is
+code-enforced (R4-02), so the integrity of "a human deliberately approved this"
+cannot silently degrade to an unenforced convention just because a software key
+was handed in.
+
+The check asks the *policy* whether it requires hardware rather than testing for
+`Approval` by name, and refuses a policy value the package does not define. A
+policy added later therefore has to state its own answer instead of inheriting
+"software is acceptable" from the shape of the check.
+
+### `Attestation`: the enforcement point's own key
+An enforcement point signs every audit entry and the export envelope with its own
+key. That key is neither of the other two policies, and the third exists so the
+daemon does not have to pretend otherwise.
+
+It is **not `Routine`.** Routine permits software for a specific reason: the proxy
+binds a proof-of-possession to one `(action, seq, prevHash)`, so a freely brokered
+PoP signature authorizes exactly one action at exactly one slot. An attestation
+signature carries no such binding.
+
+It is **not `Approval`,** and so it does not require hardware. Approval's hardware
+rule buys a per-use human gesture enforced by the OS, which is meaningless for a
+key an unattended server process uses on every request: no human is present to
+gesture. Requiring hardware here would buy non-extractability instead, which is
+worth having but is a different and weaker claim than the one Approval's rule
+makes. If a non-extractability requirement ever lands, this is the policy that
+gains it, and it can gain it without disturbing what `Routine` means.
+
+What the policy earns today is honesty at the daemon's boundary: the key table
+`kessa-issuer daemon` prints on startup says which key attests a log and which
+proves possession, rather than one undifferentiated `routine` pile.
 
 ### What is NOT yet enforced
 There is **no op-level distinction between a PoP sign and an approval sign**. The

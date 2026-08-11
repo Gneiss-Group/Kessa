@@ -15,31 +15,25 @@ import (
 	"github.com/Gneiss-Group/Kessa/internal/credential"
 	"github.com/Gneiss-Group/Kessa/internal/did"
 	"github.com/Gneiss-Group/Kessa/internal/export"
+	"github.com/Gneiss-Group/Kessa/internal/keystore"
 	"github.com/Gneiss-Group/Kessa/internal/macaroon"
-	"github.com/Gneiss-Group/Kessa/internal/signer"
 	"github.com/Gneiss-Group/Kessa/internal/status"
 	"github.com/Gneiss-Group/Kessa/pkg/types"
 )
 
-// Keystore maps a principal's DID to a hex-encoded 32-byte Ed25519 seed.
+// Keystore is internal/keystore's mock keystore, aliased rather than redeclared.
+//
+// This file used to carry its own copy of the same map type and its own copy of
+// Signer, differing only in the wording of two error messages. Two copies of one
+// type is two places a fix has to land, and the second one is the copy nobody
+// remembers: the Principals helper that skips a keystore's non-DID "_comment"
+// entry would have had to be written twice, which is how the daemon came to be
+// unable to load a keystore the proxy reads fine.
 //
 // THIS IS MOCK KEY MANAGEMENT. Real deployments put private keys behind the
 // signer.Signer seam (TPM / Secure Enclave / HSM) and never write them to disk.
 // Seeds live here so the POC and `make demo` are deterministic and reproducible.
-type Keystore map[types.DID]string
-
-// Signer materializes a SoftwareSigner for a principal.
-func (ks Keystore) Signer(d types.DID) (signer.Signer, error) {
-	h, ok := ks[d]
-	if !ok {
-		return nil, fmt.Errorf("keystore has no seed for %q", d)
-	}
-	seed, err := hex.DecodeString(h)
-	if err != nil {
-		return nil, fmt.Errorf("keystore seed for %q is not hex: %w", d, err)
-	}
-	return signer.NewSoftwareSignerFromSeed(d, seed)
-}
+type Keystore = keystore.Keystore
 
 // CaveatSpec is one restriction added at a delegation hop.
 type CaveatSpec struct {

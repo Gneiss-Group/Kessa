@@ -19,6 +19,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"sort"
+	"strings"
 
 	"github.com/Gneiss-Group/Kessa/internal/signer"
 	"github.com/Gneiss-Group/Kessa/pkg/types"
@@ -38,6 +40,35 @@ func Load(path string) (Keystore, error) {
 		return nil, fmt.Errorf("keystore: parse %q: %w", path, err)
 	}
 	return ks, nil
+}
+
+// Principals returns the DIDs this keystore holds seeds for, in sorted order,
+// excluding entries whose key is not a DID at all.
+//
+// JSON objects have nowhere to put a comment, so both keystore fixtures in this
+// repository carry a "_comment" entry stating that the file is mock key
+// management. That entry is documentation, not a principal, and its value is
+// prose rather than a hex seed. A caller that iterates the raw map and calls
+// Signer on every key therefore fails on it, which is exactly what
+// `kessa-issuer daemon --keystore` did: it could not load either of the
+// repository's own example keystores. The proxy never noticed because it only
+// ever asks for one DID by name.
+//
+// The rule is the DID syntax rather than a list of names to skip: anything
+// without the "did:" scheme is not an identifier this file can hold a key for.
+// Entries that DO claim to be DIDs are returned even if their seed is unusable,
+// so a genuinely malformed principal still fails loudly at Signer rather than
+// being quietly dropped here.
+func (ks Keystore) Principals() []types.DID {
+	out := make([]types.DID, 0, len(ks))
+	for d := range ks {
+		if !strings.HasPrefix(string(d), "did:") {
+			continue
+		}
+		out = append(out, d)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
+	return out
 }
 
 // Signer materializes a software signer for a principal.

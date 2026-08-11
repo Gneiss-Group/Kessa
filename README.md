@@ -117,8 +117,15 @@ seam with two backends: a software keystore (the demo, CI, and
 **macOS Secure Enclave** backend holding a non-extractable P-256 key. The Enclave
 generate → persist → reload → sign → delete loop is **validated on real
 hardware**, and the compiled Go daemon has not yet run under a profile, so
-packaging is the remaining step. There is no Linux/TPM or Windows backend. What
-each backend does and does not prove is stated bluntly in
+packaging is the remaining step. There is no Linux/TPM or Windows backend.
+
+The enforcement point does not have to hold its own key in a file: `kessa-proxy
+serve --signer-sock` brokers it through the signing daemon, so the private key
+stays in the daemon and never enters the proxy's process. `--keystore` remains,
+for evaluation, and the two are mutually exclusive so nothing picks a custody
+model by default. The brokered key is still a software key.
+
+What each backend does and does not prove is stated bluntly in
 [Signing backends](docs/signer.md); the other boundaries are under
 [Known limits](#known-limits), and open questions are collected in
 [`UPCOMING.md`](UPCOMING.md).
