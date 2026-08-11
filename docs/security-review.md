@@ -380,6 +380,38 @@ Five regression tests cover both trust paths, including a genuine revocation sti
 denying, without which a proxy that denied everything would satisfy the rest. All
 were confirmed to fail with the binding removed.
 
+## Published advisories
+
+Findings raised after a tagged release are disclosed through GitHub's security
+advisory workflow rather than described here, for the reason given under [How
+this record will work going forward](#how-this-record-will-work-going-forward).
+This section is the index; the advisory is the account.
+
+| Advisory | Sev | Affected | Fixed in | What it covers |
+|---|---|---|---|---|
+| [GHSA-mw7q-jp9f-576r](https://github.com/Gneiss-Group/Kessa/security/advisories/GHSA-mw7q-jp9f-576r) | High | `<= 0.0.1` | **0.0.2** | did:web resolution could be steered to unintended hosts when `--fetch-dids` is enabled |
+
+Two things about that advisory are worth recording here, because they are
+decisions rather than facts about the defect.
+
+**It is one advisory covering a defect fixed in two parts.** Host confusion and
+uncontrolled redirects were closed first, and the choice of destination second.
+Splitting them would have produced two advisories for one exposure and invited a
+reader to patch half of it, so the advisory stayed a draft until both halves
+shipped in the same release. Disclosing once, against a version that carries the
+whole fix, is the trade this makes deliberately.
+
+**No CVE was requested.** An advisory published here reaches the channels that
+matter for software distributed from this repository. A CVE earns its place when
+notification has to travel further than that, which is a judgement about
+distribution rather than about severity. A third party taking a dependency on
+Kessa, or redistributing it, would each put consumers beyond the reach of this
+page, and either would change the answer.
+
+What remains after the fix is stated in [Known
+limits](../README.md#known-limits) rather than left implied: `--fetch-dids`
+reaches only hosts the operator names, at paths the DID chooses.
+
 ## Deferred, and why
 
 These are recorded as open rather than closed. All but the first are design
@@ -424,6 +456,11 @@ attack.
 
 Findings raised **after** a public release are handled through GitHub's security
 advisory workflow instead: reported privately, fixed, and published as an advisory
-once a fixed version is available. The register above will link to the advisory
-rather than describe the finding, so the public record stays complete without
-handing a map to anyone still running an older version.
+once a fixed version is available. [Published
+advisories](#published-advisories) links each one rather than describing the
+finding, so the public record stays complete without handing a map to anyone
+still running an older version.
+
+"Once a fixed version is available" means *released*, not merged. An advisory
+names a version a reader can install, so it publishes after the release
+completes rather than alongside it.

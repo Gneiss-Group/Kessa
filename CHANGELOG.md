@@ -23,9 +23,8 @@ an entry in whenever a frozen golden moves, since regenerating a golden means th
 format changed. It sits above the release sections because it is not tied to any
 one release, and it predates all of them.
 
-**Nothing has been released yet**, so there are no release sections below. The
-format history exists anyway: `v2` is what the verifier reads today, and a reader
-should be able to learn why there is a `v1` without going to the source.
+`v2` is what the verifier reads today, and a reader should be able to learn why
+there is a `v1` without going to the source.
 
 | Version | Status | What it is |
 |---|---|---|
