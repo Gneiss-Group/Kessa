@@ -116,7 +116,14 @@ if [ -n "$other" ]; then
   printf '### Other changes\n\n%s\n\n' "$other"
 fi
 
-cat <<'EOF'
+# The heredoc stays QUOTED so nothing in these shell examples is expanded by the
+# shell generating them, which is what keeps a future `$HOME` or `$(...)` in an
+# example from being evaluated here. The consequence is that $VERSION does not
+# expand either, so the one place that needs it uses a placeholder token and an
+# explicit substitution below. The previous spelling was a bare "VERSION", which
+# read like an intentional fill-in-the-blank and shipped in v0.0.1 as a docker
+# pull nobody could copy.
+cat <<'EOF' | sed "s/@@VERSION@@/$VERSION/g"
 ### Verifying what you downloaded
 
 Each archive is listed in `SHA256SUMS`, every binary answers `--version`
@@ -137,8 +144,8 @@ The verifier bundle (`kessa_*`) is Apache-2.0; the server bundle
 Multi-arch (linux/amd64 + arm64), distroless, signed with build provenance:
 
 ```sh
-docker pull ghcr.io/gneiss-group/kessa:VERSION          # verifier (Apache-2.0)
-docker pull ghcr.io/gneiss-group/kessa-proxy:VERSION    # enforcement proxy (AGPL-3.0-only)
-gh attestation verify oci://ghcr.io/gneiss-group/kessa:VERSION --repo Gneiss-Group/Kessa
+docker pull ghcr.io/gneiss-group/kessa:@@VERSION@@          # verifier (Apache-2.0)
+docker pull ghcr.io/gneiss-group/kessa-proxy:@@VERSION@@    # enforcement proxy (AGPL-3.0-only)
+gh attestation verify oci://ghcr.io/gneiss-group/kessa:@@VERSION@@ --repo Gneiss-Group/Kessa
 ```
 EOF
