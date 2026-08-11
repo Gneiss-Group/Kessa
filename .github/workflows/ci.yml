@@ -77,13 +77,21 @@ jobs:
 
       # ---- CI-only extras beyond the shared gate --------------------------
 
-      - name: fuzz targets still build and still fuzz
-        # A liveness check, not a discovery run: ten seconds per target keeps
-        # them compiling and their seed corpora loading on every PR. A fuzz
-        # target that silently stopped building is a check that passes by not
-        # running, and it would sit unnoticed until the next long campaign.
-        # Discovery happens in bounded runs at minutes per target, not here.
-        run: make fuzz-smoke
+      # There is deliberately NO fuzz step here, and the absence is worth a note
+      # because it looks like an omission.
+      #
+      # `go test` runs a fuzz target's seed corpus as ordinary subtests whenever
+      # -fuzz is absent, so the race-test step inside the gate above ALREADY
+      # compiles every target and executes every seed, including every committed
+      # regression seed from `testdata/fuzz/`. Both things a liveness check would
+      # assert, that the targets still build and their corpora still load, are
+      # therefore already asserted, and every defect a past campaign found is
+      # re-checked on every pull request.
+      #
+      # A `-fuzz` step here would add only random exploration. Ten seconds of it
+      # is noise, minutes of it does not belong between writing a change and
+      # merging it, and it was two thirds of this job's runtime. Discovery moved
+      # to fuzz.yml, on a schedule, with a budget worth having.
 
       - name: build every binary
         run: make build
