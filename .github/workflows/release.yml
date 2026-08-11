@@ -203,7 +203,18 @@ jobs:
           # from these commits. To start a version genuinely clean, delete the
           # release branch first.
           base_oid="$(git rev-parse HEAD)"
+
+          # Validate the SHAPE of the lookup, never its emptiness. `gh api` writes
+          # the error body to STDOUT on a 404 and does not apply --jq to it, so a
+          # branch that does not exist yet returns the error JSON rather than an
+          # empty string. A `-z` test therefore never fires: the branch is not
+          # created, and the JSON is handed to expectedHeadOid, which is exactly
+          # how v0.0.2's first prepare failed. Requiring 40 hex characters means an
+          # unmatched ref and a failed call both land on the create path.
           head_oid="$(gh api "repos/$REPO/git/ref/heads/$BRANCH" --jq .object.sha 2>/dev/null || true)"
+          if ! printf '%s' "$head_oid" | grep -qE '^[0-9a-f]{40}$'; then
+            head_oid=""
+          fi
           if [ -z "$head_oid" ]; then
             gh api -X POST "repos/$REPO/git/refs" -f ref="refs/heads/$BRANCH" -f sha="$base_oid" >/dev/null
             head_oid="$base_oid"
