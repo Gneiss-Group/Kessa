@@ -75,6 +75,59 @@ changes are in the [security review record](docs/security-review.md).
 
 <!-- releases below; newest first -->
 
+## v0.0.2: 2026-08-11
+
+_Changes since v0.0.1._
+
+### Fixes
+
+- the branch-exists check could not fire, so phase 1 could not create one (#51)
+- a port must be digits, not whatever strconv.Atoi will take (#48)
+- make phase 1 and phase 2 work unattended (#39)
+
+### Security
+
+- let the deployment name which did:web hosts may be resolved (#45)
+- make a did:web identifier determine the URL it resolves, and refuse redirects off that host (CodeQL #12) (#41)
+
+### Documentation
+
+- the --fetch-dids limit describes a surface that no longer exists (#50)
+- write down two things that were only recorded where nobody looks (#49)
+- name the severity rubric that was already being used (#44)
+
+### Other changes
+
+- Bump the github-actions group with 4 updates (#47)
+- Bump golang from `3aff665` to `2005724` in /docker (#46)
+- native fuzz targets, and the two defects they found (#42)
+- ship the provenance bundle as a file, not only as an API record (#40)
+
+### Verifying what you downloaded
+
+Each archive is listed in `SHA256SUMS`, every binary answers `--version`
+without running anything, and every artifact carries signed build provenance
+binding it to this repository's release pipeline:
+
+```sh
+sha256sum -c SHA256SUMS
+gh attestation verify kessa_*_linux_amd64.tar.gz --repo Gneiss-Group/Kessa
+./kessa --version
+```
+
+The verifier bundle (`kessa_*`) is Apache-2.0; the server bundle
+(`kessa-server_*`) is AGPL-3.0-only. See `LICENSING.md`.
+
+### Container images
+
+Multi-arch (linux/amd64 + arm64), distroless, signed with build provenance:
+
+```sh
+docker pull ghcr.io/gneiss-group/kessa:VERSION          # verifier (Apache-2.0)
+docker pull ghcr.io/gneiss-group/kessa-proxy:VERSION    # enforcement proxy (AGPL-3.0-only)
+gh attestation verify oci://ghcr.io/gneiss-group/kessa:VERSION --repo Gneiss-Group/Kessa
+```
+
 ## v0.0.1: 2026-08-07
 
 _First tagged release._
