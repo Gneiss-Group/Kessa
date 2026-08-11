@@ -61,6 +61,33 @@ docker run --rm -v "$PWD/out:/pub" -v "$PWD/scripts/demo:/in:ro" kessa-issuer \
 docker run --rm -p 8181:8181 -p 8182:8182 kessa-proxy serve --help
 ```
 
+## Serving, and what the default command does
+
+The proxy image's `CMD` binds `0.0.0.0` on both ports and passes
+`--allow-unauthenticated-remote`, because the binary refuses a non-loopback bind
+without it and a container's loopback is unreachable through `-p`. The flag adds
+no authentication; it records that the deployment accepted its absence.
+
+That command is **not runnable on its own**: `serve` also needs `--policy`,
+`--dids`, `--enforcement-point` and `--keystore`, and supplying them means
+overriding the command, which replaces the `CMD` wholesale. A hand-written
+invocation therefore has to restate the bind flags, including
+`--allow-unauthenticated-remote`. Config-file support would remove this sharp
+edge by letting configuration arrive without displacing the command; it does not
+exist yet ([`UPCOMING.md`](../UPCOMING.md)).
+
+`--dids` is resolved from a local directory only, with no network path, so the
+issuer's publish step has to populate that directory **before** the proxy starts.
+The proxy fails at startup rather than at request time if it cannot resolve its
+own enforcement-point document.
+
+[`scripts/ci/container-smoke.sh`](../scripts/ci/container-smoke.sh) runs exactly
+this sequence on every pull request: publish, start the proxy from the image's
+own `CMD` (read back out of the built image, not restated), then call `GET /tip`
+and a real MCP `tools/list`. It exists because the `CMD` shipped unstartable for
+months, and `demo.sh` below could not catch it: the demo exercises `run`, so
+nothing ever reached the serving path.
+
 > The `serve` transport is a documented mock (plain JSON over HTTP, no mTLS).
 > These images are for **evaluation and development**, not production-hardened
 > endpoints. See the repo README's "Known limits."

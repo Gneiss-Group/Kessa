@@ -307,9 +307,12 @@ docker run --rm -v "$PWD:/data:ro" ghcr.io/gneiss-group/kessa:latest \
 docker run --rm -p 8181:8181 -p 8182:8182 ghcr.io/gneiss-group/kessa-proxy:latest serve --help
 
 # Serving from a container binds a non-loopback address, which is refused unless you
-# say so: the listeners have no caller authentication. The flag adds none, it
-# records that you accepted its absence.
-#   ... serve --http-addr 0.0.0.0:8181 --allow-unauthenticated-remote
+# say so: the listeners have no caller authentication. The image's default command
+# therefore carries --allow-unauthenticated-remote already. The flag adds none, it
+# records that the deployment accepted its absence. Note that overriding the command
+# (to add --policy, --dids and the rest) replaces it wholesale, so a hand-written
+# invocation has to carry the flag itself:
+#   ... serve --http-addr 0.0.0.0:8181 --allow-unauthenticated-remote --policy ...
 
 # The issuer (AGPL-3.0-only): mint/publish/enroll/daemon. Publishes a chain's
 # public artifacts into a mounted directory (software-key path; see docker/README).
