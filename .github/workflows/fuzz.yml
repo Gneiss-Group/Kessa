@@ -1,0 +1,184 @@
+# SPDX-FileCopyrightText: 2026 Gneiss Group Inc.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Scheduled fuzzing: the DISCOVERY run.
+#
+# This is where fuzzing actually looks for defects. The PR gate does not: it runs
+# `go test`, which compiles every target and executes every seed, including every
+# committed regression seed, so a defect any past campaign found stays found on
+# every pull request. What the gate deliberately does not buy is random
+# exploration, because ten seconds of it is noise and minutes of it does not
+# belong on the path between writing a change and merging it.
+#
+# Why scheduled rather than on release: a campaign that finds something is useful
+# on a Tuesday and a crisis during a release. Run it in phase 1 and every release
+# waits on it; run it in phase 2 and the tag already exists by the time it
+# reports. Releases are also event-driven, so tying discovery to them means a
+# quiet quarter fuzzes nothing, whereas a schedule has a floor.
+#
+# It NEVER blocks anything. A finding opens an issue. Fuzzing is a search, and a
+# search that has not finished is not a failure of the thing being searched.
+#
+# THE FAILURE MODE TO WATCH is this workflow quietly doing nothing: an empty
+# matrix, a target list that stopped resolving, a schedule GitHub disabled. A
+# green run that fuzzed zero targets looks exactly like a green run that fuzzed
+# eight. Three things guard that, and they are the point of the design:
+#   1. fuzz-targets.sh exits non-zero on zero targets, so the matrix cannot be
+#      empty without failing the run.
+#   2. the summary job asserts the campaign actually ran, so a skipped or
+#      cancelled fan-out is reported rather than inherited as success.
+#   3. workflow_dispatch exists so this can be proven by running it, which is
+#      how every other never-exercised gate in this repository was found.
+
+name: Fuzz (scheduled campaign)
+
+on:
+  schedule:
+    # Mondays, 09:17 UTC. An odd minute rather than the hour: GitHub queues
+    # scheduled runs and the top of the hour is the most contended slot.
+    - cron: "17 9 * * 1"
+  workflow_dispatch:
+    inputs:
+      fuzztime:
+        description: "Per-target budget (Go duration, e.g. 10m, 45m, 2h)"
+        type: string
+        default: "10m"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fuzz-campaign
+  cancel-in-progress: false
+
+jobs:
+  targets:
+    name: enumerate fuzz targets
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      matrix: ${{ steps.list.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: derive the target list from the test binaries
+        id: list
+        run: |
+          set -euo pipefail
+          # Not enumerated here: a target added tomorrow is picked up by having
+          # been written. The script exits non-zero if it finds none.
+          matrix="$(scripts/ci/fuzz-targets.sh)"
+          echo "$matrix" | python3 -m json.tool
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+
+  campaign:
+    name: fuzz ${{ matrix.name }}
+    needs: targets
+    runs-on: ubuntu-latest
+    # Generous relative to the default budget so a manually dispatched long run
+    # is not truncated by the job limit instead of by -fuzztime.
+    timeout-minutes: 360
+    strategy:
+      # One target's finding must not cancel the other seven. A campaign that
+      # stops at the first crasher reports one defect per week at best.
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.targets.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: fuzz
+        env:
+          FUZZTIME: ${{ inputs.fuzztime || '10m' }}
+          PKG: ${{ matrix.pkg }}
+          TARGET: ${{ matrix.target }}
+        run: |
+          set -euo pipefail
+          # Anchored so FuzzParse does not also select a future FuzzParseFoo.
+          go test "$PKG" -run "^${TARGET}\$" -fuzz "^${TARGET}\$" -fuzztime "$FUZZTIME"
+
+      - name: collect the failing input
+        # A crasher is written to <pkg>/testdata/fuzz/<Target>/<hash> on the
+        # runner, which is thrown away with the runner. Without this the report
+        # names a defect whose reproducer no longer exists, and the input has to
+        # be rediscovered by running the campaign again and hoping.
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: crasher-${{ matrix.target }}-${{ github.run_id }}
+          path: "**/testdata/fuzz/${{ matrix.target }}/*"
+          if-no-files-found: warn
+          retention-days: 90
+
+  report:
+    name: report the campaign
+    needs: [targets, campaign]
+    # always(), so this runs when the fan-out failed, was skipped, or was
+    # cancelled. `if: failure()` would not fire on a SKIPPED matrix, which is
+    # exactly the silent-nothing case worth catching.
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: assert the campaign actually ran, then report what it found
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RESULT: ${{ needs.campaign.result }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          FUZZTIME: ${{ inputs.fuzztime || '10m' }}
+        run: |
+          set -euo pipefail
+
+          # A campaign that did not run is not a clean campaign. Treated as its
+          # own failure so the schedule silently stopping is visible.
+          if [ "$RESULT" != "success" ] && [ "$RESULT" != "failure" ]; then
+            echo "campaign did not run (result: $RESULT); the schedule fuzzed nothing"
+            title="Fuzz campaign did not run"
+            body="The scheduled fuzz campaign finished with result \`$RESULT\` rather than running.
+
+          Nothing was fuzzed. This is reported as a failure because a campaign that
+          does not run looks identical to one that found nothing.
+
+          Run: $RUN_URL"
+          elif [ "$RESULT" = "success" ]; then
+            echo "campaign clean: every target survived $FUZZTIME"
+            exit 0
+          else
+            title="Fuzz campaign found a failing input"
+            body="A scheduled fuzz campaign failed. At least one target found an input its property does not hold for.
+
+          **Budget:** \`$FUZZTIME\` per target
+          **Run:** $RUN_URL
+
+          The failing input is attached to that run as a \`crasher-*\` artifact. To act on it:
+
+          1. Download the artifact and copy the file into the target's \`testdata/fuzz/<Target>/\` directory, giving it a descriptive name rather than its hash.
+          2. Confirm it fails: \`go test ./<pkg> -run '<Target>/<name>'\`. Seeds run under plain \`go test\`, so this becomes a permanent regression test on every PR once committed.
+          3. Fix, and confirm the seed passes while the fix is present and fails when it is removed.
+
+          A campaign finding is a real defect until shown otherwise, on the same footing as a review finding."
+          fi
+
+          # One open issue at a time. A weekly schedule against an unfixed defect
+          # would otherwise file the same report every Monday, and a queue of
+          # duplicates is how a real finding gets tuned out.
+          existing="$(gh issue list --repo "$REPO" --state open --search "\"$title\" in:title" --json number --jq '.[0].number // empty')"
+          if [ -n "$existing" ]; then
+            echo "issue #$existing is already open for this; commenting instead"
+            gh issue comment "$existing" --repo "$REPO" --body "Recurred: $RUN_URL"
+          else
+            gh issue create --repo "$REPO" --title "$title" --body "$body"
+          fi
+          exit 1
