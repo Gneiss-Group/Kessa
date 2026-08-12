@@ -308,19 +308,22 @@ distroless/static as a nonroot user, and signed with build provenance.
 docker run --rm -v "$PWD:/data:ro" ghcr.io/gneiss-group/kessa:latest \
   verify --export /data/export.json --dids /data/public
 
-# The enforcement proxy (AGPL-3.0-only): the sidecar. By default it serves two
-# listeners into one enforcement engine: generic HTTP (8181) and MCP-native
-# Streamable HTTP (8182). Close either with an empty address (e.g. --mcp-addr "");
-# closing both is refused, since a chokepoint nothing can reach enforces nothing.
-docker run --rm -p 8181:8181 -p 8182:8182 ghcr.io/gneiss-group/kessa-proxy:latest serve --help
+# The enforcement proxy (AGPL-3.0-only): the sidecar. Mount a config and run it
+# with no arguments; the image's command is `serve --config /etc/kessa/proxy.json`.
+# One enforcement engine behind two listeners: generic HTTP and MCP-native
+# Streamable HTTP. Omit either address to close that listener; closing both is
+# refused, since a chokepoint nothing can reach enforces nothing.
+docker run --rm -p 8181:8181 -p 8182:8182 \
+  -v "$PWD/proxy.json:/etc/kessa/proxy.json:ro" -v "$PWD/public:/pub:ro" \
+  ghcr.io/gneiss-group/kessa-proxy:latest
 
-# Serving from a container binds a non-loopback address, which is refused unless you
-# say so: the listeners have no caller authentication. The image's default command
-# therefore carries --allow-unauthenticated-remote already. The flag adds none, it
-# records that the deployment accepted its absence. Note that overriding the command
-# (to add --policy, --dids and the rest) replaces it wholesale, so a hand-written
-# invocation has to carry the flag itself:
-#   ... serve --http-addr 0.0.0.0:8181 --allow-unauthenticated-remote --policy ...
+# Check a config without binding anything. In a container, http_addr/mcp_addr need
+# 0.0.0.0 (loopback is unreachable through -p), which needs
+# allow_unauthenticated_remote: the listeners have no caller authentication, and
+# that field adds none. It records that the deployment accepted its absence.
+docker run --rm -v "$PWD/proxy.json:/etc/kessa/proxy.json:ro" \
+  ghcr.io/gneiss-group/kessa-proxy:latest \
+  serve --config /etc/kessa/proxy.json --check-config
 
 # The issuer (AGPL-3.0-only): mint/publish/enroll/daemon. Publishes a chain's
 # public artifacts into a mounted directory (software-key path; see docker/README).

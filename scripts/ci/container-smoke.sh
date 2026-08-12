@@ -18,17 +18,25 @@
 # always fails looks exactly like a gate that never had to fire. The correction is
 # not a sharper reading of the Dockerfile, it is running the thing.
 #
-# HOW IT AVOIDS BEING THE SAME KIND OF TEST. Two properties do the work:
+# HOW IT AVOIDS BEING THE SAME KIND OF TEST. Three properties do the work:
 #
-#   1. The run arguments are READ OUT OF THE BUILT IMAGE (`docker inspect`), not
-#      restated here. Deleting `--allow-unauthenticated-remote` from the CMD makes
-#      this script fail, which a hand-written `docker run serve --http-addr ...`
-#      would not: that would test a command line this file made up, and would have
-#      passed happily against the broken image.
-#   2. The probes reach a LISTENER and read the response body. "The container is
+#   1. The proxy is started with NO ARGUMENTS, so the shipped CMD runs verbatim.
+#      A hand-written `docker run … serve --http-addr …` tests a command line this
+#      file made up, and would have passed happily against the broken image.
+#   2. The CMD is still READ OUT OF THE BUILT IMAGE (`docker inspect`) and
+#      asserted on: it must name a --config file and must NOT carry bind
+#      configuration. Configuration in the CMD is what forced every real
+#      invocation to restate the bind posture, and is how the flag came to be
+#      missing. Checking the shape means a regression NAMES itself rather than
+#      reappearing later as an unreachable listener.
+#   3. The probes reach a LISTENER and read the response body. "The container is
 #      still running" is not evidence: the bug being guarded against was an
 #      immediate exit, but the next one might not be, and a liveness check that a
 #      dead listener can pass is the shape this whole file exists to reject.
+#
+# Configuration now arrives through a mounted file, which is the shape a real
+# deployment uses, and the image validates it (--check-config) before the run that
+# has to start from it.
 #
 # Deliberately NOT in scripts/ci/gate.sh. The gate has no non-Go dependencies (see
 # scripts/reusecheck and scripts/ci/secret-scan.sh, both of which exist to keep it
@@ -56,7 +64,12 @@ HTTP_PORT=18181
 MCP_PORT=18182
 
 GATEKEEPER="did:web:localhost:proxies:gatekeeper"
-STATUS="https://localhost/orgs/acme/status.json=/pub/localhost/orgs/acme/status.json"
+STATUS_URL="https://localhost/orgs/acme/status.json"
+STATUS_FILE="/pub/localhost/orgs/acme/status.json"
+
+# Where the rendered config is written on the host. Set before the cleanup trap so
+# a failure between here and the mkdir still tears down cleanly.
+CFG_DIR=""
 
 # The MCP revision the listener speaks (internal/enforce/mcp.go, mcpProtocolVersion).
 # Restated here because the probe is an external client and has to send it like
@@ -79,6 +92,8 @@ fail() {
 cleanup() {
   docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
   docker volume rm "$VOLUME" >/dev/null 2>&1 || true
+  [ -n "$CFG_DIR" ] && rm -rf "$CFG_DIR"
+  return 0
 }
 trap cleanup EXIT
 
@@ -103,9 +118,10 @@ docker run --rm --user 0:0 \
 echo "OK"
 
 step "read the image's own default command"
-# The whole point: these arguments come out of the built image, so this script
-# tests the CMD that ships rather than one it invented. Restating the flags here
-# would have passed against the broken image.
+# Read out of the BUILT IMAGE rather than restated here. Two things depend on it:
+# the assertion below names a regression instead of letting it surface as a
+# connection refused, and the --check-config run further down exercises the same
+# command the real start uses.
 CMD_ARGS=()
 while IFS= read -r arg; do
   [ -n "$arg" ] && CMD_ARGS+=("$arg")
@@ -115,27 +131,78 @@ if [ "${#CMD_ARGS[@]}" -eq 0 ]; then
   fail "$PROXY_IMAGE declares no CMD; there is nothing for this test to exercise"
 fi
 if [ "${CMD_ARGS[0]}" != "serve" ]; then
-  fail "$PROXY_IMAGE's CMD starts with '${CMD_ARGS[0]}', not 'serve'; this test appends serving configuration and would be testing nothing"
+  fail "$PROXY_IMAGE's CMD starts with '${CMD_ARGS[0]}', not 'serve'; this test exercises the serving path and would be testing nothing"
 fi
+# The CMD must name a config file and must NOT carry configuration itself. It used
+# to carry the bind flags, which is what forced every real invocation to restate
+# them, and is how --allow-unauthenticated-remote came to be missing for months.
+# Asserting the shape here means a regression to that says so, rather than
+# reappearing as an unreachable listener.
+case "${CMD_ARGS[*]}" in
+  *--config*) ;;
+  *) fail "the CMD does not name a --config file: ${CMD_ARGS[*]}" ;;
+esac
+case "${CMD_ARGS[*]}" in
+  *--http-addr*|*--mcp-addr*|*--allow-unauthenticated-remote*)
+    fail "the CMD carries bind configuration again (${CMD_ARGS[*]}); that belongs in the mounted config, or overriding the command silently drops it" ;;
+esac
 printf 'CMD: %s\n' "${CMD_ARGS[*]}"
 
-step "start the proxy from that command, adding only deployment configuration"
-# No --user: the image's own USER (nonroot, uid 65532) is part of what is under
-# test. The appended flags are the four buildProxy requires plus the status list;
-# none of them touch the bind posture, which is the CMD's business and stays the
-# CMD's business.
+# Where the CMD says the config lives, so the mount below follows the image
+# rather than a path this script decided.
+CFG_IN_CONTAINER=""
+for i in "${!CMD_ARGS[@]}"; do
+  if [ "${CMD_ARGS[$i]}" = "--config" ]; then
+    CFG_IN_CONTAINER="${CMD_ARGS[$((i + 1))]}"
+  fi
+done
+[ -n "$CFG_IN_CONTAINER" ] || fail "the CMD names --config with no path"
+printf 'config path inside the image: %s\n' "$CFG_IN_CONTAINER"
+
+step "render the deployment's config"
+# Every path here is a path INSIDE the container. This is the shape a real
+# deployment uses: configuration is mounted, not spliced into the command line.
+CFG_DIR="$(mktemp -d)"
+cat > "$CFG_DIR/proxy.json" <<JSON
+{
+  "comment": "Rendered by scripts/ci/container-smoke.sh. Binds 0.0.0.0 because a container's loopback is unreachable through -p, and says so via allow_unauthenticated_remote.",
+  "policy": "/policies/commerce-security.json",
+  "dids": "/pub",
+  "enforcement_point": {
+    "did": "$GATEKEEPER",
+    "key": { "mock_keystore": "/in/keystore.json" }
+  },
+  "http_addr": "0.0.0.0:8181",
+  "mcp_addr": "0.0.0.0:8182",
+  "allow_unauthenticated_remote": true,
+  "audit_log": "",
+  "audit_wal": null,
+  "status": { "$STATUS_URL": "$STATUS_FILE" }
+}
+JSON
+echo "OK"
+
+MOUNTS=(-v "$VOLUME:/pub"
+  -v "$ROOT/scripts/demo:/in:ro"
+  -v "$ROOT/examples/policies:/policies:ro"
+  -v "$CFG_DIR/proxy.json:$CFG_IN_CONTAINER:ro")
+
+step "the image validates that config before anything is bound"
+# --check-config appended to the image's own command, so this exercises the same
+# invocation the real start uses. It must succeed WITHOUT the port mappings below:
+# a check that needed a bindable port would not be a check.
+docker run --rm "${MOUNTS[@]}" "$PROXY_IMAGE" "${CMD_ARGS[@]}" --check-config \
+  || fail "the image refused a config it then has to start from"
+
+step "start the proxy from its default command, with NO arguments"
+# No arguments at all: the CMD runs verbatim, which is the strongest form of "the
+# shipped default works". No --user either, so the image's own nonroot USER is
+# part of what is under test.
 docker run -d --name "$CONTAINER" \
   -p "127.0.0.1:$HTTP_PORT:8181" \
   -p "127.0.0.1:$MCP_PORT:8182" \
-  -v "$VOLUME:/pub" \
-  -v "$ROOT/scripts/demo:/in:ro" \
-  -v "$ROOT/examples/policies:/policies:ro" \
-  "$PROXY_IMAGE" "${CMD_ARGS[@]}" \
-  --policy /policies/commerce-security.json \
-  --dids /pub \
-  --enforcement-point "$GATEKEEPER" \
-  --keystore /in/keystore.json \
-  --status "$STATUS" >/dev/null
+  "${MOUNTS[@]}" \
+  "$PROXY_IMAGE" >/dev/null
 
 # Wait for the HTTP listener to answer, not for the container to merely exist. A
 # container that exited 2 is caught here by the readiness loop failing, and the

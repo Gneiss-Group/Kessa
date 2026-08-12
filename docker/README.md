@@ -61,32 +61,47 @@ docker run --rm -v "$PWD/out:/pub" -v "$PWD/scripts/demo:/in:ro" kessa-issuer \
 docker run --rm -p 8181:8181 -p 8182:8182 kessa-proxy serve --help
 ```
 
-## Serving, and what the default command does
+## Serving: mount a config, run with no arguments
 
-The proxy image's `CMD` binds `0.0.0.0` on both ports and passes
-`--allow-unauthenticated-remote`, because the binary refuses a non-loopback bind
-without it and a container's loopback is unreachable through `-p`. The flag adds
-no authentication; it records that the deployment accepted its absence.
+The proxy image's `CMD` is `serve --config /etc/kessa/proxy.json`. Mount a config
+there and run the image with **no arguments**:
 
-That command is **not runnable on its own**: `serve` also needs `--policy`,
-`--dids`, `--enforcement-point` and `--keystore`, and supplying them means
-overriding the command, which replaces the `CMD` wholesale. A hand-written
-invocation therefore has to restate the bind flags, including
-`--allow-unauthenticated-remote`. Config-file support would remove this sharp
-edge by letting configuration arrive without displacing the command; it does not
-exist yet ([`UPCOMING.md`](../UPCOMING.md)).
+```sh
+docker run --rm -p 8181:8181 -p 8182:8182 \
+  -v "$PWD/proxy.json:/etc/kessa/proxy.json:ro" \
+  -v "$PWD/public:/pub:ro" -v "$PWD/policies:/policies:ro" \
+  kessa-proxy
+```
 
-`--dids` is resolved from a local directory only, with no network path, so the
+Validate a config first, which binds nothing:
+
+```sh
+docker run --rm -v "$PWD/proxy.json:/etc/kessa/proxy.json:ro" \
+  kessa-proxy serve --config /etc/kessa/proxy.json --check-config
+```
+
+The schema is in [configuration](../docs/configuration.md). Two fields matter
+specifically for containers: `http_addr` and `mcp_addr` should bind `0.0.0.0`,
+since a container's loopback is unreachable through `-p`, and doing so requires
+`allow_unauthenticated_remote`. That flag adds no authentication; it records that
+the deployment accepted its absence.
+
+The image deliberately does **not** set those for you. It used to, and the CMD
+carried the bind flags directly, which meant supplying `--policy` and `--dids`
+replaced them and any invocation that forgot was refused. Whether a deployment
+accepts unauthenticated listeners is not the image's decision to presume.
+
+`dids` is resolved from a local directory only, with no network path, so the
 issuer's publish step has to populate that directory **before** the proxy starts.
 The proxy fails at startup rather than at request time if it cannot resolve its
 own enforcement-point document.
 
 [`scripts/ci/container-smoke.sh`](../scripts/ci/container-smoke.sh) runs exactly
-this sequence on every pull request: publish, start the proxy from the image's
-own `CMD` (read back out of the built image, not restated), then call `GET /tip`
-and a real MCP `tools/list`. It exists because the `CMD` shipped unstartable for
-months, and `demo.sh` below could not catch it: the demo exercises `run`, so
-nothing ever reached the serving path.
+this sequence on every pull request: publish, validate the config, start the
+proxy from its default command with no arguments, then call `GET /tip` and a real
+MCP `tools/list`. It exists because the `CMD` shipped unstartable for months, and
+`demo.sh` below could not catch it: the demo exercises `run`, so nothing ever
+reached the serving path.
 
 > The `serve` transport is a documented mock (plain JSON over HTTP, no mTLS).
 > These images are for **evaluation and development**, not production-hardened
