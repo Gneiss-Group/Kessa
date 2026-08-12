@@ -310,7 +310,8 @@ docker run --rm -v "$PWD:/data:ro" ghcr.io/gneiss-group/kessa:latest \
 
 # The enforcement proxy (AGPL-3.0-only): the sidecar. By default it serves two
 # listeners into one enforcement engine: generic HTTP (8181) and MCP-native
-# Streamable HTTP (8182). Close either with an empty address (e.g. --mcp-addr "").
+# Streamable HTTP (8182). Close either with an empty address (e.g. --mcp-addr "");
+# closing both is refused, since a chokepoint nothing can reach enforces nothing.
 docker run --rm -p 8181:8181 -p 8182:8182 ghcr.io/gneiss-group/kessa-proxy:latest serve --help
 
 # Serving from a container binds a non-loopback address, which is refused unless you

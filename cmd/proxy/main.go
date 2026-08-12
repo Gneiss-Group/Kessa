@@ -368,13 +368,28 @@ func isLoopbackAddr(addr string) bool {
 	return ip != nil && ip.IsLoopback()
 }
 
+// anyListenerEnabled reports whether at least one address would bind something.
+//
+// Takes the same address slice refuseRemoteBind does, so the set of listener
+// addresses is enumerated in exactly ONE place in cmdServe. A third listener
+// shape added later is picked up by both checks from that one list, rather than
+// by whoever remembers there are two of them.
+func anyListenerEnabled(addrs []string) bool {
+	for _, a := range addrs {
+		if strings.TrimSpace(a) != "" {
+			return true
+		}
+	}
+	return false
+}
+
 // refuseRemoteBind decides whether the configured listen addresses may be used.
 // It returns a message to print and whether to proceed: refusing carries an
 // explanation, and proceeding under the escape hatch carries a warning, because
 // an operator who opted in should still see it on every start.
-func refuseRemoteBind(httpAddr, mcpAddr string, allow bool) (string, bool) {
+func refuseRemoteBind(addrs []string, allow bool) (string, bool) {
 	var remote []string
-	for _, a := range []string{httpAddr, mcpAddr} {
+	for _, a := range addrs {
 		if !isLoopbackAddr(a) {
 			remote = append(remote, a)
 		}
@@ -439,11 +454,35 @@ func cmdServe(args []string, stdout, stderr io.Writer) int {
 	// Containerized serving genuinely needs it, because a container's loopback is
 	// unreachable through -p, which is why the escape hatch exists and is named
 	// after what it costs rather than what it enables.
-	if msg, ok := refuseRemoteBind(*httpAddr, *mcpAddr, *allowRemote); !ok {
+	listenAddrs := []string{*httpAddr, *mcpAddr}
+
+	if msg, ok := refuseRemoteBind(listenAddrs, *allowRemote); !ok {
 		fmt.Fprint(stderr, msg)
 		return exitUsage
 	} else if msg != "" {
 		fmt.Fprint(stderr, msg)
+	}
+
+	// A proxy with every listener closed is refused rather than started.
+	//
+	// This used to print a note and exit 0, on the reasoning that a
+	// security-conscious operator should be able to close a port without being
+	// forced to commit to a protocol, and that both-closed was therefore
+	// "legitimate, if inert". That reasoning held while both-closed required
+	// intent: two addresses explicitly cleared on the command line.
+	//
+	// It stops holding once configuration can arrive from a file where an absent
+	// field means off, because then both-closed is what an INCOMPLETE file
+	// produces. The result was a chokepoint that enforced nothing and exited
+	// successfully, which is indistinguishable from a healthy run by the only
+	// signal an unattended deployment has. Closing one listener is still
+	// supported and still the way to shed a protocol; closing the last one is not
+	// a configuration, it is a mistake with a success exit code.
+	if !anyListenerEnabled(listenAddrs) {
+		fmt.Fprint(stderr, "kessa-proxy: refusing to start with no listeners enabled: "+
+			"--http-addr and --mcp-addr are both empty, so nothing would reach the enforcement engine.\n"+
+			"  Close one to shed a protocol; closing both leaves a chokepoint that enforces nothing.\n")
+		return exitUsage
 	}
 
 	ep, ok := enforcementPointSigner(*ksPath, *sockPath, *epDID, stderr)
@@ -494,9 +533,14 @@ func cmdServe(args []string, stdout, stderr io.Writer) int {
 			"revision        2026-07-28 (stateless: no sessions, no initialize)",
 		}},
 	})
+	// An ASSERTION, not the gate. anyListenerEnabled already refused this case
+	// above, before anything was created, and that is where the decision is made
+	// and where an operator-facing explanation lives. This only fires if the two
+	// ever disagree about what "enabled" means, which is why it says so rather
+	// than repeating the advice: an operator reading it cannot act on it.
 	if len(listeners) == 0 {
-		fmt.Fprintln(stdout, "kessa-proxy: no listeners enabled (both --http-addr and --mcp-addr are empty); nothing to serve")
-		return exitOK
+		fmt.Fprintln(stderr, "kessa-proxy: internal error: the address check passed but no listener survived filtering")
+		return exitUsage
 	}
 	for _, l := range listeners {
 		fmt.Fprintf(stdout, "kessa-proxy %s listener at http://%s\n", l.name, l.addr)
@@ -531,9 +575,12 @@ type listener struct {
 // enabledListeners keeps only the listeners with a non-empty address, preserving
 // order. Clearing an address is how a listener is turned off: attack-surface
 // minimization for an operator who wants a port closed, not a forced up-front
-// protocol commitment. Returning zero listeners is legal and inert, deliberately,
-// so the config does not hardcode "at least one protocol" as an assumption a
-// future third listener shape could break.
+// protocol commitment.
+//
+// This function still returns zero listeners without complaint, deliberately, so
+// it does not hardcode "at least one protocol" as an assumption a future listener
+// shape could break. Refusing that case is cmdServe's job (anyListenerEnabled),
+// where it happens before anything is created and where it can explain itself.
 func enabledListeners(ls []listener) []listener {
 	out := make([]listener, 0, len(ls))
 	for _, l := range ls {
