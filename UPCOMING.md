@@ -185,14 +185,14 @@ For what the system does today, and for the limits of a clean verdict, the
 
   **Two prerequisites before flipping it**, and neither is optional:
 
-  - **A WAL benchmark, which does not exist.** `perf/` measures throughput with
-    durability off, and that is the configuration the published ~2,200 req/sec
-    figure describes. fsync-per-decision is usually a dominant cost rather than a
-    marginal one, so flipping the default silently changes what that number means.
-    Quoting a figure measured in one configuration while shipping another is the
-    kind of overclaim the fail-closed decision exists to prevent, so the benchmark
-    comes first and the external figure gets restated against whatever the default
-    becomes.
+  - **A WAL benchmark, which does not exist.** The harness builds its proxy with
+    no WAL (`perf/harness_test.go` passes no `WAL` to `enforce.Config`), so every
+    throughput number in [`perf/README.md`](perf/README.md) describes a
+    non-durable configuration. fsync-per-decision is usually a dominant cost
+    rather than a marginal one, so flipping the default would change what those
+    measurements describe without changing the measurements themselves. Benchmark
+    first, and state any throughput figure against the configuration it was
+    measured in.
   - **A decision about where the WAL lives.** `--audit-wal` takes a path, not a
     boolean, so defaulting durability on means the binary picks a filesystem
     location: writable, persistent across restarts, and sane inside a container
