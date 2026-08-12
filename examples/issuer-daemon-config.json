@@ -1,0 +1,10 @@
+{
+  "comment": "Worked example for `kessa-issuer daemon --config`. Paths are relative to the repository root, so this runs as-is from a checkout. `sock` is required and has no default here: the flag's default is derived from the environment ($XDG_RUNTIME_DIR, else $HOME), and a proxy's enforcement_point.key.broker_socket names a literal path that has to match this one. See docs/configuration.md.",
+
+  "sock": "/tmp/kessa/issuer.sock",
+
+  "keystore": "examples/issuer/keystore.json",
+  "attestation_keys": [
+    "did:web:localhost:proxies:gatekeeper"
+  ]
+}

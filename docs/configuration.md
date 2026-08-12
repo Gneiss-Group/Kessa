@@ -1,15 +1,23 @@
 <!-- SPDX-FileCopyrightText: 2026 Gneiss Group Inc. -->
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 
-# Configuring `kessa-proxy serve`
+# Configuration files
 
-`serve` takes its configuration either from flags or from a JSON file. Not both.
+`kessa-proxy serve` and `kessa-issuer daemon` each take their configuration
+either from flags or from a JSON file. Not both.
 
 ```sh
-kessa-proxy serve --config /etc/kessa/proxy.json
+kessa-proxy serve      --config /etc/kessa/proxy.json
+kessa-issuer daemon    --config /etc/kessa/daemon.json
 ```
 
-A worked example is in [`examples/proxy-config.json`](../examples/proxy-config.json).
+Worked examples: [`examples/proxy-config.json`](../examples/proxy-config.json)
+and [`examples/issuer-daemon-config.json`](../examples/issuer-daemon-config.json).
+
+The rules below are the same for both commands, and the mechanics behind them
+live in one place ([`internal/config`](../internal/config)) rather than being
+implemented twice. The schemas themselves differ, because what is required, and
+what an absent field means, is a question about the command.
 
 ## Why a config file exists
 
@@ -77,7 +85,7 @@ refused rather than started. Closing one listener is still the supported way to
 shed a protocol; closing the last one leaves a chokepoint nothing can reach,
 which used to exit 0 and was therefore indistinguishable from a healthy run.
 
-## Schema
+## Schema: `kessa-proxy serve`
 
 | Field | Required | Notes |
 |---|---|---|
@@ -128,6 +136,39 @@ Whether durability should default *on* is a separate, tracked question
 ([`UPCOMING.md`](../UPCOMING.md)): it needs a WAL benchmark first, and it has to
 change the flag path at the same time.
 
+## Schema: `kessa-issuer daemon`
+
+| Field | Required | Notes |
+|---|---|---|
+| `comment` | no | Accepted and ignored, as above. |
+| `sock` | **yes** | The Unix socket to listen on. See below. |
+| `keystore` | no | Software keys brokered as ROUTINE (proof-of-possession). |
+| `mapping` | no | Enrolled Secure Enclave keys, brokered as APPROVAL-capable. |
+| `attestation_keys` | no | Array of DIDs from `keystore` to broker as ATTESTATION keys instead of routine ones. |
+
+At least one of `keystore` and `mapping` is required: a daemon with no key source
+has nothing to broker. `attestation_keys` requires `keystore`, and a DID it names
+that the keystore does not hold is refused rather than ignored, because ignoring
+it would broker the intended key as `routine` and still report success.
+
+### `sock` is required, for a different reason than `audit_wal`
+
+There is no "off" for a socket: a daemon that binds nothing cannot serve. What
+absence would inherit is the **flag's** default, which is derived from the
+environment (`$XDG_RUNTIME_DIR`, else `$HOME`). So an omitted `sock` would put the
+socket wherever the invoking shell happened to point, and a config file exists to
+describe a deployment completely.
+
+It also has to agree with the proxy's `enforcement_point.key.broker_socket`, which
+is always a literal path. Letting one side be environment-derived and the other
+literal is a silent mismatch: the daemon comes up on a path the proxy is not
+looking at, and the proxy fails at startup pointing at a socket that does not
+exist.
+
+Note the daemon's peer-uid gate: the proxy must run as the daemon's owner uid and
+be able to reach that path. In containers that means one uid and a shared volume,
+not two service accounts. See [the signing daemon](daemon.md).
+
 ## Checking a config before you start
 
 ```sh
@@ -155,6 +196,14 @@ Checked to depth 3 (live). This configuration should start here.
 
 A config naming a `mock_keystore` has no daemon to reach, so it reports depth 2
 and says so rather than claiming a depth it did not get to.
+
+`kessa-issuer daemon --check-config` works the same way and stops immediately
+before it binds its socket. It tops out at **depth 2** and states that, rather
+than inventing a third: the daemon dials nothing, so its equivalent of a live
+check would be binding, which is the side effect the check exists to avoid. What
+it does reach is worth having: the key set is built and `signerd.NewKeys` has
+already refused a software key offered for the approval role, so the printed key
+table shows which key attests a log and which proves possession.
 
 Exit status is 0 only when everything it checked passed. An unreachable signing
 daemon is a failure, not a caveat: it means this configuration will not start
