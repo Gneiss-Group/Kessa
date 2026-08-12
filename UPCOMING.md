@@ -179,6 +179,50 @@ For what the system does today, and for the limits of a clean verdict, the
   log whose envelope signature commits to its length and tip, which is why it is a
   design question and not a size constant.
 
+- **Enforcement-point key custody: decided and built, with a named residual.**
+  `kessa-proxy serve` now takes either `--keystore` (the mock keystore, seeds in
+  the clear, evaluation only) or `--signer-sock`, which brokers the enforcement
+  point's key through `kessa-issuer daemon` so the private key never enters the
+  proxy's process. Exactly one, never both and never neither: defaulting either
+  way would pick a custody model on the operator's behalf. The daemon classifies
+  such a key under a third `signerd.KeyPolicy`, `Attestation`, because it is
+  neither a proof-of-possession key nor a human approval key (see
+  [`docs/signer.md`](docs/signer.md)).
+
+  What is **not** closed by that:
+
+  - The brokered key is still software. `Attestation` permits software
+    deliberately, since Approval's hardware rule exists to force a per-use human
+    gesture and no human is present on an unattended server. A
+    *non-extractability* requirement is a different and weaker claim, unaddressed,
+    and `Attestation` is where it would land if it is ever wanted. On Linux it
+    would also need the TPM backend above.
+  - The peer-uid gate means the proxy must run as the daemon's owner uid and share
+    the socket's filesystem. For containers that is one uid and a shared volume,
+    not two service accounts. This is a real constraint on any deployment tooling,
+    including the Terraform module.
+  - Batch mode (`kessa-proxy run`) stays on the mock keystore by design: it needs
+    it anyway to mint each fixture's PoP and approval, so brokering only the
+    enforcement point's key would leave the other two as seeds in a file.
+
+- **Config-file support for the proxy and issuer.** Both binaries are configured
+  entirely by CLI flags today, which makes every deployment a long, hand-built
+  command line, and makes containerized serving specifically awkward: supplying
+  configuration means overriding the image's `CMD`, which replaces the bind flags
+  the image carries rather than adding to them (see
+  [`docker/README.md`](docker/README.md)).
+
+  The surface from `serve` alone: `policy`, `dids`, `enforcement-point`, one of
+  `keystore` or `signer-sock`, `http-addr`, `mcp-addr`, `export`, `audit-log`,
+  `audit-wal`, `allow-unauthenticated-remote`, and repeatable `status`. `--now` is
+  a determinism fixture for reproducible runs and must stay **out** of any
+  operator-facing schema: exposing a test seam as production surface would be a
+  category error, not a convenience.
+
+  Unstarted, and big enough to want its own design pass rather than being grown
+  incrementally. It is also the first thing deployment tooling would consume, so
+  the schema and that tooling's inputs are one design problem seen from two sides.
+
 ## Coverage and evidence
 
 - **Tool-call payload coverage.** Kessa authorizes today: it records that an

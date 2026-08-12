@@ -24,6 +24,7 @@ import (
 	"github.com/Gneiss-Group/Kessa/internal/export"
 	"github.com/Gneiss-Group/Kessa/internal/policy"
 	"github.com/Gneiss-Group/Kessa/internal/signer"
+	"github.com/Gneiss-Group/Kessa/internal/signerd"
 	"github.com/Gneiss-Group/Kessa/internal/status"
 	"github.com/Gneiss-Group/Kessa/pkg/types"
 )
@@ -693,4 +694,89 @@ func httpGet(t *testing.T, url string) []byte {
 		t.Fatal(err)
 	}
 	return b
+}
+
+// TestDaemon_AttestationKeyClassification: --attestation-key reclassifies exactly
+// the named keystore DIDs and leaves every other key ROUTINE. The negative half
+// matters as much as the positive one: a flag that promoted everything, or
+// nothing, would still produce a daemon that starts and brokers keys.
+func TestDaemon_AttestationKeyClassification(t *testing.T) {
+	ks, err := loadJSON[Keystore](ksPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	principals := ks.Principals()
+	if len(principals) < 2 {
+		t.Fatalf("this test needs a keystore with at least two principals, got %d", len(principals))
+	}
+	chosen := principals[0]
+
+	keys, err := keystoreKeys(ks, didList{chosen})
+	if err != nil {
+		t.Fatalf("keystoreKeys: %v", err)
+	}
+	if len(keys) != len(principals) {
+		t.Fatalf("brokered %d keys from a keystore of %d principals", len(keys), len(principals))
+	}
+
+	var attested int
+	for _, k := range keys {
+		want := signerd.Routine
+		if k.Signer.DID() == chosen {
+			want = signerd.Attestation
+			attested++
+		}
+		if k.Policy != want {
+			t.Errorf("key %s classified %s, want %s", k.Signer.DID(), k.Policy, want)
+		}
+	}
+	if attested != 1 {
+		t.Fatalf("%d keys were promoted to attestation, want exactly 1", attested)
+	}
+
+	// With no flag at all, nothing is promoted.
+	plain, err := keystoreKeys(ks, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, k := range plain {
+		if k.Policy != signerd.Routine {
+			t.Errorf("without --attestation-key, %s was classified %s", k.Signer.DID(), k.Policy)
+		}
+	}
+}
+
+// TestDaemon_AttestationKeyMustBeHeld: naming a DID the keystore does not hold is
+// refused rather than ignored. Ignoring it would broker the operator's intended
+// enforcement-point key as ROUTINE and report success, so the mistake would only
+// show up as a mislabelled key table nobody reads.
+func TestDaemon_AttestationKeyMustBeHeld(t *testing.T) {
+	ks, err := loadJSON[Keystore](ksPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = keystoreKeys(ks, didList{"did:web:localhost:proxies:not-in-this-keystore"})
+	if err == nil || !strings.Contains(err.Error(), "not in the keystore") {
+		t.Fatalf("an unheld --attestation-key must be refused, got %v", err)
+	}
+
+	// Same refusal through the CLI, and --attestation-key without --keystore has
+	// nothing to name at all.
+	code, _, errOut := invoke(t, "daemon", "--keystore", ksPath,
+		"--attestation-key", "did:web:localhost:proxies:not-in-this-keystore")
+	if code != exitUsage {
+		t.Fatalf("exit %d, want %d", code, exitUsage)
+	}
+	if !strings.Contains(errOut, "not in the keystore") {
+		t.Fatalf("stderr %q does not name the problem", errOut)
+	}
+
+	code, _, errOut = invoke(t, "daemon", "--mapping", filepath.Join(t.TempDir(), "absent.json"),
+		"--attestation-key", "did:web:localhost:proxies:gatekeeper")
+	if code != exitUsage {
+		t.Fatalf("exit %d, want %d", code, exitUsage)
+	}
+	if !strings.Contains(errOut, "--keystore") {
+		t.Fatalf("stderr %q does not say the flag needs a keystore", errOut)
+	}
 }

@@ -55,7 +55,81 @@ const (
 	// enforced by the OS. Brokering it as software would silently degrade that
 	// control to an unenforced convention (R4-02).
 	Approval
+	// Attestation is an enforcement point's own key: the one that signs every audit
+	// entry and the export envelope. It exists as a third policy because it is
+	// neither of the other two, and bucketing it under either would be a claim that
+	// is not true.
+	//
+	// It is not Routine. Routine permits a software key for a specific reason: a
+	// proof-of-possession signature is bound by the proxy to one (action, seq,
+	// prevHash), so a freely brokered PoP authorizes exactly one action at exactly
+	// one slot, and the blast radius of brokering it is that single slot. An
+	// attestation signature has no such binding; it is the deployment asserting its
+	// own record.
+	//
+	// It is not Approval either, and so it does not require hardware. Approval's
+	// hardware rule buys a per-use human gesture enforced by the OS, which is
+	// meaningless for a key an unattended server process uses on every request:
+	// there is no human present to gesture. Requiring hardware here would buy
+	// non-extractability, which is worth having but is a different and much weaker
+	// claim, and it is not what Approval's rule is for.
+	//
+	// What the policy earns today is honesty at the daemon's boundary: an operator
+	// reading the key table sees which key attests a log and which key proves
+	// possession, rather than one undifferentiated "routine" pile. If a
+	// non-extractability requirement ever lands, this is the policy that gains it,
+	// and it can gain it without disturbing what Routine means.
+	Attestation
 )
+
+// String names the policy for operator-facing output. An unrecognized value is
+// rendered rather than hidden, so a key holding one is visible in the daemon's
+// own key listing.
+func (p KeyPolicy) String() string {
+	switch p {
+	case Routine:
+		return "routine"
+	case Approval:
+		return "approval"
+	case Attestation:
+		return "attestation"
+	default:
+		return fmt.Sprintf("unknown(%d)", int(p))
+	}
+}
+
+// known reports whether p is a policy this package defines. NewKeys refuses
+// anything else rather than brokering a key whose handling nobody has decided,
+// which is what a zero-valued or out-of-range policy would otherwise get: the
+// permissive answer, by accident.
+func (p KeyPolicy) known() bool {
+	switch p {
+	case Routine, Approval, Attestation:
+		return true
+	default:
+		return false
+	}
+}
+
+// requiresHardware reports whether a key held under this policy must be backed by
+// a secure element.
+//
+// Deliberately a switch over every policy rather than a test for Approval. The
+// test form answers "software is acceptable" for any policy it was not told
+// about, so a policy added later would inherit that answer from the shape of the
+// check instead of from a decision: the same enumerated-inclusion shape the
+// house rules name. The default here refuses, which is the wrong answer for a
+// permissive policy and therefore one that cannot be reached by forgetting.
+func (p KeyPolicy) requiresHardware() bool {
+	switch p {
+	case Routine, Attestation:
+		return false
+	case Approval:
+		return true
+	default:
+		return true
+	}
+}
 
 // HeldKey is a signer plus its declared policy.
 type HeldKey struct {
@@ -96,9 +170,13 @@ func NewKeys(keys []HeldKey) (*Server, error) {
 		if k.Signer == nil {
 			return nil, errors.New("signerd: nil signer in key set")
 		}
-		if k.Policy == Approval && !isHardwareBacked(k.Signer) {
-			return nil, fmt.Errorf("signerd: refusing to broker approval-capable key %q as a software signer; "+
-				"an approval/issuance key must be hardware-backed (Secure Enclave) so the per-use gesture is enforced", k.Signer.DID())
+		if !k.Policy.known() {
+			return nil, fmt.Errorf("signerd: key %q declares policy %s, which this package does not define; "+
+				"refusing rather than guessing how it should be handled", k.Signer.DID(), k.Policy)
+		}
+		if k.Policy.requiresHardware() && !isHardwareBacked(k.Signer) {
+			return nil, fmt.Errorf("signerd: refusing to broker %s-policy key %q as a software signer; "+
+				"an approval/issuance key must be hardware-backed (Secure Enclave) so the per-use gesture is enforced", k.Policy, k.Signer.DID())
 		}
 		m[k.Signer.DID()] = k.Signer
 	}

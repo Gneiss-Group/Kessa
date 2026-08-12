@@ -39,6 +39,8 @@ func cmdDaemon(args []string, stdout, stderr io.Writer) int {
 	ksPath := fs.String("keystore", "", "keystore JSON (DID -> hex seed): software keys brokered as ROUTINE (PoP) keys")
 	mapPath := fs.String("mapping", "", "enrollment mapping: load enrolled Secure Enclave keys by tag as APPROVAL-capable keys")
 	sock := fs.String("sock", defaultSockPath(), "Unix socket to listen on")
+	var attest didList
+	fs.Var(&attest, "attestation-key", "DID from --keystore to broker as an ATTESTATION key, an enforcement point's own audit-signing key, rather than a routine PoP key (repeatable). This is the key `kessa-proxy serve --signer-sock` asks for")
 	if err := fs.Parse(args); err != nil {
 		return exitUsage
 	}
@@ -46,11 +48,19 @@ func cmdDaemon(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stderr, "kessa-issuer: one of --keystore or --mapping is required")
 		return exitUsage
 	}
+	if len(attest) > 0 && *ksPath == "" {
+		fmt.Fprintln(stderr, "kessa-issuer: --attestation-key names a DID from --keystore, which was not given")
+		return exitUsage
+	}
 
-	// Software keystore keys are ROUTINE-only (PoP). Enrolled keys from the mapping
-	// are APPROVAL-capable and must be hardware-backed; signerd.NewKeys refuses an
-	// approval key that is not (R4-02), and loadEnrolledKeys refuses to even offer a
-	// software-enrolled key for that role.
+	// Software keystore keys are ROUTINE-only (PoP) unless --attestation-key names
+	// one, which reclassifies it as the enforcement point's own audit-signing key.
+	// Both are software-permitted, and the distinction is not a security boundary:
+	// it is so the daemon's key table says which key attests a log and which proves
+	// possession, rather than presenting one undifferentiated pile. Enrolled keys
+	// from the mapping are APPROVAL-capable and must be hardware-backed;
+	// signerd.NewKeys refuses an approval key that is not (R4-02), and
+	// loadEnrolledKeys refuses to even offer a software-enrolled key for that role.
 	var keys []signerd.HeldKey
 	if *ksPath != "" {
 		ks, err := loadJSON[Keystore](*ksPath)
@@ -58,14 +68,12 @@ func cmdDaemon(args []string, stdout, stderr io.Writer) int {
 			fmt.Fprintf(stderr, "kessa-issuer: %v\n", err)
 			return exitUsage
 		}
-		for d := range ks {
-			sg, err := ks.Signer(d)
-			if err != nil {
-				fmt.Fprintf(stderr, "kessa-issuer: %v\n", err)
-				return exitUsage
-			}
-			keys = append(keys, signerd.HeldKey{Signer: sg, Policy: signerd.Routine})
+		kk, err := keystoreKeys(ks, attest)
+		if err != nil {
+			fmt.Fprintf(stderr, "kessa-issuer: %v\n", err)
+			return exitUsage
 		}
+		keys = append(keys, kk...)
 	}
 	if *mapPath != "" {
 		hk, err := loadEnrolledKeys(*mapPath)
@@ -80,15 +88,20 @@ func cmdDaemon(args []string, stdout, stderr io.Writer) int {
 		return exitUsage
 	}
 
-	l, err := listen(*sock, stderr)
+	// Build and validate the key set BEFORE binding the socket. NewKeys is the
+	// gate that refuses a software approval key (R4-02) and an unknown policy, and
+	// binding first meant a refused key set had already created a socket on a path
+	// another daemon could be told to use. Closing the listener unlinks it, so the
+	// old order was not leaking a file, but it did perform the side effect before
+	// the check that can reject it, which is the ordering the house rules call out.
+	srv, err := signerd.NewKeys(keys)
 	if err != nil {
 		fmt.Fprintf(stderr, "kessa-issuer: %v\n", err)
 		return exitUsage
 	}
 
-	srv, err := signerd.NewKeys(keys)
+	l, err := listen(*sock, stderr)
 	if err != nil {
-		_ = l.Close()
 		fmt.Fprintf(stderr, "kessa-issuer: %v\n", err)
 		return exitUsage
 	}
@@ -104,8 +117,8 @@ func cmdDaemon(args []string, stdout, stderr io.Writer) int {
 	}()
 
 	fmt.Fprintf(stdout, "kessa-issuer daemon: brokering %d key(s) on %s\n", len(keys), *sock)
-	for _, d := range heldDIDs(keys) {
-		fmt.Fprintf(stdout, "  %s\n", d)
+	for _, k := range heldKeysSorted(keys) {
+		fmt.Fprintf(stdout, "  %-11s %s\n", k.Policy, k.Signer.DID())
 	}
 
 	serveErr := srv.Serve(l)
@@ -201,13 +214,75 @@ func loadEnrolledKeys(mapPath string) ([]signerd.HeldKey, error) {
 	return out, nil
 }
 
-func heldDIDs(keys []signerd.HeldKey) []types.DID {
-	out := make([]types.DID, 0, len(keys))
-	for _, k := range keys {
-		out = append(out, k.Signer.DID())
+// keystoreKeys turns the mock keystore into brokerable keys, classifying each as
+// ROUTINE unless attest names it, in which case it becomes ATTESTATION: an
+// enforcement point's own audit-signing key, which is what `kessa-proxy serve
+// --signer-sock` asks the daemon for.
+//
+// Every named DID is checked against the keystore BEFORE any signer is
+// materialized. Skipping that check would not fail: it would start a daemon that
+// brokers the intended key as ROUTINE, so the flag would appear accepted and
+// change nothing, which is the shape of a check that passes by not testing
+// anything.
+func keystoreKeys(ks Keystore, attest didList) ([]signerd.HeldKey, error) {
+	for _, d := range attest {
+		if _, ok := ks[d]; !ok {
+			return nil, fmt.Errorf("--attestation-key %q is not in the keystore", d)
+		}
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
+	attested := attest.set()
+	principals := ks.Principals()
+	keys := make([]signerd.HeldKey, 0, len(principals))
+	for _, d := range principals {
+		sg, err := ks.Signer(d)
+		if err != nil {
+			return nil, err
+		}
+		policy := signerd.Routine
+		if attested[d] {
+			policy = signerd.Attestation
+		}
+		keys = append(keys, signerd.HeldKey{Signer: sg, Policy: policy})
+	}
+	return keys, nil
+}
+
+// heldKeysSorted orders the brokered keys by DID for a stable listing. It carries
+// the policy through rather than reducing to DIDs, because what an operator needs
+// from this table is which key does what: an attestation key and a routine key
+// look identical once the policy is dropped.
+func heldKeysSorted(keys []signerd.HeldKey) []signerd.HeldKey {
+	out := make([]signerd.HeldKey, len(keys))
+	copy(out, keys)
+	sort.Slice(out, func(i, j int) bool { return out[i].Signer.DID() < out[j].Signer.DID() })
 	return out
+}
+
+// didList collects a repeatable DID-valued flag.
+type didList []types.DID
+
+func (l *didList) String() string {
+	out := make([]string, 0, len(*l))
+	for _, d := range *l {
+		out = append(out, string(d))
+	}
+	return strings.Join(out, ",")
+}
+
+func (l *didList) Set(v string) error {
+	if v == "" {
+		return errors.New("empty DID")
+	}
+	*l = append(*l, types.DID(v))
+	return nil
+}
+
+func (l *didList) set() map[types.DID]bool {
+	m := make(map[types.DID]bool, len(*l))
+	for _, d := range *l {
+		m[d] = true
+	}
+	return m
 }
 
 func isClosedListener(err error) bool {
