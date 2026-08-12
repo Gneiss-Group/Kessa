@@ -244,23 +244,24 @@ For what the system does today, and for the limits of a clean verdict, the
     it anyway to mint each fixture's PoP and approval, so brokering only the
     enforcement point's key would leave the other two as seeds in a file.
 
-- **Config-file support for the proxy and issuer.** Both binaries are configured
-  entirely by CLI flags today, which makes every deployment a long, hand-built
-  command line, and makes containerized serving specifically awkward: supplying
-  configuration means overriding the image's `CMD`, which replaces the bind flags
-  the image carries rather than adding to them (see
-  [`docker/README.md`](docker/README.md)).
+- **Config files cover the long-lived commands only.** `kessa-proxy serve` and
+  `kessa-issuer daemon` take `--config` ([configuration](docs/configuration.md));
+  the one-shot subcommands (`proxy run`, `issuer publish`, `revoke`, `enroll`,
+  `issuer serve`) deliberately do not. They are invoked by a human or a script
+  with arguments that differ every time, so a config file buys them little.
 
-  The surface from `serve` alone: `policy`, `dids`, `enforcement-point`, one of
-  `keystore` or `signer-sock`, `http-addr`, `mcp-addr`, `export`, `audit-log`,
-  `audit-wal`, `allow-unauthenticated-remote`, and repeatable `status`. `--now` is
-  a determinism fixture for reproducible runs and must stay **out** of any
-  operator-facing schema: exposing a test seam as production surface would be a
-  category error, not a convenience.
+  The revisit trigger is specific: **if deployment tooling ends up running
+  `issuer publish`**, that command wants a config too, since the whole point of
+  the file is that tooling renders it rather than assembling a command line. That
+  is an open question in the Terraform work, not here.
 
-  Unstarted, and big enough to want its own design pass rather than being grown
-  incrementally. It is also the first thing deployment tooling would consume, so
-  the schema and that tooling's inputs are one design problem seen from two sides.
+  `cmd/verify` is excluded on stronger grounds and should stay excluded. Its
+  posture is that you point it at files and it reads nothing else; a config file
+  is another input to a tool whose selling point is having almost none.
+
+  Config **reload** is also out, and not merely unbuilt: it should not arrive as a
+  cheaper-looking version of the policy hot-reload problem above, which is an
+  export-format change rather than a loader feature.
 
 ## Coverage and evidence
 

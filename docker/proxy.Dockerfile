@@ -38,22 +38,30 @@ FROM gcr.io/distroless/static:nonroot@sha256:f7f8f729987ad0fdf6b05eeeae94b26e6a0
 COPY --from=build /out/kessa-proxy /usr/local/bin/kessa-proxy
 
 USER nonroot:nonroot
-# Both listeners are on by default: the generic HTTP listener (8181) and the
-# MCP-native Streamable-HTTP listener (8182). Close either by passing an empty
-# address (e.g. `serve --mcp-addr ""`).
+# The conventional ports, declared for documentation. Which listeners actually
+# bind, and on what addresses, is the mounted config's business now, not the
+# image's: see `http_addr` and `mcp_addr` in docs/configuration.md.
 EXPOSE 8181 8182
 ENTRYPOINT ["/usr/local/bin/kessa-proxy"]
-# Default to serving on all interfaces: the binary's own default is 127.0.0.1,
-# which is unreachable from outside a container. 0.0.0.0 inside a container is
-# scoped by the pod/host network, and this CMD is overridable (e.g.
-# `docker run … run --requests …` for batch mode).
+# Mount a config at /etc/kessa/proxy.json and run the image with NO arguments.
 #
-# `--allow-unauthenticated-remote` is not optional here, it is what makes this
-# CMD startable at all. The binary refuses a non-loopback bind unless the
-# operator says they accept that the listeners have no caller authentication, so
-# without the flag every one of these addresses is refused and the container
-# exits 2 before binding anything. It was missing until scripts/ci/container-smoke.sh
-# ran the image's own default for the first time; nothing else ever did, because
-# docker/demo.sh exercises `run`, not `serve`. The flag adds no authentication,
-# it records that containerized serving accepts its absence (README, Known limits).
-CMD ["serve", "--http-addr", "0.0.0.0:8181", "--mcp-addr", "0.0.0.0:8182", "--allow-unauthenticated-remote"]
+# This CMD used to carry the bind flags instead: `--http-addr 0.0.0.0:8181
+# --mcp-addr 0.0.0.0:8182 --allow-unauthenticated-remote`. That was unavoidable
+# while flags were the only way to configure the proxy, and it was the source of
+# a genuine defect. `docker run` REPLACES the CMD rather than adding to it, so
+# supplying --policy and --dids meant restating the bind posture too, and any
+# invocation that forgot was refused. The flag itself went missing for months,
+# leaving an image whose default command exited 2 before binding anything,
+# because nothing ever ran it: docker/demo.sh builds this image and then
+# exercises `run`, never `serve`.
+#
+# Configuration now arrives through a file, so it no longer has to displace the
+# command. The bind posture, including whether this deployment accepts listeners
+# with no caller authentication, is stated in the operator's config rather than
+# presumed by the image. An image that hardcodes 0.0.0.0 is making that choice on
+# their behalf, and it is not the image's to make.
+#
+# Overriding the CMD is still fine for a different command (`docker run …
+# run --requests …` for batch mode). What changed is that configuring the proxy
+# is no longer such an override.
+CMD ["serve", "--config", "/etc/kessa/proxy.json"]
