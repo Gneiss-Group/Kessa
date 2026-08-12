@@ -427,11 +427,58 @@ func cmdServe(args []string, stdout, stderr io.Writer) int {
 	auditLog := fs.String("audit-log", "audit-log.jsonl", "forward each audit entry to this local JSON-Lines file; \"-\" for stdout, \"\" to disable. Best-effort and lossy: a hung/slow sink drops records rather than stalling enforcement (bound sinkMaxInFlight=64; finding R2-03)")
 	walPath := fs.String("audit-wal", "", "durable write-ahead audit log path; when set, every entry is fsynced before its decision returns (log-before-act, fail-closed) and the log is recovered from it on restart. \"\" disables durability")
 	allowRemote := fs.Bool("allow-unauthenticated-remote", false, "permit binding a NON-LOOPBACK address. The listeners have no caller authentication, so this exposes the enforcement endpoint to anyone who can reach it. Required for containerized serving, where a container's loopback is unreachable through -p. It does not add authentication; it records that you accepted its absence")
+	cfgPath := fs.String("config", "", "JSON configuration file. When given it supplies the whole configuration, and any flag this schema covers is refused rather than merged: see cmd/proxy/config.go. Flags outside the schema (--now, --version) stay usable")
+	checkOnly := fs.Bool("check-config", false, "validate the configuration and exit without binding, creating or serving anything. Goes as deep as the environment allows (schema, then the files it names, then the signing daemon) and reports which depth it reached")
 	var statuses statusFlag
 	fs.Var(&statuses, "status", "signed status list as url=file (repeatable)")
 	if err := fs.Parse(args); err != nil {
 		return exitUsage
 	}
+
+	// The config file and the command line are mutually exclusive, so there is no
+	// precedence relation to specify: the two sources are never both allowed to
+	// speak. Flags-win would let a launcher script silently override the reviewed,
+	// version-controlled artifact; file-wins-with-a-warning leaves the process
+	// running under a posture nobody intended, and a warning on every start is
+	// wallpaper in an unattended deployment. Refusal is the only form of "loud"
+	// that survives having no one watching.
+	//
+	// The escape hatch needs no flag: to run without the file, do not pass
+	// --config.
+	if *cfgPath != "" {
+		if bad := conflictingFlags(fs); len(bad) > 0 {
+			fmt.Fprintf(stderr, "kessa-proxy: --config supplies the whole configuration, so these flags cannot also be given: --%s\n",
+				strings.Join(bad, ", --"))
+			fmt.Fprintln(stderr, "  Put their values in the config file, or drop --config to configure entirely by flag.")
+			return exitUsage
+		}
+		cfg, err := loadConfig(*cfgPath)
+		if err != nil {
+			fmt.Fprintf(stderr, "kessa-proxy: %v\n", err)
+			return exitUsage
+		}
+		// Assigned UNCONDITIONALLY, which is what makes "absent means off" real: a
+		// field the file omits overwrites the flag's default with its zero value
+		// rather than leaving the default in place. Anything conditional here would
+		// quietly reintroduce flag defaults for omitted fields.
+		*policyPath = cfg.Policy
+		*didsDir = cfg.DIDs
+		*epDID = cfg.EnforcementPoint.DID
+		*ksPath = cfg.EnforcementPoint.Key.MockKeystore
+		*sockPath = cfg.EnforcementPoint.Key.BrokerSocket
+		*httpAddr = cfg.HTTPAddr
+		*mcpAddr = cfg.MCPAddr
+		*exportOut = cfg.Export
+		*auditLog = cfg.AuditLog
+		*allowRemote = cfg.AllowUnauthenticatedRemote
+		statuses = cfg.statusPairs()
+		// Already validated by loadConfig; the error is unreachable here.
+		*walPath, _, _ = cfg.auditWAL()
+	} else if *checkOnly {
+		fmt.Fprintln(stderr, "kessa-proxy: --check-config needs a --config file to check")
+		return exitUsage
+	}
+
 	now, err := parseNow(*nowStr)
 	if err != nil {
 		fmt.Fprintf(stderr, "kessa-proxy: %v\n", err)
@@ -488,6 +535,26 @@ func cmdServe(args []string, stdout, stderr io.Writer) int {
 	ep, ok := enforcementPointSigner(*ksPath, *sockPath, *epDID, stderr)
 	if !ok {
 		return exitUsage
+	}
+
+	// --check-config stops HERE, which is not an arbitrary point: it is the last
+	// instruction before buildSink, the first thing in this function that creates
+	// something. Everything above has already run, unchanged, so the check is a
+	// prefix of the real start rather than a second opinion about it.
+	//
+	// That matters more than it looks. A standalone validator is a parallel
+	// implementation of "valid", and it drifts; its failure mode is a check that
+	// reports clean against a service that then refuses to start, which is worse
+	// than having no check at all.
+	if *checkOnly {
+		// The same construction the real start performs, minus exactly the two
+		// steps that touch the disk. It loads and parses the policy, loads and
+		// verifies every status list, and builds the DID resolver.
+		if _, ok := buildProxy(*policyPath, *didsDir, ep, statuses, now, nil, nil, stderr); !ok {
+			return exitUsage
+		}
+		reportConfigCheck(stdout, *cfgPath, *sockPath, listenAddrs, statuses)
+		return exitOK
 	}
 
 	sink, closeSink, err := buildSink(*auditLog)

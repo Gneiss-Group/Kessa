@@ -387,6 +387,7 @@ everything else:
 | [The MCP-native listener](docs/mcp.md) | The MCP revision spoken (`2026-07-28`, the only one accepted), the headers and `_meta` every request must carry, and the two reserved tools. Read before pointing an MCP client at the proxy. |
 | [Signing backends](docs/signer.md) | The `Signer` seam: software keystore, macOS Secure Enclave, and precisely what each one does and does not prove. |
 | [Enrollment](docs/enrollment.md) | How a device gets its own key and credential. |
+| [Configuration](docs/configuration.md) | Configuring `kessa-proxy serve` from a file instead of flags, and the rules that go with it. |
 | [Signing daemon](docs/daemon.md) | The long-running signer, its socket, and its trust boundary. |
 | [Enclave runbook](docs/enclave-runbook.md) | Reproducing the Secure Enclave path on real hardware, including code-signing setup. |
 | [Standards alignment](docs/standards-alignment.md) | Published requirements mapped to specific tests and files, with what Kessa does not address stated alongside. Not a certification. |
