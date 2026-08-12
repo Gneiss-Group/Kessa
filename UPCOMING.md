@@ -91,10 +91,36 @@ For what the system does today, and for the limits of a clean verdict, the
   closed perimeter has no way to ask for one. `--allow-unauthenticated-remote` is a
   fail-closed default, not an answer.
 
-  Candidates, all unstarted: mTLS (matches the sidecar topology); a unix socket
-  with a peer-uid check (matches the same-host case and reuses what the signing
-  daemon already does); a bearer token (weakest, easiest). The choice interacts
-  with the MCP deployment model below.
+  **Deferred, deliberately, and not a v1 blocker.** The cost of a stranger's
+  request is bounded rather than open-ended: `enforce.Handle` rejects an absent
+  chain before doing any work, request bodies are capped at `maxRequestBody`
+  (1 MB) and chains at `chain.MaxDepth` (8 hops), and nothing reaches policy
+  evaluation until chain verification and then proof-of-possession have both
+  passed. What is missing is not a bound on what a request costs, it is a check on
+  *who* may spend that bounded cost repeatedly. That is a volume question, and it
+  is the same shape as `GET /export` below, already named as an unauthenticated
+  amplifier and already accepted rather than fixed. Treated the same way: named,
+  bounded, accepted.
+
+  This was nearly mis-sized. An initial reading of the container CMD defect (see
+  `docker/proxy.Dockerfile`) framed it as a reopened security fix, which would have
+  turned a bounded, already-precedented gap into an authentication design project.
+  Tracing the actual code path is what corrected it. Sizing a finding off the first
+  plausible-sounding story, rather than off the path and its real bounds, is the
+  error to avoid repeating.
+
+  **Revisit triggers**, any one of which reopens this: sustained abuse actually
+  observed against a deployment; a design partner naming it a hard requirement; or
+  the deployment shape changing such that the bound stops holding, in particular
+  unbounded *connection* volume rather than unbounded per-request cost. Absent one
+  of those, this is V2-or-paid-tier work, not v1 work.
+
+  Candidates, all unstarted, preserved as design input for whenever a trigger
+  fires: mTLS (matches the sidecar topology); a unix socket with a peer-uid check
+  (matches the same-host case and reuses what the signing daemon already does);
+  SPIFFE/SPIRE (workload identity, fits the sidecar and multi-node shapes, and
+  brings its own trust-domain question); a bearer token (weakest, easiest). The
+  choice interacts with the MCP deployment model below.
 
   **It is also coupled to the still-open root-of-trust layer**: org-root
   enrollment and key rotation, which [`enrollment`](docs/enrollment.md) names as

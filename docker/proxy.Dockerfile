@@ -47,4 +47,13 @@ ENTRYPOINT ["/usr/local/bin/kessa-proxy"]
 # which is unreachable from outside a container. 0.0.0.0 inside a container is
 # scoped by the pod/host network, and this CMD is overridable (e.g.
 # `docker run … run --requests …` for batch mode).
-CMD ["serve", "--http-addr", "0.0.0.0:8181", "--mcp-addr", "0.0.0.0:8182"]
+#
+# `--allow-unauthenticated-remote` is not optional here, it is what makes this
+# CMD startable at all. The binary refuses a non-loopback bind unless the
+# operator says they accept that the listeners have no caller authentication, so
+# without the flag every one of these addresses is refused and the container
+# exits 2 before binding anything. It was missing until scripts/ci/container-smoke.sh
+# ran the image's own default for the first time; nothing else ever did, because
+# docker/demo.sh exercises `run`, not `serve`. The flag adds no authentication,
+# it records that containerized serving accepts its absence (README, Known limits).
+CMD ["serve", "--http-addr", "0.0.0.0:8181", "--mcp-addr", "0.0.0.0:8182", "--allow-unauthenticated-remote"]

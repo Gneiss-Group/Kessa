@@ -55,6 +55,27 @@ jobs:
       - name: scan for committed credentials
         run: scripts/ci/secret-scan.sh
 
+  # The container images get their own job for the same reason the secret scan
+  # does: it is an independent status check, and its dependency (a Docker daemon)
+  # must not leak into scripts/ci/gate.sh, which is deliberately Go-only so the
+  # Codeberg mirror and a laptop can both run it.
+  #
+  # It is here rather than on a schedule because of what it caught. The proxy
+  # image's CMD could not start at all, and had not been able to for months,
+  # because nothing ever ran it: docker/demo.sh builds the same image and then
+  # exercises `run`, never `serve`. A check that only runs weekly would have been a
+  # slower version of the same blind spot. It runs concurrently with `check`, whose
+  # gate is the long pole, so it costs no wall-clock on the critical path.
+  container-smoke:
+    name: container images serve (proxy CMD, both listeners)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: proxy image starts from its own CMD and both listeners answer
+        run: scripts/ci/container-smoke.sh
+
   check:
     name: build, vet, race tests, licence boundary, demo
     runs-on: ubuntu-latest
