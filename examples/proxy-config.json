@@ -1,0 +1,22 @@
+{
+  "comment": "Worked example for `kessa-proxy serve --config`. Paths are relative to the repository root, so this runs as-is from a checkout. See docs/configuration.md for the schema, and note that an ABSENT field means OFF rather than 'on with the flag default': mcp_addr is omitted below, so that listener is closed.",
+
+  "policy": "examples/policies/commerce-security.json",
+  "dids": "testdata/dids",
+
+  "enforcement_point": {
+    "did": "did:web:localhost:proxies:gatekeeper",
+    "key": {
+      "mock_keystore": "examples/issuer/keystore.json"
+    }
+  },
+
+  "http_addr": "127.0.0.1:8181",
+
+  "audit_log": "audit-log.jsonl",
+  "audit_wal": null,
+
+  "status": {
+    "https://localhost/orgs/acme/status.json": "testdata/status/acme_status.json"
+  }
+}

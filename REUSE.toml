@@ -27,6 +27,7 @@ path = [
   # grant nobody decided to make.
   "docs/README.md",
   "docs/branching.md",
+  "docs/configuration.md",
   "docs/daemon.md",
   "docs/demo.md",
   "docs/enclave-runbook.md",

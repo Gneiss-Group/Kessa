@@ -23,6 +23,7 @@ how the system is built, how its signing backends work, and how to run the demo.
 |----------|------------|
 | [Signing backends](signer.md) | The `Signer` seam: the software keystore, the macOS Secure Enclave backend, the hardware gate, and a blunt list of what is *not* true yet. Read §6 before trusting any hardware claim. |
 | [Enrollment](enrollment.md) | How a device gets its own key and its own credential, and why per-device credentials make revocation symmetric. |
+| [Configuration](configuration.md) | The `serve` config file: why it exists, why it and the command line are mutually exclusive, and what an absent field means. |
 | [Signing daemon](daemon.md) | The long-running signer: its socket, permissions, and trust boundary. |
 | [Enclave runbook](enclave-runbook.md) | Reproducing the Secure Enclave path on real hardware, including the code-signing and entitlement setup it requires. |
 
