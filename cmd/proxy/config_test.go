@@ -10,7 +10,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"reflect"
 	"strings"
 	"testing"
 )
@@ -212,34 +211,6 @@ func TestConfigRefusesTrailingContent(t *testing.T) {
 }
 
 // ---- the derived refused-flag set ------------------------------------------
-
-// TestSchemaFlagsAreDerivedFromTags tests the MECHANISM, not a snapshot. Adding a
-// field with a flag tag must extend the set on its own; if this were asserted
-// against a hand-written list, the test would be circular and the rule would rot
-// the first time someone added a field under time pressure.
-func TestSchemaFlagsAreDerivedFromTags(t *testing.T) {
-	type nested struct {
-		Deep string `json:"deep" flag:"deep-flag"`
-	}
-	type addedLater struct {
-		Existing string `json:"existing" flag:"existing-flag"`
-		Nested   nested `json:"nested"`
-		Untagged string `json:"untagged"`
-	}
-
-	got := map[string]bool{}
-	collectFlagTags(reflect.TypeOf(addedLater{}), got)
-
-	if !got["existing-flag"] {
-		t.Error("a tagged field was not collected")
-	}
-	if !got["deep-flag"] {
-		t.Error("a tagged field inside a nested struct was not collected; enforcement_point.key lives there")
-	}
-	if len(got) != 2 {
-		t.Errorf("an untagged field was collected: %v", got)
-	}
-}
 
 // TestSchemaFlagsExistOnServe catches the failure this whole design is exposed
 // to: a typo'd tag (`flag:"http-adr"`) names a flag that does not exist, so the

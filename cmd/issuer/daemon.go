@@ -39,11 +39,43 @@ func cmdDaemon(args []string, stdout, stderr io.Writer) int {
 	ksPath := fs.String("keystore", "", "keystore JSON (DID -> hex seed): software keys brokered as ROUTINE (PoP) keys")
 	mapPath := fs.String("mapping", "", "enrollment mapping: load enrolled Secure Enclave keys by tag as APPROVAL-capable keys")
 	sock := fs.String("sock", defaultSockPath(), "Unix socket to listen on")
+	cfgPath := fs.String("config", "", "JSON configuration file. When given it supplies the whole configuration, and any flag this schema covers is refused rather than merged: see cmd/issuer/config.go and docs/configuration.md")
+	checkOnly := fs.Bool("check-config", false, "validate the configuration and exit without binding the socket or brokering anything, reporting which depth the check reached")
 	var attest didList
 	fs.Var(&attest, "attestation-key", "DID from --keystore to broker as an ATTESTATION key, an enforcement point's own audit-signing key, rather than a routine PoP key (repeatable). This is the key `kessa-proxy serve --signer-sock` asks for")
 	if err := fs.Parse(args); err != nil {
 		return exitUsage
 	}
+
+	// The config file and the command line are mutually exclusive, exactly as for
+	// `kessa-proxy serve`: no precedence relation, because the two sources are
+	// never both allowed to speak. To run without the file, do not pass --config.
+	if *cfgPath != "" {
+		if bad := daemonConflictingFlags(fs); len(bad) > 0 {
+			fmt.Fprintf(stderr, "kessa-issuer: --config supplies the whole configuration, so these flags cannot also be given: --%s\n",
+				strings.Join(bad, ", --"))
+			fmt.Fprintln(stderr, "  Put their values in the config file, or drop --config to configure entirely by flag.")
+			return exitUsage
+		}
+		cfg, err := loadDaemonConfig(*cfgPath)
+		if err != nil {
+			fmt.Fprintf(stderr, "kessa-issuer: %v\n", err)
+			return exitUsage
+		}
+		// Assigned unconditionally, so a field the file omits overwrites the flag's
+		// default rather than inheriting it. That is what makes absence mean "off"
+		// rather than "whatever the flag would have done", and it is why `sock` is
+		// required: its flag default is environment-derived, so inheriting it would
+		// put the socket wherever the invoking shell pointed.
+		*ksPath = cfg.Keystore
+		*mapPath = cfg.Mapping
+		*sock = cfg.Sock
+		attest = cfg.AttestationKeys
+	} else if *checkOnly {
+		fmt.Fprintln(stderr, "kessa-issuer: --check-config needs a --config file to check")
+		return exitUsage
+	}
+
 	if *ksPath == "" && *mapPath == "" {
 		fmt.Fprintln(stderr, "kessa-issuer: one of --keystore or --mapping is required")
 		return exitUsage
@@ -98,6 +130,21 @@ func cmdDaemon(args []string, stdout, stderr io.Writer) int {
 	if err != nil {
 		fmt.Fprintf(stderr, "kessa-issuer: %v\n", err)
 		return exitUsage
+	}
+
+	// --check-config stops HERE, immediately before listen, which is the first
+	// thing this function creates. Everything above has already run unchanged, so
+	// the check is a prefix of the real start rather than a second opinion about
+	// it: a standalone validator drifts, and its failure mode is reporting clean
+	// against a daemon that then refuses to start.
+	//
+	// NewKeys above is the gate worth reaching. It is where a software key offered
+	// for the APPROVAL role is refused (R4-02) and where an undefined policy is
+	// rejected, so a config whose mapping would break that is caught here rather
+	// than at the next restart.
+	if *checkOnly {
+		reportDaemonCheck(stdout, *cfgPath, keys)
+		return exitOK
 	}
 
 	l, err := listen(*sock, stderr)

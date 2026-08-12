@@ -11,10 +11,10 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"os"
-	"reflect"
 	"sort"
 	"strings"
+
+	"github.com/Gneiss-Group/Kessa/internal/config"
 )
 
 // Config is the on-disk configuration for `kessa-proxy serve`.
@@ -104,77 +104,26 @@ type keySourceConfig struct {
 	MockKeystore string `json:"mock_keystore,omitempty" flag:"keystore"`
 }
 
-// schemaFlags returns every CLI flag name the schema can express, read from the
-// `flag` struct tags rather than from a list kept beside them.
-//
-// The DERIVATION is the point. A test adds a field with a flag tag and confirms
-// that flag becomes refused, without editing anything else; under a maintained
-// list that test would be impossible to write honestly.
-func schemaFlags() map[string]bool {
-	out := map[string]bool{}
-	collectFlagTags(reflect.TypeOf(Config{}), out)
-	return out
-}
+// schemaFlags returns every CLI flag name this schema can express, derived from
+// the `flag` struct tags above rather than from a list kept beside them. The
+// mechanism is shared: see internal/config.FlagNames for why it is derived.
+func schemaFlags() map[string]bool { return config.FlagNames(Config{}) }
 
-func collectFlagTags(t reflect.Type, out map[string]bool) {
-	for i := 0; i < t.NumField(); i++ {
-		f := t.Field(i)
-		if name := f.Tag.Get("flag"); name != "" {
-			out[name] = true
-		}
-		// Recurse into nested schema structs so enforcement_point.key's fields are
-		// covered too. Only structs: json.RawMessage and map fields are terminals
-		// that carry their own tag.
-		if f.Type.Kind() == reflect.Struct {
-			collectFlagTags(f.Type, out)
-		}
-	}
-}
-
-// conflictingFlags returns the flags that were EXPLICITLY SET on fs and are also
-// expressible in the config schema, sorted.
-//
-// It uses fs.Visit, which walks only the flags actually provided. Comparing each
-// flag's value against its default would not work and would fail quietly:
-// `--http-addr 127.0.0.1:8181` IS the default, and `--allow-unauthenticated-remote=false`
-// is indistinguishable from unset by value, so a flag deliberately passed at its
-// default would slip past the refusal entirely.
+// conflictingFlags returns the flags explicitly set on fs that this schema also
+// covers, sorted. See internal/config.Conflicting for why "explicitly set" is
+// fs.Visit and never a comparison against defaults.
 func conflictingFlags(fs *flag.FlagSet) []string {
-	covered := schemaFlags()
-	var bad []string
-	fs.Visit(func(f *flag.Flag) {
-		if covered[f.Name] {
-			bad = append(bad, f.Name)
-		}
-	})
-	sort.Strings(bad)
-	return bad
+	return config.Conflicting(fs, schemaFlags())
 }
 
 // loadConfig reads and validates a config file. It performs NO side effects: no
 // file is created, no address is bound, no socket is dialed. Everything it can
 // reject, it rejects before the caller does anything irreversible.
 func loadConfig(path string) (*Config, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("read config %q: %w", path, err)
-	}
-
 	var cfg Config
-	dec := json.NewDecoder(bytes.NewReader(data))
-	// An unknown field is an ERROR. A config that silently ignored a misspelled
-	// allow_unauthenticated_remote would report success while the proxy refused to
-	// bind, or bound under a posture the operator believed they had changed.
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&cfg); err != nil {
-		return nil, fmt.Errorf("parse config %q: %w", path, err)
+	if err := config.Load(path, &cfg); err != nil {
+		return nil, err
 	}
-	// Trailing content means the file is not the single object it claims to be,
-	// e.g. two concatenated objects where only the first would ever be read.
-	if err := dec.Decode(new(json.RawMessage)); !errors.Is(err, io.EOF) {
-		return nil, fmt.Errorf("parse config %q: unexpected content after the top-level object", path)
-	}
-
 	if err := cfg.validate(); err != nil {
 		return nil, fmt.Errorf("config %q: %w", path, err)
 	}
