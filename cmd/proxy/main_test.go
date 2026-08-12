@@ -269,18 +269,85 @@ func TestEnabledListeners(t *testing.T) {
 	}
 }
 
-// TestServe_BothListenersDisabled confirms clearing both addresses is a legal,
-// inert configuration: serve reports it and exits 0 without binding anything.
+// TestServe_BothListenersDisabled: clearing every address is refused, not
+// started. It used to print a note and exit 0, which is indistinguishable from a
+// healthy run by the only signal an unattended deployment has, and which becomes
+// reachable by omission rather than intent once configuration can come from a
+// file whose absent fields mean off.
+//
+// This is the flag-path half. It is the one that proves the behaviour actually
+// changed, since this is where both-off was previously a success.
 func TestServe_BothListenersDisabled(t *testing.T) {
 	code, out, errb := invoke(t, "serve",
 		"--policy", commercePol, "--dids", didsRoot,
 		"--enforcement-point", epDID, "--keystore", ksExample,
 		"--http-addr", "", "--mcp-addr", "", "--audit-log", "")
-	if code != exitOK {
-		t.Fatalf("both-off serve exit=%d, want %d\n%s\n%s", code, exitOK, out, errb)
+	if code != exitUsage {
+		t.Fatalf("both-off serve exit=%d, want %d\n%s\n%s", code, exitUsage, out, errb)
 	}
-	if !strings.Contains(out, "no listeners enabled") {
-		t.Fatalf("expected a 'no listeners enabled' note, got:\n%s", out)
+	if !strings.Contains(errb, "no listeners enabled") {
+		t.Fatalf("expected the refusal to say why, got:\n%s", errb)
+	}
+	// Refused on stderr with a usage code, never on stdout with a success code:
+	// the distinction is the entire point of the change.
+	if strings.Contains(out, "listener at http://") {
+		t.Fatalf("nothing should have been announced as listening:\n%s", out)
+	}
+}
+
+// TestServe_OneListenerIsStillEnough guards the other side. Closing a single
+// listener is a supported way to shed a protocol and must not have been swept up
+// by the refusal above; a rule that refused this too would be a much worse
+// regression than the one it fixed, and it would look identical from the
+// both-off test alone.
+func TestServe_OneListenerIsStillEnough(t *testing.T) {
+	for _, tc := range []struct{ name, http, mcp string }{
+		{"mcp closed", "127.0.0.1:0", ""},
+		{"http closed", "", "127.0.0.1:0"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			// Refused for a reason that can only be reached AFTER the listener check
+			// passes: a keystore that does not exist. Reaching it proves the listener
+			// configuration was accepted, without this test having to bind a port and
+			// then shut a server down.
+			_, _, errb := invoke(t, "serve",
+				"--policy", commercePol, "--dids", didsRoot,
+				"--enforcement-point", epDID, "--keystore", "testdata/no-such-keystore.json",
+				"--http-addr", tc.http, "--mcp-addr", tc.mcp, "--audit-log", "")
+			if strings.Contains(errb, "no listeners enabled") {
+				t.Fatalf("closing one listener must remain legal, got:\n%s", errb)
+			}
+			// Positive half: confirm it failed at the LATER check rather than at no
+			// check at all. Asserting only the absence of the listener refusal would
+			// pass just as happily against a build with the refusal deleted.
+			if !strings.Contains(errb, "keystore") {
+				t.Fatalf("expected to reach the key-source step, got:\n%s", errb)
+			}
+		})
+	}
+}
+
+// TestAnyListenerEnabled is the predicate in isolation, including the whitespace
+// case: enabledListeners treats a blank address as disabled, so this must agree
+// with it or the assertion at the serve call site fires on a legal config.
+func TestAnyListenerEnabled(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		addrs []string
+		want  bool
+	}{
+		{"both set", []string{"127.0.0.1:8181", "127.0.0.1:8182"}, true},
+		{"first only", []string{"127.0.0.1:8181", ""}, true},
+		{"second only", []string{"", "127.0.0.1:8182"}, true},
+		{"both empty", []string{"", ""}, false},
+		{"blank counts as empty", []string{"  ", "\t"}, false},
+		{"no addresses at all", nil, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := anyListenerEnabled(tc.addrs); got != tc.want {
+				t.Fatalf("anyListenerEnabled(%q) = %v, want %v", tc.addrs, got, tc.want)
+			}
+		})
 	}
 }
 
@@ -339,7 +406,7 @@ func TestRefuseRemoteBind(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			msg, ok := refuseRemoteBind(tc.http, tc.mcp, tc.allow)
+			msg, ok := refuseRemoteBind([]string{tc.http, tc.mcp}, tc.allow)
 			if ok != tc.wantOK {
 				t.Fatalf("ok = %v, want %v (msg %q)", ok, tc.wantOK, msg)
 			}
