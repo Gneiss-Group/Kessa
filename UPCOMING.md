@@ -170,6 +170,45 @@ For what the system does today, and for the limits of a clean verdict, the
   endpoint require anything, and the `Origin` guard is browser-scoped by
   construction. That half belongs with caller authentication above.
 
+- **Durability is off by default, which the fail-closed posture says it should not
+  be.** `--audit-wal` defaults to `""`, so the shipped default configuration can
+  return an allowed action and then lose the record of it in a crash. The
+  log-before-act machinery to prevent that exists and works; it is simply not on
+  unless an operator asks for it.
+
+  This is a gap between a decision and its default, not an unbuilt feature. The
+  proxy's failure posture is **uniform fail-closed**: any failure that prevents a
+  sound, logged decision denies the action. Durable logging was named as one of
+  the availability dependencies that posture rests on, and log-before-act ordering
+  was named as the work it unblocked. That work shipped. The default did not
+  follow it.
+
+  **Two prerequisites before flipping it**, and neither is optional:
+
+  - **A WAL benchmark, which does not exist.** The harness builds its proxy with
+    no WAL (`perf/harness_test.go` passes no `WAL` to `enforce.Config`), so every
+    throughput number in [`perf/README.md`](perf/README.md) describes a
+    non-durable configuration. fsync-per-decision is usually a dominant cost
+    rather than a marginal one, so flipping the default would change what those
+    measurements describe without changing the measurements themselves. Benchmark
+    first, and state any throughput figure against the configuration it was
+    measured in.
+  - **A decision about where the WAL lives.** `--audit-wal` takes a path, not a
+    boolean, so defaulting durability on means the binary picks a filesystem
+    location: writable, persistent across restarts, and sane inside a container
+    whose working directory is `/`. That is a deployment question, not a constant.
+
+  **It must flip on both paths at once.** Flags defaulting off while a config file
+  requires an explicit answer is tolerable, because neither is claiming something
+  untrue. Flags defaulting off while config defaults on would mean the two ways of
+  starting the same binary disagree about whether the deployment is durable, which
+  is worse than either default on its own.
+
+  Surfaced 2026-08-11 while designing config-file support, where `audit_wal` is
+  specified as a **required** field for this reason: requiring it forces the
+  durability decision to be conscious without this question having to be answered
+  first.
+
 - **The audit log is unbounded in entry count.** [R6-04](docs/security-review.md#r6-2026-08-06)
   capped how many attacker-chosen bytes one entry may carry, which is a per-entry
   bound; it did nothing about how many entries there are. The in-memory log is
