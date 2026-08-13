@@ -117,10 +117,19 @@ For what the system does today, and for the limits of a clean verdict, the
 
   Candidates, all unstarted, preserved as design input for whenever a trigger
   fires: mTLS (matches the sidecar topology); a unix socket with a peer-uid check
-  (matches the same-host case and reuses what the signing daemon already does);
-  SPIFFE/SPIRE (workload identity, fits the sidecar and multi-node shapes, and
-  brings its own trust-domain question); a bearer token (weakest, easiest). The
-  choice interacts with the MCP deployment model below.
+  (matches the same-host case and reuses what the signing daemon already does); a
+  session-scoped macaroon check at submission time (reuses the existing
+  delegation-chain verification rather than a new trust mechanism, so it stays
+  local to the receiving deployment by construction and needs no separate
+  trust-domain decision, unlike mTLS or SPIFFE; the natural fit if the chain's
+  own verification logic turns out to generalize to a pre-work admission check,
+  not just a post-work possession check); SPIFFE/SPIRE (workload identity, fits
+  the sidecar and multi-node shapes, and brings its own trust-domain question); a
+  bearer token (weakest, easiest). The choice interacts with the MCP deployment
+  model below, and with which of that model's shapes are same-host by
+  construction (sidecar, in-process plugin) versus inherently network-spanning
+  (in front of an existing gateway, standing in as the gateway itself); the
+  socket-based candidate only answers the former.
 
   **It is also coupled to the still-open root-of-trust layer**: org-root
   enrollment and key rotation, which [`enrollment`](docs/enrollment.md) names as
