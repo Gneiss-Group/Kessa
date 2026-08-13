@@ -45,16 +45,38 @@ func Load(path string, v any) error {
 	if err != nil {
 		return fmt.Errorf("read config %q: %w", path, err)
 	}
+	if err := DecodeStrict(data, v); err != nil {
+		return fmt.Errorf("parse config %q: %w", path, err)
+	}
+	return nil
+}
 
+// DecodeStrict decodes one JSON document from data into v, rejecting unknown
+// fields and trailing content. It adds no context to its errors: the caller knows
+// what the file is and names it.
+//
+// Split out from Load because the issuer's spec and keystore files want the same
+// strictness under different words. They are not configs, and "parse config
+// %q: ..." pointed at a spec file would be a message that misnames what the
+// operator was editing. Sharing the mechanism while leaving the wording to the
+// caller is the alternative to a second copy that drifts, which is the failure
+// this package's doc comment already records.
+//
+// NOTE ON MAPS. DisallowUnknownFields governs decoding into STRUCTS. A map type
+// has no unknown fields by construction, so calling this on one is legal and
+// buys nothing. That is not a gap to close: see the keystore, where a "_comment"
+// entry is a legitimate map key and no decoder setting would ever have caught the
+// bug that internal/keystore.Principals exists to fix.
+func DecodeStrict(data []byte, v any) error {
 	dec := json.NewDecoder(bytes.NewReader(data))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(v); err != nil {
-		return fmt.Errorf("parse config %q: %w", path, err)
+		return err
 	}
 	// Trailing content means the file is not the single object it claims to be,
 	// e.g. two concatenated objects where only the first would ever be read.
 	if err := dec.Decode(new(json.RawMessage)); !errors.Is(err, io.EOF) {
-		return fmt.Errorf("parse config %q: unexpected content after the top-level object", path)
+		return errors.New("unexpected content after the top-level object")
 	}
 	return nil
 }

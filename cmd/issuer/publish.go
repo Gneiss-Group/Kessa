@@ -6,12 +6,12 @@ package main
 
 import (
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 
 	"github.com/Gneiss-Group/Kessa/internal/chain"
+	"github.com/Gneiss-Group/Kessa/internal/config"
 	"github.com/Gneiss-Group/Kessa/internal/credential"
 	"github.com/Gneiss-Group/Kessa/internal/did"
 	"github.com/Gneiss-Group/Kessa/internal/export"
@@ -71,15 +71,41 @@ type Spec struct {
 	Status          StatusSpec  `json:"status"`
 	Hops            []HopSpec   `json:"hops"`
 	ExtraPrincipals []types.DID `json:"extraPrincipals,omitempty"` // e.g. the enforcement point
+
+	// Comment is never read. It exists so a spec file may carry a "_comment"
+	// key, which is how this repository writes a comment into JSON, which has no
+	// syntax for one.
+	//
+	// Declared rather than tolerated. Under strict decoding an undeclared
+	// "_comment" is an error, and the three spec files in this repository all
+	// carry one saying that the committed rootKeyHex is a NON-SECRET demo value
+	// and pointing at SECURITY.md's "Committed demo material". Deleting that text
+	// to satisfy a parser would remove the only explanation for why something
+	// shaped like a key is in the tree, which is the first question a reviewer or
+	// a secret-scanner triage asks.
+	Comment string `json:"_comment,omitempty"`
 }
 
+// loadJSON reads a JSON file into T, rejecting unknown fields.
+//
+// Strictness is here for the OPTIONAL fields. A misspelled required field is
+// already caught downstream, because Spec.validate refuses an empty
+// RootKeyHex, Identifier, Status or Hops whatever the reason for it being empty.
+// An optional one has no such backstop: "extraPrincipals" misspelled parses
+// cleanly, yields an empty slice, and publishes a root with the enforcement point
+// silently absent. That is a check whose absence is invisible precisely because
+// the field it governs is allowed to be missing.
+//
+// This does NOTHING for loadJSON[Keystore]. Keystore is a map type and a map has
+// no unknown fields; see config.DecodeStrict. The keystore's own "_comment" entry
+// stays a legitimate key, handled where it has to be, in keystore.Principals.
 func loadJSON[T any](path string) (T, error) {
 	var v T
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return v, fmt.Errorf("read %q: %w", path, err)
 	}
-	if err := json.Unmarshal(data, &v); err != nil {
+	if err := config.DecodeStrict(data, &v); err != nil {
 		return v, fmt.Errorf("parse %q: %w", path, err)
 	}
 	return v, nil
