@@ -137,7 +137,7 @@ _First tagged release._
 - bring the MCP listener to revision 2026-07-28
 - algorithm-agile verification + scoped P-256 employee key
 - serve dual, independently configurable listeners
-- Signer.Public() and did.ResolveKey now return crypto.PublicKey;
+- Signer.Public() and did.ResolveKey now return crypto.PublicKey; Credential.HolderKey is a did.JWK object rather than a raw base64 key; the v2 audit export golden was regenerated. Pre-1.0, no compatibility preserved.
 - the proxy serve --addr flag is renamed to --http-addr. Update any deployment that passed --addr (the Docker CMD and repo scripts are updated in this change).
 
 ### Features

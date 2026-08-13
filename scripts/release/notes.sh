@@ -78,6 +78,62 @@ section() {
   fi
 }
 
+# FOOTER_EOC marks where one commit message ends, so a footer running to the end
+# of its message cannot absorb the start of the next one. It is emitted by the
+# --format string, never by a commit.
+FOOTER_EOC='@@end-of-commit@@'
+
+# footer_bullets: turn BREAKING CHANGE footers on stdin into markdown bullets,
+# INCLUDING their continuation lines.
+#
+# A footer is a paragraph, not a line. The previous implementation was a single
+# `grep -E '^BREAKING[ -]CHANGE: '`, which is line-oriented, so a footer that
+# wrapped contributed only its first line and the bullet stopped mid-sentence.
+# That is not hypothetical: v0.0.1 shipped "Signer.Public() and did.ResolveKey now
+# return crypto.PublicKey;" into CHANGELOG.md and into the GitHub release body,
+# ending on a semicolon with the rest discarded. It survived review because a
+# truncated footer still reads like a terse note. The v0.1.0 range does it twice,
+# and one of those drops the sentence telling operators their scripts will fail,
+# which is the only part of the note that asks anyone to do anything.
+#
+# A footer therefore ends at the first of: a blank line, another footer token, or
+# the end of its commit message. The middle terminator is what keeps a trailing
+# `Co-Authored-By:` out of the release notes; v0.0.1's second footer has one, so
+# reading to end-of-message is not an option.
+#
+# The footer-token terminator can in principle cut a wrapped line that happens to
+# begin `Word: `. That is the safe direction (it truncates rather than swallowing
+# an unrelated trailer) and it is what the git trailer convention means by a
+# footer, but it is a choice rather than a certainty, so it is stated here.
+#
+# Line-oriented with an explicit delimiter rather than a NUL record separator:
+# awk's RS is not portably assignable to NUL, and this script runs on whatever
+# awk the runner has.
+footer_bullets() {
+  awk -v eoc="$FOOTER_EOC" '
+    function flush() {
+      if (collecting && acc != "") print "- " acc
+      collecting = 0
+      acc = ""
+    }
+    $0 == eoc { flush(); next }
+    /^BREAKING[ -]CHANGE: / {
+      flush()
+      acc = $0
+      sub(/^BREAKING[ -]CHANGE: /, "", acc)
+      collecting = 1
+      next
+    }
+    {
+      if (!collecting) next
+      if ($0 ~ /^[[:space:]]*$/) { flush(); next }
+      if ($0 ~ /^[A-Za-z][A-Za-z-]*: /) { flush(); next }
+      acc = acc " " $0
+    }
+    END { flush() }
+  '
+}
+
 printf '## v%s: %s\n\n' "$VERSION" "$DATE"
 
 if [ -n "$PREV" ]; then
@@ -90,7 +146,7 @@ fi
 # that signal (a 0.x breaking change bumps the minor), so this section is the
 # only place a consumer learns it.
 breaking="$(git log --no-merges --format='%s' "$RANGE" | grep -E '^[a-z]+(\([^)]*\))?!:' | sed -E 's/^[a-z]+(\([^)]*\))?!: */- /' | house_style || true)"
-footers="$(git log --no-merges --format='%B' "$RANGE" | grep -E '^BREAKING[ -]CHANGE: ' | sed -E 's/^BREAKING[ -]CHANGE: */- /' | house_style || true)"
+footers="$(git log --no-merges --format="%B%n${FOOTER_EOC}" "$RANGE" | footer_bullets | house_style || true)"
 if [ -n "$breaking$footers" ]; then
   printf '### Breaking changes\n\n'
   [ -n "$breaking" ] && printf '%s\n' "$breaking"
