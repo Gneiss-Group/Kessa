@@ -17,6 +17,12 @@ path = [
   "Makefile",
   ".gitignore",
   "go.mod",
+  # The nested module under experimental/. Annotated rather than headed inline
+  # for go.sum's sake: it has no comment syntax at all, so a header is not
+  # available to it, and splitting the pair across two mechanisms would put the
+  # licence for one half of a module in a place nobody looks for the other.
+  "experimental/policy-opa/go.mod",
+  "experimental/policy-opa/go.sum",
   "REUSE.toml",
   # docs/ is named file by file rather than by a `docs/*.md` glob. The glob was
   # wrong for one file (enrollment.md is AGPL-tier, see the block below) and it
