@@ -357,3 +357,34 @@ For what the system does today, and for the limits of a clean verdict, the
   **self-run** AI red-team passes, not third-party; they are registered in the
   [security review record](docs/security-review.md). An independent, named audit
   has not been commissioned.
+
+- **A version is written two ways, and one of them cannot change.** The git tag
+  is `v0.1.0`; the version constant, `--version` output and the container image
+  tag are all bare `0.1.0`. The `v` is added in exactly one place,
+  [`release.yml`](.github/workflows/release.yml) (`tag=v$next`), and stated in the
+  [`Makefile`](Makefile)'s versioning comment as "the git tag is v plus it".
+
+  **This is not a naming inconsistency to tidy away.** This repository is a public
+  Go module, and Go's module system requires version tags to be `vX.Y.Z`:
+  `go get github.com/Gneiss-Group/Kessa@v0.1.0` resolves through that tag.
+  Dropping the prefix would make the module unfetchable at a version. Container
+  registries take the opposite convention, and `notes.sh` substitutes the bare
+  version into the documented `docker pull` line accordingly. Both sides are
+  right; they simply disagree, and neither is free to move.
+
+  **What it costs, which is the reason this is written down at all.** Reaching for
+  the git-tag form against the registry returns **404**, and 404 is also what GHCR
+  returns for a package you may not see. So the wrong spelling is indistinguishable
+  from a permissions problem, and it routes diagnosis toward "did the package go
+  private" rather than "did I type the tag right". That happened on 2026-08-14
+  while resolving the v0.1.0 proxy digest, and it briefly looked like a visibility
+  regression.
+
+  **Options, none of them obviously correct.** Publish both `0.1.0` and `v0.1.0`
+  image tags so either spelling works, at the cost of doubling the tag list and
+  implying a distinction that does not exist. Or leave one spelling and make the
+  documentation carry the whole load, which is the current state and is what just
+  failed. Or say it once, loudly, where someone is about to type a tag: the
+  release body and `docker/README.md`, rather than only in a comment next to the
+  code that adds the prefix. The last is the cheapest and is the recommendation;
+  it is not done.
