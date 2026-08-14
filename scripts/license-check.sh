@@ -26,6 +26,31 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+SELF="$ROOT/scripts/license-check.sh"
+
+# --also DIR walks a NESTED module as well, one that has its own go.mod and is
+# therefore invisible to this script's package walk. See section 7 at the bottom
+# for why that walk is a re-invocation rather than a loop, and for what goes
+# wrong if the check is merely assumed to cover such a module.
+#
+# With no arguments the behavior is unchanged, which matters:
+# internal/licensing/guardrail_test.go invokes this script bare against a
+# synthesized fixture module and asserts on what it reports.
+ALSO_MODULES=""
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --also)
+      [ "$#" -ge 2 ] || { echo "license-check: --also needs a directory" >&2; exit 2; }
+      ALSO_MODULES="$ALSO_MODULES $2"
+      shift 2
+      ;;
+    *)
+      echo "license-check: unknown argument $1" >&2
+      exit 2
+      ;;
+  esac
+done
+
 # The module under test is the one in the working directory, not a baked-in
 # constant, so the guardrail test can run this script against a synthesized
 # fixture module and observe it fail. A check nobody can watch fail is a check
@@ -274,6 +299,46 @@ done
 if [ -x "$ROOT/scripts/gen-notice.sh" ] && [ "$ROOT" = "$PWD" ]; then
   "$ROOT/scripts/gen-notice.sh" --check || fail=1
 fi
+
+# ---------------------------------------------------------------------------
+# 7. Nested modules, which everything above is structurally unable to see.
+#
+# `go list ./...` enumerates the packages of ONE module: the one in the working
+# directory. A directory carrying its own go.mod is a different module, so it is
+# not merely unlisted, it cannot be listed from here. experimental/policy-opa is
+# exactly that, and deliberately so, since keeping OPA out of the core module's
+# dependency graph is the whole reason it has its own go.mod.
+#
+# The failure mode that makes this section necessary is the one this project
+# keeps rediscovering: left alone, every check above would go on passing while
+# silently classifying nothing in that module, and a green run would mean "the
+# guardrail found no violation" and "the guardrail never looked" at the same
+# time. That is not a hypothetical shape here, it is the fifth or sixth instance
+# of it. So the nested walk is opt-in at the CALL SITE (scripts/ci/gate-full.sh
+# passes --also) rather than conditional on some property of the tree that could
+# quietly become false.
+#
+# It is a re-invocation of this same script rather than a loop factored into a
+# function, and that is the point rather than a shortcut: MOD is already derived
+# from the working directory, so running the identical file one directory over
+# gives the nested module every check the root module gets, by construction. A
+# second code path could drift into checking less; this one cannot check
+# anything different, because it is not different code. The recursion passes no
+# --also, so it terminates.
+# ---------------------------------------------------------------------------
+for m in $ALSO_MODULES; do
+  if [ ! -f "$ROOT/$m/go.mod" ]; then
+    note "NOT A NESTED MODULE: '$m' has no go.mod, so there is nothing here this"
+    note "  script did not already walk. Either the path is wrong or the module"
+    note "  boundary was removed, and both mean this check is now covering less"
+    note "  than its caller believes."
+    fail=1
+    continue
+  fi
+  echo
+  echo "license-check: nested module $m"
+  ( cd "$ROOT/$m" && bash "$SELF" ) || fail=1
+done
 
 if [ "$fail" -eq 0 ]; then
   n_all="$(printf '%s\n' $all_pkgs | wc -l | tr -d ' ')"

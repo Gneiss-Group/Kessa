@@ -91,10 +91,19 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - name: gate (fmt, licence, vet, licence boundary, race tests, demo)
-        # The shared gate: the same script the two release phases run, so CI and
-        # release cannot check different things. See scripts/ci/gate.sh.
-        run: scripts/ci/gate.sh
+      - name: gate (fmt, licence, vet, licence boundary, race tests, demo, nested modules)
+        # gate-full.sh runs scripts/ci/gate.sh in full and then adds the nested
+        # modules, so this is still the shared gate rather than a variant of it:
+        # every check the release phases run, CI runs here too.
+        #
+        # CI runs the FULL one, and that is load-bearing rather than a preference.
+        # gate.sh stays offline-hermetic so contributors and the no-network demo
+        # keep working, which means it cannot see experimental/policy-opa (its own
+        # go.mod, its own dependency graph). If CI also ran the offline gate, that
+        # module would be covered only by checks that never execute, which is this
+        # project's recurring failure shape and the reason the split is written
+        # down here instead of being inferred from the filenames.
+        run: scripts/ci/gate-full.sh
 
       # ---- CI-only extras beyond the shared gate --------------------------
 
