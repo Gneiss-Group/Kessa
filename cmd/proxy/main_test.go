@@ -6,12 +6,14 @@ package main
 
 import (
 	"bytes"
+	"cmp"
 	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -181,7 +183,25 @@ func readExportEntries(t *testing.T, path string) int {
 	return len(env.Entries)
 }
 
-// readJSONL decodes a JSON-Lines audit-sink file into records.
+// readJSONL decodes a JSON-Lines audit-sink file into records, SORTED BY Seq.
+//
+// Sorting is the point, not tidiness. The sink is asynchronous and explicitly
+// does not promise arrival order: enforce.forward dispatches each record on its
+// own goroutine and says so in as many words, because that is the shape R2-03
+// asked for. A slow, hung or hostile sink must never stall enforcement, and the
+// cost of that, stated where the tradeoff is made, is that records may arrive out
+// of order and may be dropped under saturation. The signed export is the system
+// of record; records carry Seq so a consumer can reorder and reconcile.
+//
+// Reading them in FILE order was that unmet promise turned into an assertion.
+// With two requests the goroutines almost always finish in order, so it held on
+// every developer machine and on an idle runner, and failed on a loaded one where
+// the deny landed first and every positional assertion after it was wrong.
+//
+// Sorting removes the arrival-order assumption WITHOUT weakening the sequence
+// check: a caller comparing r.Seq against its index still catches a gap, a
+// duplicate or a wrong value, because sorting reorders records and never
+// renumbers them.
 func readJSONL(t *testing.T, path string) []auditsink.AuditRecord {
 	t.Helper()
 	data, err := os.ReadFile(path)
@@ -199,6 +219,9 @@ func readJSONL(t *testing.T, path string) []auditsink.AuditRecord {
 		}
 		out = append(out, r)
 	}
+	slices.SortFunc(out, func(a, b auditsink.AuditRecord) int {
+		return cmp.Compare(a.Seq, b.Seq)
+	})
 	return out
 }
 
