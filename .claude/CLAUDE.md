@@ -18,3 +18,21 @@ Two things worth having in front of you at all times:
   detail.
 
 Before opening a PR, run `bash scripts/ci/gate.sh`. It is the same gate CI runs.
+
+## Never write a session log inside this repository
+
+Session logs, handoffs, reconciliation notes and similar working documents go
+**outside any git working tree**. In this project that is `~/Documents/kessa-logs/`.
+If a destination is not obvious for some other document, ask where it should go
+rather than defaulting to the repo root.
+
+This repository is **public**. A working document written inside it is one
+`git add -A` away from being published, and that is not a hypothetical: it
+happened on 2026-08-14, and what caught it was the licence check reporting
+`UNLICENSED` rather than anyone noticing the file did not belong. The gate was
+right by accident, since it objects to a missing SPDX header and knows nothing
+about session logs.
+
+`/session-log-*.md` is in `.gitignore` as a backstop, but the rule is the point:
+the file should not be in the tree at all. An ignore entry only covers the name
+someone thought of in advance.

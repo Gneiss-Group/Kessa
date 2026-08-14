@@ -25,3 +25,9 @@ audit-log.jsonl
 /agent
 /issuer
 /verify
+
+# Session logs. Working documents: written at the repo root, reconciled into the
+# handoff that lives outside any repo, then deleted. They are not repository
+# content and this repository is public. Ignored rather than remembered, because
+# `git add -A` picked one up once and only the licence check noticed.
+/session-log-*.md
