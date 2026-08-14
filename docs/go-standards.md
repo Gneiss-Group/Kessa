@@ -182,6 +182,29 @@ All four run in CI on every pull request, and again before any release.
   again whenever the path in front of it changes. Say in the pull request that
   you did. **A concurrency test that has never been mutation-checked is not known
   to test anything.**
+- **A test may only assert what the component PROMISES.** Where a component
+  documents a weaker guarantee than a test leans on, the test is wrong while it
+  is passing, and it will eventually fail on timing rather than on behaviour.
+  That failure reads as flake, so the reflex is to re-run it rather than read it,
+  which is what makes this a rule instead of a one-off fix.
+  `TestRun_BatchProducesExport` asserted that the audit sink's file held its
+  records in arrival order. `enforce.forward` dispatches each record on its own
+  goroutine and says in as many words that concurrent requests may reach the sink
+  out of order, because a slow or hung sink must never stall enforcement (R2-03);
+  records carry `Seq` precisely so a consumer can reorder. The test encoded a
+  guarantee the design explicitly declines to give, and the numbers are the whole
+  character of it: 0 failures in 200 runs on an idle machine, 36 in 60 under
+  `go test -race -cpu=1,2,8`. It held on every developer machine and on an idle
+  runner, and picked a loaded one to fail on.
+
+  **Note the direction, because it is the mirror of the bullet above.** A vacuous
+  test asserts LESS than it appears to and stays green; this one asserts MORE
+  than it is owed and goes red at random. Both leave a signal worth less than it
+  looks, from opposite sides. So when a test leans on an ordering, a timing, or a
+  delivery property, cite the line that promises it. If no such line exists, the
+  property is not yours to assume, and the fix is in the test rather than in the
+  code: reconcile against what the component does guarantee, the way `readJSONL`
+  now sorts by `Seq`.
 - **Goldens are frozen, and regenerating one is a deliberate act.** `make
   fixtures` regenerates `testdata/`, and doing so means the frozen export format
   changed: it needs an entry in the format-history record (`CHANGELOG.md`; see
