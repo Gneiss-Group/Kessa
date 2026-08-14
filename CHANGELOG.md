@@ -74,6 +74,70 @@ changes are in the [security review record](docs/security-review.md).
 
 <!-- releases below; newest first -->
 
+## v0.1.0: 2026-08-14
+
+_Changes since v0.0.2._
+
+### Breaking changes
+
+- reject unknown fields in a spec file instead of ignoring them (#65)
+- the proxy image takes a mounted config instead of bind flags (#62)
+- refuse to start with no listeners enabled (#59)
+- `kessa-issuer publish` and `kessa-issuer revoke` now refuse a spec file containing any field the schema does not declare, where such a field was previously ignored. A spec carrying notes in an undeclared key must move them under "_comment", which is now a declared field, or remove them.
+- `ghcr.io/gneiss-group/kessa-proxy` no longer serves from its default command without a config mounted at /etc/kessa/proxy.json. An invocation that overrode the CMD with its own serve flags is unaffected.
+- `kessa-proxy serve` with both listener addresses empty now exits 2 instead of 0. Any script relying on that as a no-op start will fail.
+
+### Features
+
+- reject unknown fields in a spec file instead of ignoring them (#65)
+- the proxy image takes a mounted config instead of bind flags (#62)
+- configure the daemon from a file, sharing the proxy's mechanics (#61)
+- configure serve from a file instead of a flag string (#60)
+- refuse to start with no listeners enabled (#59)
+- broker the enforcement point's key instead of reading it from a file (#57)
+
+### Fixes
+
+- read the audit-sink log by Seq, not by arrival order (#66)
+- keep whole BREAKING CHANGE footers, not just their first line (#64)
+- the proxy image's default command could never start (#56)
+
+### Documentation
+
+- add a macaroon-based caller-auth candidate, and scope the socket one (#63)
+- durability is off by default, which the posture says it should not be (#58)
+- UPCOMING.md is where a new open item is written down (#55)
+- link the advisory the register promised, and fix the notes template (#53)
+
+### Other changes
+
+- move discovery to a schedule, and stop paying for it on every PR (#54)
+
+### Verifying what you downloaded
+
+Each archive is listed in `SHA256SUMS`, every binary answers `--version`
+without running anything, and every artifact carries signed build provenance
+binding it to this repository's release pipeline:
+
+```sh
+sha256sum -c SHA256SUMS
+gh attestation verify kessa_*_linux_amd64.tar.gz --repo Gneiss-Group/Kessa
+./kessa --version
+```
+
+The verifier bundle (`kessa_*`) is Apache-2.0; the server bundle
+(`kessa-server_*`) is AGPL-3.0-only. See `LICENSING.md`.
+
+### Container images
+
+Multi-arch (linux/amd64 + arm64), distroless, signed with build provenance:
+
+```sh
+docker pull ghcr.io/gneiss-group/kessa:0.1.0          # verifier (Apache-2.0)
+docker pull ghcr.io/gneiss-group/kessa-proxy:0.1.0    # enforcement proxy (AGPL-3.0-only)
+gh attestation verify oci://ghcr.io/gneiss-group/kessa:0.1.0 --repo Gneiss-Group/Kessa
+```
+
 ## v0.0.2: 2026-08-11
 
 _Changes since v0.0.1._
