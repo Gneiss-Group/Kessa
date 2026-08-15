@@ -30,27 +30,59 @@ For what the system does today, and for the limits of a clean verdict, the
   Whether to adopt Cedar or Rego, and at what cost to the verifier's dependency
   closure, is undecided. Both spikes are unstarted.
 
-- **`in` and the equality operators are still spelled twice, and the two spellings
-  differ.** Policy conditions and macaroon caveats are written against one field
-  vocabulary (`types.Action.Context()`), and the ORDERING operators now get their
-  meaning from one place (`internal/scalar`), so the enforcement proxy and the
-  independent verifier cannot answer `<`, `<=`, `>` or `>=` differently. `==`,
-  `!=` and `in` did not move, and `in` is not in fact the same operator on both
-  sides: `internal/policy` splits the member list on commas and compares each
-  trimmed member, while `internal/macaroon.splitSet` drops members that trim to
-  nothing. So for the caveat `x in "a,,b"` and an action carrying `x=""`, policy
-  reports a match and macaroon reports the caveat unsatisfied. Confirmed by
-  running it, not read off the source.
+- **`==`, `!=` and `in` are still spelled twice, though they now agree.** Policy
+  conditions and macaroon caveats are written against one field vocabulary
+  (`types.Action.Context()`), and the ORDERING operators get their meaning from
+  one place (`internal/scalar`), so the enforcement proxy and the independent
+  verifier cannot answer `<`, `<=`, `>` or `>=` differently. The other three
+  never moved. They are two copies that agree, which is the condition that
+  produced both defects found so far rather than a resting state.
 
-  Nothing observable depends on it today, because the two are consulted for
-  different questions (classification against authority) rather than composed
-  into one answer, and an empty member is a policy nobody has written. It is
-  recorded because it is the same SHAPE as the timestamp divergence that was
-  fixed: one vocabulary, two implementations of what it means. Deciding it needs
-  an answer to which behaviour is right (an empty set member is arguably not a
-  member at all, which would make macaroon's the correct one and policy's the
-  bug) and that is a classifier semantics change, so it wants its own change and
-  its own note in the format history, not a quiet fix inside another one.
+  The `in` divergence that used to be recorded here is FIXED. `internal/policy`
+  honoured a member that trimmed to nothing while `internal/macaroon.splitSet`
+  dropped it, so a trailing comma (`"us,eu,"`, an ordinary typo rather than the
+  exotic policy this note once claimed) put `""` in the set, and an action
+  carrying `region=""` matched. Under allow-list posture, where a rule declares
+  something ROUTINE, that match was the permissive outcome and skipped the
+  approval gate. Policy now drops empty members, which is what macaroon always
+  did, so nothing on the authority side changed. It cost no compatibility: every
+  `in` value in the repository, including the one inside
+  `testdata/audit_export_v2.golden.json` that a verifier re-derives, was checked
+  and none contains an empty member, so the change is observationally a no-op on
+  every existing policy and export.
+
+  **What is left is the duplication itself, and it wants a decision rather than a
+  patch.** Hoisting the three into one implementation, the way ordering went into
+  `internal/scalar`, is the obvious move, but that package is named and documented
+  for scalar ordering and equality/membership do not belong under that name
+  without rescoping it or adding a second shared package, which would put the seam
+  somewhere new rather than removing it. Worth an hour of design before any code.
+
+  **Also open, and deliberately not taken: whether a trailing comma should be
+  refused rather than tolerated.** Dropping the empty member silently accepts a
+  policy whose author probably made a typo, which sits against the instinct that
+  produced the mandatory `default` block, where an omitted posture is refused
+  rather than inferred. Refusing it is the stricter reading and the RISKIER change,
+  which is backwards from intuition and the reason it is parked: `Validate` is
+  shared by `policy.Parse` and `export.Parse` precisely so the proxy and the
+  verifier cannot disagree, so tightening it means an existing export carrying such
+  a policy would stop PARSING altogether, failing wholesale instead of degrading
+  one entry. Available later as a deliberate call once it is known that no deployed
+  export carries one.
+
+- **A conformance suite proves agreement, not correctness, and the `in` bug is the
+  case that shows it.** `internal/policy/conformance` runs one contract against
+  the hand-rolled classifier and the OPA backend, and it caught the infinity
+  divergence because Rego's `to_number` independently refused what the classifier
+  accepted. It did NOT catch the `in` bug, because that backend's `in` was written
+  to mirror the classifier and mirrored it faithfully while it was wrong. Both
+  agreed, and the suite stayed green throughout.
+
+  This is not an argument against the suite, which has now paid for itself twice.
+  It is a limit worth stating where it will be read: a differential catches a
+  divergence, and a bug reproduced on purpose is not one. The corollary for any
+  future backend is that translating the reference implementation's behaviour is
+  exactly the way to build a second implementation that cannot find anything.
 
 - **Policy hot-reload is an export-format change, not a loader feature.** A proxy
   loads one policy at startup, and every audit entry pins that policy's

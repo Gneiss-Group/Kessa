@@ -179,6 +179,26 @@ func Cases() []Case {
 		{"in with a single member behaves as equality", oneRule("region", "in", "us"), act("data.move", map[string]string{"region": "us"}), matched},
 		{"in on absent field", oneRule("region", "in", "us,eu"), act("data.move", nil), unmatched},
 
+		// A member that trims to nothing is not a member.
+		//
+		// The reachable spelling is the trailing comma, an ordinary typo that used
+		// to put "" in the set, so an action carrying an empty attribute matched.
+		// Under allow-list posture, where a rule declares something ROUTINE, that
+		// match was the permissive outcome and skipped the approval gate.
+		//
+		// Unlike the infinities, the differential did NOT surface this one: the OPA
+		// backend's `in` was written to mirror the classifier and mirrored it while
+		// it was wrong, so both agreed and the suite stayed green. Recorded here
+		// because it marks what this suite can and cannot prove. It pins that the
+		// two backends mean the same thing, which is not the same as their meaning
+		// the right thing, and a bug reproduced deliberately survives it.
+		{"a doubled comma is not an empty member", oneRule("region", "in", "us,,eu"), act("data.move", map[string]string{"region": ""}), unmatched},
+		{"a trailing comma is not an empty member", oneRule("region", "in", "us,eu,"), act("data.move", map[string]string{"region": ""}), unmatched},
+		{"a space-only member is not a member", oneRule("region", "in", "us, ,eu"), act("data.move", map[string]string{"region": ""}), unmatched},
+		// The control. Everything above passes if `in` stopped matching at all, so
+		// the members either side of the discarded one are shown still working.
+		{"members beside a discarded one still match", oneRule("region", "in", "us,,eu"), act("data.move", map[string]string{"region": "eu"}), matched},
+
 		// ---- reserved fields ----
 		// The reserved names are written into the context AFTER attributes
 		// precisely so a hostile attribute cannot shadow them. An evaluator that

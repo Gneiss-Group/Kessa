@@ -288,7 +288,23 @@ func (c Condition) matches(ctx map[string]string) bool {
 		return gs.Satisfies(scalar.Op(c.Op), vs)
 	case OpIn:
 		for _, m := range strings.Split(c.Value, ",") {
-			if got == strings.TrimSpace(m) {
+			// A member that trims to nothing is not a member. Dropping it matches
+			// internal/macaroon.splitSet, which has always done so, and closes the
+			// gap where "in" was not the same operator on the two sides of the same
+			// field vocabulary.
+			//
+			// The reachable case is a trailing comma, which is an ordinary typo
+			// rather than an exotic policy: "us,eu," used to put "" in the approved
+			// set, so an action carrying region="" matched. Under allow-list posture
+			// a rule declares something ROUTINE, so that match was the permissive
+			// outcome and the action skipped the approval gate that region="cn"
+			// correctly triggers.
+			//
+			// Consistent with a rule the schema already states, rather than a new
+			// one: Condition.validate refuses "in" with an empty value outright, so
+			// an empty member list is already meaningless. Honouring an empty member
+			// INSIDE a list was the same concept accepted piecemeal.
+			if m = strings.TrimSpace(m); m != "" && got == m {
 				return true
 			}
 		}
