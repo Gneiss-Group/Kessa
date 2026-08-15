@@ -28,7 +28,12 @@ func writeDaemonConfig(t *testing.T, cfg map[string]any) string {
 func validDaemonConfig(t *testing.T) map[string]any {
 	t.Helper()
 	return map[string]any{
-		"sock":             filepath.Join(t.TempDir(), "issuer.sock"),
+		// A directory of its OWN, not the temp root. The daemon settles the socket's
+		// parent to 0700 and will not modify a directory it did not create, so a
+		// socket dropped straight into a general-purpose 0755 directory is refused.
+		// That is the deployment shape the default already uses
+		// ($XDG_RUNTIME_DIR/kessa/issuer.sock) and the one docs/daemon.md documents.
+		"sock":             filepath.Join(t.TempDir(), "kessa", "issuer.sock"),
 		"keystore":         ksPath,
 		"attestation_keys": []string{epDIDForConfig},
 	}

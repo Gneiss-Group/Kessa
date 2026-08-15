@@ -9,6 +9,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"io/fs"
 	"net"
 	"os"
 	"os/signal"
@@ -143,7 +144,16 @@ func cmdDaemon(args []string, stdout, stderr io.Writer) int {
 	// rejected, so a config whose mapping would break that is caught here rather
 	// than at the next restart.
 	if *checkOnly {
-		reportDaemonCheck(stdout, *cfgPath, keys)
+		// Where the socket may live is checkable without binding it, and until now
+		// this check said nothing at all about --sock beyond it being non-empty.
+		// That left the one thing the daemon does outside its own footprint as the
+		// one thing the check could not predict.
+		dirState, err := socketDirState(filepath.Dir(*sock))
+		if err != nil {
+			fmt.Fprintf(stderr, "kessa-issuer: %v\n", err)
+			return exitUsage
+		}
+		reportDaemonCheck(stdout, *cfgPath, dirState, keys)
 		return exitOK
 	}
 
@@ -178,18 +188,103 @@ func cmdDaemon(args []string, stdout, stderr io.Writer) int {
 	return exitOK
 }
 
-// listen prepares the socket: it creates the parent directory 0700, refuses to
-// start if a live daemon already owns the path, clears a stale socket otherwise,
-// binds, and tightens the socket to 0600. The 0700 dir + 0600 socket are the
-// filesystem half of the daemon's access control; the peer-uid check is the other.
+// prepareSocketDir makes dir usable as the socket's home, by CREATING it 0700 or
+// by CHECKING it, never by changing one it found.
+//
+// The 0700 directory is load-bearing rather than tidiness: net.Listen creates the
+// socket with umask-dependent permissions and the chmod to 0600 lands a moment
+// later, so for that moment the directory is the only thing standing between the
+// socket and any other uid on the host. That is why it is established before the
+// bind rather than after.
+//
+// WHAT CHANGED, AND WHY. This used to be MkdirAll followed by an unconditional
+// Chmod, which tightened whatever directory the socket path happened to name.
+// `--sock /tmp/kessa.sock` made it chmod /tmp; running as root, that is every
+// other user's /tmp. The daemon was reaching outside its own footprint to
+// enforce a property about its own socket, and the reach was invisible: nothing
+// printed it, and --check-config stops before listen so nothing predicted it
+// either.
+//
+// A directory this process created is its own to set. One it merely found is
+// not, so a directory that is already 0700 is accepted, and anything else is
+// refused with the remedy rather than silently corrected.
+//
+// PORTABILITY, AND WHAT THIS DOES NOT CHECK. It checks the mode and not the
+// owning uid, because reading st_uid needs a per-platform build split this
+// package does not otherwise have. For a non-root daemon the two coincide in the
+// only direction that matters: a 0700 directory it can go on to bind inside is
+// one it owns, since no other uid could traverse it. Running as root the check is
+// weaker, and root binding a socket inside another user's private directory is a
+// deployment nobody has asked for.
+func prepareSocketDir(dir string) error {
+	switch err := os.Mkdir(dir, 0o700); {
+	case err == nil:
+		// umask may have taken bits off a directory this process just created.
+		// Setting them is safe here, and only here, because it is ours.
+		if err := os.Chmod(dir, 0o700); err != nil {
+			return fmt.Errorf("secure socket dir %q: %w", dir, err)
+		}
+		return nil
+	case errors.Is(err, fs.ErrExist):
+		fi, serr := os.Stat(dir)
+		if serr != nil {
+			return fmt.Errorf("socket dir %q: %w", dir, serr)
+		}
+		return checkSocketDir(dir, fi)
+	default:
+		// Includes a missing parent. Creating a tree implicitly is how a typo'd
+		// path used to become a new directory somewhere unintended.
+		return fmt.Errorf("create socket dir %q: %w", dir, err)
+	}
+}
+
+// checkSocketDir is the one definition of "acceptable" that both the real start
+// and --check-config are written against, so the check cannot come to a different
+// answer from the thing it predicts.
+func checkSocketDir(dir string, fi fs.FileInfo) error {
+	if !fi.IsDir() {
+		return fmt.Errorf("socket dir %q is not a directory", dir)
+	}
+	if perm := fi.Mode().Perm(); perm != 0o700 {
+		return fmt.Errorf("socket dir %q has mode %#o, want 0700: it holds a socket that brokers signing keys, "+
+			"and this daemon will not widen or narrow a directory it did not create.\n"+
+			"  Point --sock at a directory of its own (the default is $XDG_RUNTIME_DIR/kessa), or chmod 0700 %s",
+			dir, perm, dir)
+	}
+	return nil
+}
+
+// socketDirState describes what prepareSocketDir WOULD do, without doing it, and
+// returns the same refusal it would return. --check-config calls it, because
+// where the socket may live is a property of the path rather than of the bind,
+// and the bind is the side effect the check exists to avoid performing.
+func socketDirState(dir string) (string, error) {
+	fi, err := os.Stat(dir)
+	switch {
+	case errors.Is(err, fs.ErrNotExist):
+		parent := filepath.Dir(dir)
+		if _, perr := os.Stat(parent); perr != nil {
+			return "", fmt.Errorf("socket dir %q does not exist and neither does %q, so it cannot be created: %w", dir, parent, perr)
+		}
+		return fmt.Sprintf("%s will be created 0700", dir), nil
+	case err != nil:
+		return "", fmt.Errorf("socket dir %q: %w", dir, err)
+	}
+	if err := checkSocketDir(dir, fi); err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%s exists, mode 0700, left as found", dir), nil
+}
+
+// listen prepares the socket: it settles the parent directory (prepareSocketDir),
+// refuses to start if a live daemon already owns the path, clears a stale socket
+// otherwise, binds, and tightens the socket to 0600. The 0700 dir + 0600 socket
+// are the filesystem half of the daemon's access control; the peer-uid check is
+// the other.
 func listen(sock string, stderr io.Writer) (net.Listener, error) {
 	dir := filepath.Dir(sock)
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return nil, fmt.Errorf("create socket dir %q: %w", dir, err)
-	}
-	// Belt-and-suspenders: enforce 0700 even if the dir pre-existed with looser bits.
-	if err := os.Chmod(dir, 0o700); err != nil {
-		return nil, fmt.Errorf("secure socket dir %q: %w", dir, err)
+	if err := prepareSocketDir(dir); err != nil {
+		return nil, err
 	}
 	if _, err := os.Stat(sock); err == nil {
 		if c, derr := net.DialTimeout("unix", sock, time.Second); derr == nil {
