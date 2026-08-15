@@ -43,10 +43,28 @@ import (
 // evalTimeout bounds one evaluation. See Evaluate for why the bound belongs to
 // Kessa even though the work happens inside a dependency.
 //
+// It is WALL CLOCK, which is what makes the value larger than an evaluation's
+// cost would suggest. The deadline counts time the goroutine spends not running
+// as well as time it spends working, so under contention it measures scheduling
+// delay too. 250ms looked generous against the cost of one evaluation and was
+// not: TestConcurrentEvaluation runs 64 goroutines of 16 evaluations under the
+// race detector, and on a shared CI runner that fired the deadline on requests
+// that were merely waiting their turn.
+//
+// That is the symptom this comment used to say would mean something was broken,
+// so the number is now set well above any legitimate evaluation INCLUDING the
+// wait to be scheduled. Its job is to cap a hang, not to express a latency
+// target: an evaluation taking seconds is already pathological, and one taking
+// forever is the case that must not exist.
+//
+// A benchmark would replace the guess with a measurement, and until there is one
+// the value errs high, because a bound that fires on healthy traffic converts a
+// liveness property into an outage.
+//
 // A var rather than a const so a test can shorten it. Nothing else may: this is
 // not a tuning knob, and a deployment that needed it larger would be telling us
 // something about its policies rather than about this number.
-var evalTimeout = 250 * time.Millisecond
+var evalTimeout = 5 * time.Second
 
 // NO SEPARATE INPUT-SIZE CAP, and that is a decision rather than an omission.
 //
@@ -152,9 +170,9 @@ func (e *Evaluator) Evaluate(a types.Action) (types.Decision, error) {
 	// evaluator's own bound, not the caller's cancellation. Cancellation only
 	// becomes an interface question for an evaluator that leaves the process.
 	//
-	// Deliberately generous. It is here to cap pathology, not to tune anything, so
-	// a value that ever fires under normal load means something is wrong rather
-	// than that the timeout needs raising.
+	// Deliberately generous, and see evalTimeout for how generous it has to be:
+	// the deadline is wall clock, so it has to clear scheduling delay under
+	// contention as well as the evaluation itself.
 	ctx, cancel := context.WithTimeout(context.Background(), evalTimeout)
 	defer cancel()
 
