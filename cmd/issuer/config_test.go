@@ -117,6 +117,25 @@ func TestDaemonConfigRefusesUnknownFields(t *testing.T) {
 // does not exist means the real flag is never refused, so a stale launcher script
 // silently overrides the config. It fails permissively, which is the direction
 // that matters.
+// TestDaemonSchemaFlagsAreTheWholeSchema is the counterpart to the proxy's, and
+// exists for the same reason: the test below iterates daemonSchemaFlags(), so a
+// tag the derivation cannot see is never iterated and never checked. A list
+// written by reading the struct is the only thing that notices an omission.
+func TestDaemonSchemaFlagsAreTheWholeSchema(t *testing.T) {
+	want := map[string]bool{"sock": true, "keystore": true, "mapping": true, "attestation-key": true}
+	got := daemonSchemaFlags()
+	for name := range want {
+		if !got[name] {
+			t.Errorf("--%s is in the schema but not in the refused set, so it stays overridable alongside --config", name)
+		}
+	}
+	for name := range got {
+		if !want[name] {
+			t.Errorf("--%s is refused alongside --config but this test did not expect it; if the schema grew, decide deliberately and add it here", name)
+		}
+	}
+}
+
 func TestDaemonSchemaFlagsExistOnDaemon(t *testing.T) {
 	for name := range daemonSchemaFlags() {
 		t.Run(name, func(t *testing.T) {

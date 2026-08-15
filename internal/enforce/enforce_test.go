@@ -124,12 +124,22 @@ func (h *harness) proxy(t *testing.T) *Proxy {
 	if err != nil {
 		t.Fatal(err)
 	}
+	return h.proxyWith(t, pol, nil)
+}
+
+// proxyWith builds the same proxy over a caller-supplied evaluator and logger, so
+// a test can drive the Evaluator seam with something other than the shipped
+// classifier. That is what makes a property OF THE SEAM testable rather than only
+// a property of the one implementation behind it.
+func (h *harness) proxyWith(t *testing.T, ev policy.Evaluator, logf func(string, ...any)) *Proxy {
+	t.Helper()
 	px, err := NewProxy(Config{
 		EnforcementPoint: sign(t, didProxy),
-		Policy:           pol,
+		Policy:           ev,
 		DIDs:             h.resolver,
 		Status:           h.statuses,
 		Now:              func() time.Time { return fixedTime },
+		Logf:             logf,
 	})
 	if err != nil {
 		t.Fatal(err)

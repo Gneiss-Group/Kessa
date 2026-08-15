@@ -95,6 +95,19 @@ type Proxy struct {
 	// BEFORE it is committed and the decision returned (log-before-act), and a write
 	// failure fails the decision closed. nil disables durability.
 	wal *WAL
+	// logger, if non-nil, records things that are neither a decision nor an audit
+	// entry: today, a policy evaluator that panicked. It deliberately never
+	// carries anything into the signed record, which is the whole reason it
+	// exists rather than folding the detail into a Decision.Reason.
+	logger func(format string, args ...any)
+}
+
+// logf records an operational detail when a logger was supplied, and drops it
+// otherwise. Nil is silent rather than a special case at every call site.
+func (p *Proxy) logf(format string, args ...any) {
+	if p.logger != nil {
+		p.logger(format, args...)
+	}
 }
 
 // Config assembles a Proxy.
@@ -113,6 +126,10 @@ type Config struct {
 	// is written and fsynced before Handle returns, and the log is recovered from it
 	// at startup. A write failure fails closed. Optional; nil disables durability.
 	WAL *WAL
+	// Logf, if set, receives operational detail that must not reach the signed
+	// record: a panicking policy evaluator is the case it exists for. Optional;
+	// nil discards it.
+	Logf func(format string, args ...any)
 }
 
 // NewProxy builds a proxy with an empty audit log and evidence set.
@@ -140,6 +157,7 @@ func NewProxy(c Config) (*Proxy, error) {
 		now:              now,
 		sink:             c.Sink,
 		wal:              c.WAL,
+		logger:           c.Logf,
 	}
 	if c.Sink != nil {
 		p.sinkSlots = make(chan struct{}, sinkMaxInFlight)
@@ -657,12 +675,42 @@ func auditRecord(e *audit.Entry) auditsink.AuditRecord {
 	}
 }
 
+// evaluate calls the policy evaluator and converts a panic into an error.
+//
+// policy.Evaluator is an INTERFACE, and the whole point of an interface here is
+// that something other than the shipped classifier can be plugged in behind it.
+// Nothing at that boundary was defended against an implementation that
+// misbehaves, so the seam's guarantees rested on the good manners of whatever was
+// on the other side.
+//
+// The reason to recover here rather than in a backend is what a panic costs
+// today. net/http already recovers a handler panic per connection, so a
+// panicking evaluator drops the connection and produces NO AUDIT ENTRY AT ALL:
+// the request simply vanishes. For a system whose claim is that consequential
+// actions do not happen outside the audit trail, a vanished request is the worse
+// outcome, and this is the cheapest place to stop producing them. Recovered, it
+// becomes an ordinary denial that gets recorded like any other.
+//
+// The panic VALUE is deliberately not carried into the error. That string reaches
+// a signed, hash-chained audit entry the verifier re-derives, and an
+// attacker-influenced panic message is not something to write into one verbatim.
+// The detail goes to the log, where it is useful and uncovered by any signature.
+func (p *Proxy) evaluate(a types.Action) (dec types.Decision, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			p.logf("policy evaluator panicked: %v", r)
+			dec, err = types.Decision{}, errors.New("the policy evaluator panicked")
+		}
+	}()
+	return p.policy.Evaluate(a)
+}
+
 // decide is the pure composition. It returns the Decision and whether a PoP was
 // consumed (so the caller records it). It NEVER sets Allowed:true without having
 // passed every applicable check.
 func (p *Proxy) decide(req Request, terminal *credential.Credential, seq uint64, prevHash []byte) types.Decision {
 	// Policy classifies: consequential? denied by a rule?
-	dec, err := p.policy.Evaluate(req.Action)
+	dec, err := p.evaluate(req.Action)
 	if err != nil {
 		return deny(dec, "policy evaluation failed: "+err.Error())
 	}
