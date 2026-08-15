@@ -52,6 +52,14 @@ resolves against the action's `attributes`. Operators are `==`, `!=`, `<=`, `<`,
 `>=`, `>`, and `in` (a comma-separated set). Ordering operators work on numbers
 and on RFC3339 timestamps.
 
+Timestamps are ordered by exact nanosecond, and a timestamp bound outside the
+range Go can express as Unix nanoseconds (before 1678 or after 2262) is rejected
+when the policy loads, so `9999-12-31T23:59:59Z` is not available as a way to
+write "never". Those semantics live in `internal/scalar`, which macaroon caveat
+satisfaction uses too: a policy condition and a caveat written over one field
+must not be able to reach different answers about it, since the independent
+verifier re-derives both.
+
 ---
 
 ## Two postures, one mechanism

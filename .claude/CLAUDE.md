@@ -17,7 +17,13 @@ Two things worth having in front of you at all times:
   came out of review rounds, not preferences. `docs/go-standards.md` has the
   detail.
 
-Before opening a PR, run `bash scripts/ci/gate.sh`. It is the same gate CI runs.
+Before opening a PR, run `bash scripts/ci/gate-full.sh`. It is the gate CI runs.
+
+`scripts/ci/gate.sh` is the offline subset it calls: every check except the
+nested modules under `experimental/`, which have their own `go.mod` and need
+their dependencies fetched. Use it when you have no network, and know the
+asymmetry before you rely on it: a change under `experimental/` is invisible to
+the offline gate, so it can be green on a PR that CI will fail.
 
 ## Never write a session log inside this repository
 

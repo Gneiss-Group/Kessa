@@ -52,8 +52,12 @@ All four run in CI on every pull request, and again before any release.
   which is the default we want for anything that is not deliberately public.
 - **Leaf packages stay leaves.** The foundational packages (`internal/did`,
   `internal/signer`, `internal/macaroon`, `internal/status`, `internal/audit`,
-  `pkg/types`, `internal/version`) are stdlib-only by intent. A new import edge
-  into one of them is a design change; say so in the pull request.
+  `internal/scalar`, `pkg/types`, `internal/version`) are stdlib-only by intent.
+  A new import edge into one of them is a design change; say so in the pull
+  request. `internal/macaroon` is the one exception and states why in its package
+  comment: it reaches `internal/scalar`, itself a stdlib-only leaf on this list,
+  because the alternative was a second copy of the comparison semantics the
+  independent verifier has to agree with exactly.
 - **`cmd/` binaries are CLIs, reporters, and exit codes.** The logic they drive
   lives in a package that can be tested without a process. `cmd/verify` is the
   clearest example: it parses flags and prints, and `internal/export` does the

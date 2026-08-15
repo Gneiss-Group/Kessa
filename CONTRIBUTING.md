@@ -112,10 +112,33 @@ Before opening a pull request, run the full gate, which is the same script CI
 runs:
 
 ```sh
+bash scripts/ci/gate-full.sh
+```
+
+It calls [`scripts/ci/gate.sh`](scripts/ci/gate.sh) and then adds the nested
+modules under [`experimental/`](experimental/). Those carry their own `go.mod`,
+which means the root module's package walk cannot enumerate them: `go list ./...`
+lists the packages of one module, and a directory with its own `go.mod` is a
+different one. Checking them is therefore an extra walk rather than a wider glob.
+
+The inner gate runs on its own when you have no network:
+
+```sh
 bash scripts/ci/gate.sh
 ```
 
-It needs nothing beyond Go and a shell. Every check in it is a shell script or a
+That one is offline-hermetic and now says so rather than merely happening to be:
+the core has no third-party runtime dependency, so it must build from a cold
+module cache with the module proxy switched off, and the gate fails if that ever
+stops being true. The full gate has to fetch the nested modules' dependencies the
+first time it runs, which is the whole reason the two are separate. An
+air-gapped build is a property worth keeping.
+
+Know the asymmetry before relying on the offline one: a change under
+`experimental/` is invisible to it, so `gate.sh` can be green on a pull request
+that CI will fail.
+
+Both need nothing beyond Go and a shell. Every check in them is a shell script or a
 Go program in [`scripts/`](scripts/), including the licence checks: the REUSE
 conformance check is [`scripts/reusecheck`](scripts/reusecheck/), not the FSFE's
 `reuse` tool, and [`scripts/ci/secret-scan.sh`](scripts/ci/secret-scan.sh) builds

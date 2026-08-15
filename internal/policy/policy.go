@@ -19,10 +19,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"strconv"
 	"strings"
-	"time"
 
+	"github.com/Gneiss-Group/Kessa/internal/scalar"
 	"github.com/Gneiss-Group/Kessa/pkg/types"
 )
 
@@ -218,7 +217,7 @@ func (c Condition) validate() error {
 			return fmt.Errorf("condition %q %q has empty value", c.Field, c.Op)
 		}
 	case OpLe, OpLt, OpGe, OpGt:
-		if _, ok := asScalar(c.Value); !ok {
+		if _, ok := scalar.Parse(c.Value); !ok {
 			return fmt.Errorf("condition %q %q value %q is not a scalar", c.Field, c.Op, c.Value)
 		}
 	default:
@@ -281,21 +280,12 @@ func (c Condition) matches(ctx map[string]string) bool {
 	case OpNe:
 		return got != c.Value
 	case OpLe, OpLt, OpGe, OpGt:
-		gs, ok1 := asScalar(got)
-		vs, ok2 := asScalar(c.Value)
+		gs, ok1 := scalar.Parse(got)
+		vs, ok2 := scalar.Parse(c.Value)
 		if !ok1 || !ok2 {
 			return false
 		}
-		switch c.Op {
-		case OpLe:
-			return gs <= vs
-		case OpLt:
-			return gs < vs
-		case OpGe:
-			return gs >= vs
-		case OpGt:
-			return gs > vs
-		}
+		return gs.Satisfies(scalar.Op(c.Op), vs)
 	case OpIn:
 		for _, m := range strings.Split(c.Value, ",") {
 			if got == strings.TrimSpace(m) {
@@ -304,16 +294,4 @@ func (c Condition) matches(ctx map[string]string) bool {
 		}
 	}
 	return false
-}
-
-// asScalar parses s as an RFC3339 time (as Unix nanoseconds) or a float, so the
-// ordering operators work on both amounts and timestamps.
-func asScalar(s string) (float64, bool) {
-	if t, err := time.Parse(time.RFC3339, s); err == nil {
-		return float64(t.UnixNano()), true
-	}
-	if f, err := strconv.ParseFloat(s, 64); err == nil {
-		return f, true
-	}
-	return 0, false
 }

@@ -62,6 +62,51 @@ step "no em dashes (house style, enforced not remembered)"
 # a file the release has not written yet. One implementation, two moments.
 bash scripts/ci/prose-check.sh
 
+step "core is stdlib-only (the offline build, asserted rather than assumed)"
+# Until this step existed, "Kessa builds and runs with no network and no
+# third-party runtime dependency" was true by ACCIDENT: nothing checked it, and
+# the first thing that would have noticed a new dependency is a gate run getting
+# slower. That claim is load-bearing enough to be made in public, so it gets a
+# check.
+#
+# Two assertions, because either alone is weak:
+#
+#  1. The module graph is exactly one module. `go list -m all` on a dependency-free
+#     module prints only the module itself, so anything after line one is a
+#     dependency somebody added.
+#
+#  2. A build from a COLD module cache with the proxy switched off. This is the
+#     one that catches a vendored or already-cached dependency, and the empty
+#     GOMODCACHE is what makes it real: with GOPROXY=off alone, a warm cache
+#     satisfies every import and the check passes without having tested anything.
+#     That is the shape this project keeps finding in its own gates, so it is
+#     worth saying plainly why the temporary cache is not incidental.
+#
+# GOCACHE is left alone: it holds compiled packages, not modules, so reusing it
+# keeps this step fast without weakening either assertion.
+extra_modules="$(go list -m all | tail -n +2)"
+if [ -n "$extra_modules" ]; then
+  echo "The main module has grown a third-party dependency:"
+  printf '  %s\n' $extra_modules
+  echo
+  echo "The stdlib-only property is a stated architectural commitment, not a"
+  echo "default. If taking this dependency is the intended call, it needs to be"
+  echo "made deliberately and separately, and this step updated to say so."
+  echo "A dependency needed only for an experiment belongs in its own nested"
+  echo "module, as experimental/policy-opa is."
+  exit 1
+fi
+cold_cache="$(mktemp -d)"
+if ! GOMODCACHE="$cold_cache" GOPROXY=off go build ./... ; then
+  rm -rf "$cold_cache"
+  echo
+  echo "The core does not build from a cold module cache with the proxy off, so"
+  echo "something outside the standard library is now required to build it."
+  exit 1
+fi
+rm -rf "$cold_cache"
+echo "OK"
+
 step "go vet"
 make vet
 
