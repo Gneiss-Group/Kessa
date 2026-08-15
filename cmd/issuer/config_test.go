@@ -113,10 +113,6 @@ func TestDaemonConfigRefusesUnknownFields(t *testing.T) {
 	}
 }
 
-// TestDaemonSchemaFlagsExistOnDaemon is the typo guard: a tag naming a flag that
-// does not exist means the real flag is never refused, so a stale launcher script
-// silently overrides the config. It fails permissively, which is the direction
-// that matters.
 // TestDaemonSchemaFlagsAreTheWholeSchema is the counterpart to the proxy's, and
 // exists for the same reason: the test below iterates daemonSchemaFlags(), so a
 // tag the derivation cannot see is never iterated and never checked. A list
@@ -136,6 +132,10 @@ func TestDaemonSchemaFlagsAreTheWholeSchema(t *testing.T) {
 	}
 }
 
+// TestDaemonSchemaFlagsExistOnDaemon is the typo guard: a tag naming a flag that
+// does not exist means the real flag is never refused, so a stale launcher script
+// silently overrides the config. It fails permissively, which is the direction
+// that matters.
 func TestDaemonSchemaFlagsExistOnDaemon(t *testing.T) {
 	for name := range daemonSchemaFlags() {
 		t.Run(name, func(t *testing.T) {
