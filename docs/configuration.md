@@ -187,8 +187,10 @@ in the files the config names and the daemon it points at, not in its syntax.
 kessa-proxy: checked /etc/kessa/proxy.json
   schema           OK  parsed, no unknown fields, required fields present
   listeners        OK  127.0.0.1:8181
-  policy and DIDs  OK  loaded from the paths named
-  status lists     OK  1 loaded and signature-checked
+  policy           OK  loaded and parsed from the path named
+  DID trust root   OK  /etc/kessa/dids is a readable directory
+  status lists     OK  1 parsed, sized and self-signature checked
+                       (revocation AUTHORITY is per-credential, checked at request time)
   signing daemon   OK  answered on /run/kessa/issuer.sock and holds this enforcement point's key
 
 Checked to depth 3 (live). This configuration should start here.
@@ -196,6 +198,16 @@ Checked to depth 3 (live). This configuration should start here.
 
 A config naming a `mock_keystore` has no daemon to reach, so it reports depth 2
 and says so rather than claiming a depth it did not get to.
+
+**The status-list line says three things and deliberately stops there.** Each
+list is parsed, checked against the herd-privacy floor, and checked to carry a
+valid signature by the DID it names *for itself*. What that does not establish is
+**authority**: who is entitled to publish revocations for a given credential is
+named by that credential, not by the list ([R6-01](security-review.md)), so it
+cannot be known until a request carries one. A list that is internally consistent
+and signed by the wrong party passes here and is refused at request time, which
+is why the line names the check rather than saying "signature-checked" and
+leaving a reader to assume it covered the question that matters.
 
 `kessa-issuer daemon --check-config` works the same way and stops immediately
 before it binds its socket. It tops out at **depth 2** and states that, rather

@@ -321,7 +321,9 @@ func TestCheckConfigReportsItsDepth(t *testing.T) {
 	if code != exitOK {
 		t.Fatalf("exit %d, want %d\n%s\n%s", code, exitOK, out, errb)
 	}
-	for _, want := range []string{"schema", "listeners", "policy and DIDs", "status lists", "depth 2"} {
+	// "policy" and the DID trust root are named separately, because they were one
+	// line making two claims of different strengths and the weaker one was untrue.
+	for _, want := range []string{"schema", "listeners", "policy", "DID trust root", "status lists", "depth 2"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("the report should mention %q:\n%s", want, out)
 		}
