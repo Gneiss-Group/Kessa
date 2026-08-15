@@ -144,6 +144,24 @@ func Cases() []Case {
 		{"ordering against a non-scalar field fails closed", oneRule("amount", ">=", "100"), act("payment.transfer", map[string]string{"amount": "lots"}), unmatched},
 		{"ordering on absent field fails closed", oneRule("amount", ">=", "100"), act("payment.transfer", nil), unmatched},
 
+		// An infinity must not satisfy a finite bound, in either direction.
+		//
+		// This case could not be written until both implementations agreed on it,
+		// which is the useful part of its history. The OPA backend refused these
+		// from the start, because Rego's to_number does; the classifier accepted
+		// them, because strconv.ParseFloat does, and "-Inf" therefore satisfied
+		// every upper bound. Under allow-list posture that matched a ROUTINE rule
+		// and skipped the approval gate. A conformance case has to pass for both
+		// backends, so the divergence had to be fixed before the contract could
+		// state the rule; the differential test is what surfaced it in the first
+		// place.
+		//
+		// Both spellings are covered, the literal and the overflow, since they are
+		// one value reached two ways and were once treated differently.
+		{"an infinity does not satisfy an upper bound", oneRule("amount", "<=", "25"), act("payment.transfer", map[string]string{"amount": "-Inf"}), unmatched},
+		{"an infinity does not satisfy a lower bound", oneRule("amount", ">=", "100"), act("payment.transfer", map[string]string{"amount": "Inf"}), unmatched},
+		{"an overflowing literal is refused the same way", oneRule("amount", "<=", "25"), act("payment.transfer", map[string]string{"amount": "-1e400"}), unmatched},
+
 		// ---- ordering, timestamps ----
 		// asScalar parses RFC3339 as Unix nanoseconds, so the ordering operators
 		// work on instants as well as amounts. "expiry" is always present, since

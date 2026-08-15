@@ -48,6 +48,15 @@ func compileModule(p *policy.Policy) (string, error) {
 	// stylistic, since a string that parses as neither must end up undefined
 	// rather than defaulting to zero.
 	//
+	// The mirror is now exact on infinities, and it was not always. to_number has
+	// always refused "Inf", while scalar.Parse took it from strconv.ParseFloat
+	// and let it order below every finite bound, so this backend failed closed on
+	// an input the classifier let through a routine rule. The differential test
+	// is what surfaced that; scalar.Parse refuses infinities now, and the
+	// conformance suite states the rule for both. Worth recording because the
+	// agreement here is by construction on both sides rather than the coincidence
+	// it briefly was.
+	//
 	// Undefined is how "not comparable" is spelled in Rego, and it is the right
 	// spelling here: a builtin that errors (parsing "lots" as a number) leaves the
 	// expression undefined under OPA's default error handling, the enclosing rule

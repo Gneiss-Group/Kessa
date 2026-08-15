@@ -372,6 +372,54 @@ func TestPostureChangesClassificationOfTheSameAction(t *testing.T) {
 	}
 }
 
+// TestEvaluate_InfinityCannotBypassARoutineRule is the fail-open closed in
+// internal/scalar, asserted where it was reachable rather than only where it was
+// caused.
+//
+// Under allow-list posture the default is approval-gated and a rule's job is to
+// declare something ROUTINE, so matching a rule is the permissive outcome. The
+// allow-list example's micro-transfer rule is `amount <= 25`. An infinity orders
+// below every finite bound, so an action carrying amount="-Inf" matched it and
+// came back not consequential, skipping the approval gate that a plain 26
+// correctly triggers. Attributes arrive on the proxied request and the agent is
+// the untrusted party, which is what made this reachable input rather than a
+// curiosity about float syntax.
+//
+// Every spelling is checked, including the overflow route, because the defect
+// was never that one literal was mishandled: it was that infinity could be
+// reached at all, and a fix that caught "-Inf" while missing "-1e400" or
+// "-infinity" would read as fixed while leaving the gate open.
+func TestEvaluate_InfinityCannotBypassARoutineRule(t *testing.T) {
+	p := loadPolicy(t, allowlistPath)
+
+	for _, amount := range []string{"-Inf", "-inf", "-Infinity", "-infinity", "-1e400"} {
+		t.Run(amount, func(t *testing.T) {
+			d, err := p.Evaluate(action("payment.transfer", map[string]string{"amount": amount}))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if d.RuleFired == "micro-transfer" {
+				t.Errorf("amount=%q matched the routine rule; an infinity satisfied a finite bound", amount)
+			}
+			if !d.Consequential {
+				t.Errorf("amount=%q came back routine, so it skips human approval: %+v", amount, d)
+			}
+		})
+	}
+
+	// The control, and it is not optional. Everything above passes if
+	// micro-transfer simply stopped firing, which would be a far worse
+	// regression wearing this test as a green light. So the rule is shown still
+	// working for an amount that genuinely is below the ceiling.
+	d, err := p.Evaluate(action("payment.transfer", map[string]string{"amount": "10"}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d.RuleFired != "micro-transfer" || d.Consequential {
+		t.Fatalf("the routine rule no longer fires for a real amount, so the cases above prove nothing: %+v", d)
+	}
+}
+
 // Confirm Policy satisfies the Evaluator interface (swap seam for OPA later).
 func TestPolicyImplementsEvaluator(t *testing.T) {
 	var _ Evaluator = loadPolicy(t, commercePath)
