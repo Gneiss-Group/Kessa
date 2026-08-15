@@ -33,7 +33,6 @@ func TestParse_AcceptsInstantsAndNumbersAndNothingElse(t *testing.T) {
 		{"-0", true},
 		{"1e18", true},
 		{"NaN", true},   // parses; ordering it is a separate question, below
-		{"Inf", true},   // ditto
 		{"", false},     //
 		{"abc", false},  //
 		{"0x10", false}, // ParseFloat's hex form needs a p exponent
@@ -42,6 +41,17 @@ func TestParse_AcceptsInstantsAndNumbersAndNothingElse(t *testing.T) {
 		// still handing back an infinity. Refusing it is the older behaviour,
 		// kept: a bound nobody can write down is not a bound.
 		{"1e400", false},
+		// The same infinity reached by a spelling ParseFloat accepts WITHOUT an
+		// error. These were taken while 1e400 was refused, so one bound was both
+		// rejected and honoured depending on how it was written. Every spelling
+		// ParseFloat knows is listed, because refusing "Inf" while taking
+		// "Infinity" would just move the inconsistency rather than remove it.
+		{"Inf", false},
+		{"+Inf", false},
+		{"-Inf", false},
+		{"inf", false},
+		{"Infinity", false},
+		{"-infinity", false},
 	}
 	for _, tc := range cases {
 		if _, ok := Parse(tc.in); ok != tc.accept {
@@ -172,20 +182,33 @@ func TestCompare_OrdersAnInstantAgainstANumberWithoutRounding(t *testing.T) {
 	}
 }
 
-func TestCompare_OrdersAgainstTheInfinities(t *testing.T) {
-	cases := []struct {
-		a, b string
-		want int
-	}{
-		{"2026-07-09T12:00:00Z", "Inf", -1},
-		{"2026-07-09T12:00:00Z", "-Inf", 1},
-		{"Inf", "-Inf", 1},
-		{"Inf", "Inf", 0},
-	}
-	for _, tc := range cases {
-		got, ok := mustParse(t, tc.a).Compare(mustParse(t, tc.b))
-		if !ok || got != tc.want {
-			t.Errorf("Compare(%q, %q) = (%d, %v), want (%d, true)", tc.a, tc.b, got, ok, tc.want)
+// TestParse_RefusesAnInfinityHoweverSpelled replaces a test that pinned the
+// ordering of infinities against instants and numbers. That ordering was real
+// and the test was correct about it; refusing the values is what changed, and
+// the reason it changed is worth keeping next to the assertion.
+//
+// An infinity orders against everything, so "-Inf" sat below every upper bound.
+// An action attribute spelled that way satisfied any "<=" or "<" condition, and
+// against the shipped allow-list policy amount="-Inf" matched the `amount <= 25`
+// ROUTINE rule and was classified not consequential, skipping the approval gate
+// that a plain 26 correctly triggers. Attributes arrive on the proxied request
+// and the agent is the untrusted party, so it was reachable input.
+//
+// internal/policy carries that end to end in
+// TestEvaluate_InfinityCannotBypassARoutineRule. This is the same fact at the
+// layer where the cause is, and it is a parse question rather than an ordering
+// one: nothing downstream has to know about infinities, because none reach it.
+func TestParse_RefusesAnInfinityHoweverSpelled(t *testing.T) {
+	// Every spelling strconv.ParseFloat accepts without an error, plus the
+	// overflow route that was already refused. Refusing one spelling while
+	// taking another would move the inconsistency rather than remove it.
+	for _, s := range []string{
+		"Inf", "+Inf", "-Inf", "inf", "INF",
+		"Infinity", "+Infinity", "-Infinity", "infinity", "-infinity",
+		"1e400", "-1e400",
+	} {
+		if v, ok := Parse(s); ok {
+			t.Errorf("Parse(%q) = (%+v, true), want refused", s, v)
 		}
 	}
 }
@@ -204,7 +227,11 @@ func TestCompare_OrdersAgainstTheInfinities(t *testing.T) {
 func TestCompare_IsATotalOrder(t *testing.T) {
 	base := time.Date(2026, 6, 1, 12, 0, 0, 0, time.UTC)
 	corpus := []string{
-		"0", "-0", "-1", "1", "100", "100.0", "100.5", "-Inf", "Inf",
+		// The infinities that used to sit at the ends of this corpus are gone,
+		// because Parse now refuses them and mustParse would fail. Their job here
+		// was to be the extremes of the order; the two int64-boundary values below
+		// do that within the range Parse still accepts.
+		"0", "-0", "-1", "1", "100", "100.0", "100.5",
 		"1e18", "1.7833968e18", "9223372036854775807", "9223372036854775808",
 		base.Format(time.RFC3339Nano),
 		base.Add(1 * time.Nanosecond).Format(time.RFC3339Nano),

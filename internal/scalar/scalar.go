@@ -97,6 +97,29 @@ func Parse(s string) (Value, bool) {
 		return Value{nanos: t.UnixNano(), isTime: true}, true
 	}
 	if f, err := strconv.ParseFloat(s, 64); err == nil {
+		// An infinity is refused however it is SPELLED, which is a consistency
+		// fix rather than a new rule. "1e400" was already refused, because
+		// ParseFloat reports ErrRange for it while still handing back +Inf, and
+		// the reason recorded for that was that a bound nobody can write down is
+		// not a bound. "Inf", "-Infinity" and the rest are the same value reached
+		// by a spelling ParseFloat accepts without complaint, so refusing one and
+		// taking the other was the same bound being both rejected and honoured.
+		//
+		// It also closes a fail-open, which is what actually forced the question.
+		// An infinity ORDERS against everything, so an action attribute of "-Inf"
+		// satisfied any upper bound: against the shipped allow-list policy,
+		// amount="-Inf" matched the `amount <= 25` routine rule and was classified
+		// NOT consequential, skipping the approval gate that a plain 26 correctly
+		// triggers. Attributes come from the proxied request and the agent is the
+		// untrusted party, so that was reachable input, not a curiosity.
+		//
+		// NaN is deliberately NOT refused here. It is the opposite shape: it
+		// orders against nothing, so it already fails closed, and Compare is where
+		// "unordered" belongs. Refusing it here would leave that path unreachable
+		// through Parse and turn a live, tested guard into dead code.
+		if math.IsInf(f, 0) {
+			return Value{}, false
+		}
 		return Value{num: f}, true
 	}
 	return Value{}, false
