@@ -182,9 +182,19 @@ func condition(idx int, c policy.Condition) (string, error) {
 		// action's own value, so " eu" does not match "us,eu". Reproduced exactly:
 		// trim_space is applied to the member, never to the field.
 		//
+		// The `!= ""` guard drops a member that trims to nothing, which the
+		// classifier also does. Worth knowing why it is spelled out here rather
+		// than inherited: this branch was written to mirror the classifier, and it
+		// mirrored it faithfully while the classifier was WRONG, letting a trailing
+		// comma put "" in the set so an action carrying an empty attribute matched.
+		// Both backends agreed, so the conformance suite stayed green throughout.
+		// That is the honest limit of a differential: it catches a divergence, and
+		// a bug reproduced on purpose is not one.
+		//
 		// `some m in ...` is existential, which is the right reading of membership:
 		// the body holds if ANY member matches.
-		return fmt.Sprintf("some m%d in split(%s, \",\"); trim_space(m%d) == %s", idx, value, idx, got), nil
+		return fmt.Sprintf("some m%d in split(%s, \",\"); trim_space(m%d) != \"\"; trim_space(m%d) == %s",
+			idx, value, idx, idx, got), nil
 	}
 	// Unreachable for any policy that came through policy.Parse, which rejects
 	// unknown operators. Returning an error rather than skipping the condition is
