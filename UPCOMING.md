@@ -30,6 +30,28 @@ For what the system does today, and for the limits of a clean verdict, the
   Whether to adopt Cedar or Rego, and at what cost to the verifier's dependency
   closure, is undecided. Both spikes are unstarted.
 
+- **`in` and the equality operators are still spelled twice, and the two spellings
+  differ.** Policy conditions and macaroon caveats are written against one field
+  vocabulary (`types.Action.Context()`), and the ORDERING operators now get their
+  meaning from one place (`internal/scalar`), so the enforcement proxy and the
+  independent verifier cannot answer `<`, `<=`, `>` or `>=` differently. `==`,
+  `!=` and `in` did not move, and `in` is not in fact the same operator on both
+  sides: `internal/policy` splits the member list on commas and compares each
+  trimmed member, while `internal/macaroon.splitSet` drops members that trim to
+  nothing. So for the caveat `x in "a,,b"` and an action carrying `x=""`, policy
+  reports a match and macaroon reports the caveat unsatisfied. Confirmed by
+  running it, not read off the source.
+
+  Nothing observable depends on it today, because the two are consulted for
+  different questions (classification against authority) rather than composed
+  into one answer, and an empty member is a policy nobody has written. It is
+  recorded because it is the same SHAPE as the timestamp divergence that was
+  fixed: one vocabulary, two implementations of what it means. Deciding it needs
+  an answer to which behaviour is right (an empty set member is arguably not a
+  member at all, which would make macaroon's the correct one and policy's the
+  bug) and that is a classifier semantics change, so it wants its own change and
+  its own note in the format history, not a quiet fix inside another one.
+
 - **Policy hot-reload is an export-format change, not a loader feature.** A proxy
   loads one policy at startup, and every audit entry pins that policy's
   content-address, so one export carries exactly one policy and the verifier

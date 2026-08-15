@@ -43,7 +43,7 @@ func compileModule(p *policy.Policy) (string, error) {
 
 	fmt.Fprintf(&b, "package %s\n\n", regoPackage)
 
-	// scalar mirrors internal/policy.asScalar, including its ORDER: RFC3339
+	// scalar mirrors internal/scalar.Parse, including its ORDER: RFC3339
 	// first, then a plain number. The order is load-bearing rather than
 	// stylistic, since a string that parses as neither must end up undefined
 	// rather than defaulting to zero.

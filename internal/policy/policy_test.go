@@ -7,6 +7,7 @@ package policy
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Gneiss-Group/Kessa/pkg/types"
 )
@@ -145,6 +146,50 @@ func TestFirstMatchWins(t *testing.T) {
 	}
 }
 
+// TestEvaluate_OrdersTimestampsToTheNanosecond exercises the real expiry path:
+// Action.Context() renders the action's instant at RFC3339Nano precision, so a
+// rule bounded on expiry is comparing full-precision timestamps.
+//
+// It used to compare them as float64(t.UnixNano()), which at a 2026 epoch has
+// only 256ns of resolution, so an action inside that window of the bound was
+// classified as if it sat exactly on it. The comparison now happens on integer
+// nanoseconds in internal/scalar, shared with macaroon caveat satisfaction so
+// the proxy and the independent verifier cannot answer this differently.
+func TestEvaluate_OrdersTimestampsToTheNanosecond(t *testing.T) {
+	base := time.Date(2026, 6, 1, 12, 0, 0, 0, time.UTC)
+	bound := base.Add(100 * time.Nanosecond)
+
+	// Confirm the premise: without it this test passes without testing anything.
+	if float64(base.UnixNano()) != float64(bound.UnixNano()) {
+		t.Fatal("premise no longer holds: float64 now distinguishes a 100ns delta at this epoch")
+	}
+
+	p, err := Parse([]byte(`{"version":"nano-v1","rules":[{"name":"before-bound","when":[{"field":"` +
+		FieldExpiry + `","op":"<","value":"` + bound.Format(time.RFC3339Nano) +
+		`"}],"consequential":true,"reason":"before the bound"}]` + okDefault + `}`))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+
+	d, err := p.Evaluate(types.Action{Type: "document.export", Target: "res-1", Timestamp: base})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d.RuleFired != "before-bound" {
+		t.Fatalf("an action 100ns before the bound must satisfy the bound, got RuleFired=%q", d.RuleFired)
+	}
+
+	// And the instant ON the bound still must not, which is what distinguishes
+	// ordering the nanoseconds from ignoring them in the other direction.
+	d, err = p.Evaluate(types.Action{Type: "document.export", Target: "res-1", Timestamp: bound})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d.RuleFired != DefaultRule {
+		t.Fatalf("an action exactly on an exclusive bound must not satisfy it, got RuleFired=%q", d.RuleFired)
+	}
+}
+
 // okDefault is a well-formed default block, spliced into the rule-validation
 // fixtures below so each one fails for the reason it is named for rather than
 // tripping the default-block requirement first.
@@ -161,6 +206,13 @@ func TestParse_Validation(t *testing.T) {
 		{"rule without conditions", `{"version":"v1","rules":[{"name":"r"}]` + okDefault + `}`, "no conditions"},
 		{"unknown operator", `{"version":"v1","rules":[{"name":"r","when":[{"field":"amount","op":"~=","value":"1"}]}]` + okDefault + `}`, "unknown operator"},
 		{"non-scalar bound", `{"version":"v1","rules":[{"name":"r","when":[{"field":"amount","op":">=","value":"lots"}]}]` + okDefault + `}`, "not a scalar"},
+		// The far-future instant a policy author reaches for to mean "never".
+		// It is a well-formed RFC3339 timestamp, but it is past the range
+		// time.Time can express as Unix nanoseconds, where the conversion wraps
+		// rather than saturating: the bound would silently become some arbitrary
+		// instant, possibly one already in the past. Rejected at load, which is
+		// before anything is classified against it (internal/scalar).
+		{"bound past the representable instant range", `{"version":"v1","rules":[{"name":"r","when":[{"field":"expiry","op":"<","value":"9999-12-31T23:59:59Z"}]}]` + okDefault + `}`, "not a scalar"},
 		{"empty eq value", `{"version":"v1","rules":[{"name":"r","when":[{"field":"x","op":"==","value":""}]}]` + okDefault + `}`, "empty value"},
 
 		// A RULE's reason, which is the same requirement as the default block's

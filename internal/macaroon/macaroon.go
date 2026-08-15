@@ -14,9 +14,10 @@
 // that would broaden authority, and lets the independent verifier re-check that
 // each hop is a strict subset of its parent.
 //
-// This package is a pure leaf: it depends only on the standard library, so the
-// standalone verifier can import it without dragging in any server code. Verify
-// takes a plain Context (map[string]string), not a types.Action, on purpose.
+// This package is a leaf: it reaches the standard library and internal/scalar,
+// which is itself stdlib-only, so the standalone verifier can import it without
+// dragging in any server code. Verify takes a plain Context (map[string]string),
+// not a types.Action, on purpose.
 package macaroon
 
 import (
@@ -24,9 +25,9 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
-	"strconv"
 	"strings"
-	"time"
+
+	"github.com/Gneiss-Group/Kessa/internal/scalar"
 )
 
 // Op is a caveat comparison operator.
@@ -224,8 +225,8 @@ func (c Caveat) satisfied(ctx Context) error {
 			return nil
 		}
 	case OpLe, OpLt, OpGe, OpGt:
-		gs, ok1 := asScalar(got)
-		vs, ok2 := asScalar(c.Value)
+		gs, ok1 := scalar.Parse(got)
+		vs, ok2 := scalar.Parse(c.Value)
 		if !ok1 || !ok2 {
 			return fmt.Errorf("macaroon: caveat %q unsatisfied: %q or %q not a scalar", c, got, c.Value)
 		}
@@ -267,7 +268,7 @@ func narrows(parent, child Caveat) (bool, error) {
 
 // narrowsBound handles a parent that is a scalar/time bound.
 func narrowsBound(parent, child Caveat) (bool, error) {
-	pv, ok := asScalar(parent.Value)
+	pv, ok := scalar.Parse(parent.Value)
 	if !ok {
 		return false, fmt.Errorf("parent value %q is not a scalar", parent.Value)
 	}
@@ -275,7 +276,7 @@ func narrowsBound(parent, child Caveat) (bool, error) {
 
 	switch child.Op {
 	case OpLe, OpLt, OpGe, OpGt:
-		cv, ok := asScalar(child.Value)
+		cv, ok := scalar.Parse(child.Value)
 		if !ok {
 			return false, fmt.Errorf("child value %q is not a scalar", child.Value)
 		}
@@ -291,7 +292,7 @@ func narrowsBound(parent, child Caveat) (bool, error) {
 		return boundSubset(child.Op, cv, parent.Op, pv, false), nil
 	case OpEq:
 		// "== v" is a subset of a bound iff v satisfies the bound.
-		cv, ok := asScalar(child.Value)
+		cv, ok := scalar.Parse(child.Value)
 		if !ok {
 			return false, nil
 		}
@@ -299,7 +300,7 @@ func narrowsBound(parent, child Caveat) (bool, error) {
 	case OpIn:
 		// Every member must satisfy the parent bound.
 		for _, m := range splitSet(child.Value) {
-			cv, ok := asScalar(m)
+			cv, ok := scalar.Parse(m)
 			if !ok || !compareOK(parent.Op, cv, pv) {
 				return false, nil
 			}
@@ -312,29 +313,26 @@ func narrowsBound(parent, child Caveat) (bool, error) {
 
 // boundSubset reports whether the child bound is contained in the parent bound,
 // both being upper bounds (upper=true) or both lower bounds (upper=false).
-func boundSubset(childOp Op, childVal float64, parentOp Op, parentVal float64, upper bool) bool {
-	childInclusive := childOp == OpLe || childOp == OpGe
-	parentInclusive := parentOp == OpLe || parentOp == OpGe
-	if upper {
-		// child ⊆ parent iff child's sup <= parent's sup.
-		if childVal < parentVal {
-			return true
-		}
-		if childVal == parentVal {
-			// equal bounds: subset unless child includes the endpoint the
-			// parent excludes.
-			return !childInclusive || parentInclusive
-		}
+func boundSubset(childOp Op, childVal scalar.Value, parentOp Op, parentVal scalar.Value, upper bool) bool {
+	cmp, ordered := childVal.Compare(parentVal)
+	if !ordered {
+		// Nothing can be proved about a bound that does not order (a NaN
+		// endpoint), so it is not a subset. Attenuate rejects it.
 		return false
 	}
-	// lower bounds: child ⊆ parent iff child's inf >= parent's inf.
-	if childVal > parentVal {
-		return true
-	}
-	if childVal == parentVal {
+	childInclusive := childOp == OpLe || childOp == OpGe
+	parentInclusive := parentOp == OpLe || parentOp == OpGe
+	if cmp == 0 {
+		// equal bounds: subset unless child includes the endpoint the parent
+		// excludes.
 		return !childInclusive || parentInclusive
 	}
-	return false
+	if upper {
+		// child ⊆ parent iff child's sup <= parent's sup.
+		return cmp < 0
+	}
+	// lower bounds: child ⊆ parent iff child's inf >= parent's inf.
+	return cmp > 0
 }
 
 // narrowsSet handles a parent that is a set membership caveat.
@@ -370,7 +368,7 @@ func (c Caveat) validate() error {
 			return fmt.Errorf("macaroon: caveat %q has empty value", c)
 		}
 	case OpLe, OpLt, OpGe, OpGt:
-		if _, ok := asScalar(c.Value); !ok {
+		if _, ok := scalar.Parse(c.Value); !ok {
 			return fmt.Errorf("macaroon: caveat %q bound value %q is not a scalar", c, c.Value)
 		}
 	default:
@@ -398,31 +396,12 @@ func hmacSum(key, msg []byte) []byte {
 	return h.Sum(nil)
 }
 
-// asScalar parses s as an RFC3339 timestamp (compared as Unix nanoseconds) or a
-// float. Time is tried first so "2026-07-09T00:00:00Z" doesn't parse as a number.
-func asScalar(s string) (float64, bool) {
-	if t, err := time.Parse(time.RFC3339, s); err == nil {
-		return float64(t.UnixNano()), true
-	}
-	if f, err := strconv.ParseFloat(s, 64); err == nil {
-		return f, true
-	}
-	return 0, false
-}
-
-func compareOK(op Op, got, want float64) bool {
-	switch op {
-	case OpLe:
-		return got <= want
-	case OpLt:
-		return got < want
-	case OpGe:
-		return got >= want
-	case OpGt:
-		return got > want
-	default:
-		return false
-	}
+// compareOK reports whether "got op want" holds, for the four ordering
+// operators. The semantics are internal/scalar's, which internal/policy applies
+// to the same field vocabulary: a caveat and a policy condition written over one
+// field must not be able to reach different answers about it.
+func compareOK(op Op, got, want scalar.Value) bool {
+	return got.Satisfies(scalar.Op(op), want)
 }
 
 func splitSet(s string) []string {

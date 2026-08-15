@@ -57,28 +57,17 @@ becomes a member of a `matches` set keyed by its position and the decision is th
 entry at `min(matches)`. That assumption was resting silently inside the single
 implementation until a second one had to carry it across.
 
-## Known divergence: timestamp precision below 256ns
-
-The two implementations disagree on exactly one input class, and **the shipped
-classifier is the one that is wrong**.
-
-`internal/policy.asScalar` parses an RFC3339 timestamp as
-`float64(t.UnixNano())`. Around 2026 that number is roughly 1.78e18, needing 61
-bits, against float64's 53 bits of mantissa. Representable values are therefore
-256ns apart, and the classifier cannot order two instants closer together than
-that. OPA's `time.parse_rfc3339_ns` returns exact integer nanoseconds and orders
-them correctly.
-
-This is pinned by `divergence_test.go`, which asserts the disagreement still
-exists, so the finding cannot quietly stop being true in either direction.
-
-It is not fixed here, deliberately. `internal/macaroon` carries its own
-byte-identical copy of `asScalar`, and caveat satisfaction is re-derived by the
-independent verifier. Correcting one copy and not the other would make the proxy
-and the verifier disagree about whether a caveat holds, which is far worse than
-256ns of granularity. Both copies are lossy in the same way today, so the limit is
-uniform across the system and nothing observable is wrong. Fixing it means fixing
-both, deliberately, in one change.
+It also found a real defect in the core, which is the outcome that justifies
+building a second implementation from a different author's assumptions rather
+than testing the first one harder. The classifier compared RFC3339 timestamps as
+`float64(t.UnixNano())`, which at a 2026 epoch resolves only to 256ns, while
+OPA's `time.parse_rfc3339_ns` orders such instants exactly. On that one input
+class OPA was right and the shipped code was wrong. It was carried here as a
+pinned known divergence for a while, because `internal/macaroon` held a
+byte-identical copy of the same coercion and correcting one alone would have made
+the enforcement proxy and the independent verifier disagree about whether a
+caveat holds. Both are now one implementation in `internal/scalar`, comparing
+integer nanoseconds, and the divergence is closed.
 
 ## Running it
 

@@ -7,6 +7,7 @@ package macaroon
 import (
 	"bytes"
 	"testing"
+	"time"
 )
 
 var rootKey = []byte("root-secret-key-for-tests-000000")
@@ -141,6 +142,56 @@ func TestVerify_TimeBoundExpiry(t *testing.T) {
 	after := Context{"expiry": "2026-07-10T12:00:00Z"}
 	if err := Verify(m, rootKey, after); err == nil {
 		t.Fatal("action after expiry should fail")
+	}
+}
+
+// TestSatisfies_OrdersTimestampsToTheNanosecond is the caveat-side half of the
+// same fix internal/policy gets: an expiry caveat used to be compared as
+// float64(t.UnixNano()), which at a 2026 epoch resolves only to 256ns, so an
+// action inside that window of the bound was treated as sitting exactly on it.
+// Action contexts render expiry at RFC3339Nano precision, so those digits are
+// really presented to this check.
+func TestSatisfies_OrdersTimestampsToTheNanosecond(t *testing.T) {
+	base := time.Date(2026, 6, 1, 12, 0, 0, 0, time.UTC)
+	bound := base.Add(100 * time.Nanosecond)
+
+	// Confirm the premise: without it this test passes without testing anything.
+	if float64(base.UnixNano()) != float64(bound.UnixNano()) {
+		t.Fatal("premise no longer holds: float64 now distinguishes a 100ns delta at this epoch")
+	}
+
+	m := Mint(rootKey, "cred-1", "acme")
+	m = mustAttenuate(t, m, Caveat{"expiry", OpLt, bound.Format(time.RFC3339Nano)})
+
+	if err := Satisfies(m, Context{"expiry": base.Format(time.RFC3339Nano)}); err != nil {
+		t.Fatalf("an action 100ns before the bound must satisfy it: %v", err)
+	}
+	if err := Satisfies(m, Context{"expiry": bound.Format(time.RFC3339Nano)}); err == nil {
+		t.Fatal("an action exactly on an exclusive bound must not satisfy it")
+	}
+}
+
+// TestAttenuate_RefusesABoundPastTheRepresentableRange covers the far-future
+// instant a delegator reaches for to mean "never". It is well-formed RFC3339,
+// but past the range time.Time can express as Unix nanoseconds the conversion
+// wraps rather than saturating, so the bound would silently become an arbitrary
+// instant, possibly one already past. The rejection has to happen in validate,
+// which runs BEFORE the caveat is hashed into the chain: a caveat that reached
+// the signature would be one the independent verifier is then obliged to
+// re-derive an answer for.
+func TestAttenuate_RefusesABoundPastTheRepresentableRange(t *testing.T) {
+	parent := mustAttenuate(t, Mint(rootKey, "cred-1", "acme"), Caveat{"expiry", OpLt, "2262-01-01T00:00:00Z"})
+	parentSig := bytes.Clone(parent.Signature)
+
+	child, err := Attenuate(parent, Caveat{"expiry", OpLt, "9999-12-31T23:59:59Z"})
+	if err == nil {
+		t.Fatal("an instant outside the representable range must not be accepted as a bound")
+	}
+	if len(child.Caveats) != 0 || child.Signature != nil {
+		t.Fatalf("a rejected attenuation must return nothing usable, got %+v", child)
+	}
+	if !bytes.Equal(parent.Signature, parentSig) || len(parent.Caveats) != 1 {
+		t.Fatal("a rejected attenuation must leave its parent untouched")
 	}
 }
 
