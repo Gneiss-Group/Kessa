@@ -108,15 +108,24 @@ make license-check # enforce the Apache/AGPL import boundary
 make demo          # the seven-scenario end-to-end story, verified offline
 ```
 
-Before opening a pull request, run the full gate, which is the same script CI
-runs:
+Before opening a pull request, run the full gate:
 
 ```sh
 bash scripts/ci/gate-full.sh
 ```
 
-It calls [`scripts/ci/gate.sh`](scripts/ci/gate.sh) and then adds the nested
-modules under [`experimental/`](experimental/). Those carry their own `go.mod`,
+It runs everything CI runs **except** the two jobs that need something your
+machine may not have: CodeQL, which is a GitHub code-scanning service rather than
+a local tool, and the container smoke, which needs a Docker daemon. So a green
+run here is not a promise of a green CI, and it is worth knowing which way the
+gap runs before you rely on it.
+
+The first run builds `gitleaks` from source at a pinned version for the secret
+scan, which takes a minute or two and then caches.
+
+It calls [`scripts/ci/gate.sh`](scripts/ci/gate.sh), scans for committed
+credentials, and then adds the nested modules under
+[`experimental/`](experimental/). Those carry their own `go.mod`,
 which means the root module's package walk cannot enumerate them: `go list ./...`
 lists the packages of one module, and a directory with its own `go.mod` is a
 different one. Checking them is therefore an extra walk rather than a wider glob.

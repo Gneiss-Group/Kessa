@@ -17,7 +17,11 @@ Two things worth having in front of you at all times:
   came out of review rounds, not preferences. `docs/go-standards.md` has the
   detail.
 
-Before opening a PR, run `bash scripts/ci/gate-full.sh`. It is the gate CI runs.
+Before opening a PR, run `bash scripts/ci/gate-full.sh`. It runs everything CI
+runs except the two jobs that need something a laptop may not have: CodeQL (a
+GitHub service) and the container smoke (a Docker daemon). A green run here is
+not a promise of a green CI, and treating it as one is how a committed secret
+reaches a pull request.
 
 `scripts/ci/gate.sh` is the offline subset it calls: every check except the
 nested modules under `experimental/`, which have their own `go.mod` and need
