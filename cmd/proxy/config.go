@@ -196,7 +196,7 @@ func (c *Config) auditWAL() (path string, enabled bool, err error) {
 // and in the daemon it points at, not in its syntax. An operator has to be able
 // to tell "this will start" from "this is well-formed", so the last line says
 // which claim was earned.
-func reportConfigCheck(w io.Writer, cfgPath, sockPath string, listenAddrs []string, statuses statusFlag) {
+func reportConfigCheck(w io.Writer, cfgPath, didsDir, sockPath string, listenAddrs []string, statuses statusFlag) {
 	var enabled []string
 	for _, a := range listenAddrs {
 		if strings.TrimSpace(a) != "" {
@@ -207,11 +207,30 @@ func reportConfigCheck(w io.Writer, cfgPath, sockPath string, listenAddrs []stri
 	fmt.Fprintf(w, "kessa-proxy: checked %s\n", cfgPath)
 	fmt.Fprintln(w, "  schema           OK  parsed, no unknown fields, required fields present")
 	fmt.Fprintf(w, "  listeners        OK  %s\n", strings.Join(enabled, ", "))
-	fmt.Fprintf(w, "  policy and DIDs  OK  loaded from the paths named\n")
+	// Split, because one line was making two claims of different strengths and
+	// the weaker one was not true. The policy is genuinely loaded and parsed. The
+	// DID directory was named "loaded" while nothing had opened it, so a config
+	// pointing at a path that does not exist reported OK here and would have
+	// failed on its first request. It is the trust root, which makes it the worst
+	// line on this report to overstate.
+	fmt.Fprintln(w, "  policy           OK  loaded and parsed from the path named")
+	fmt.Fprintf(w, "  DID trust root   OK  %s is a readable directory\n", didsDir)
+	// The wording is the finding. This line used to read "loaded and
+	// signature-checked", which was two claims too many: status.Load parses, and
+	// nothing here had ever verified a signature. An unsigned list, a list below
+	// the herd-privacy floor and a list issued by the wrong DID all passed while
+	// the operator was told their signatures had been checked.
+	//
+	// Both halves are now true and neither is more than true. The three properties
+	// named are the ones resolver() actually establishes, and AUTHORITY is called
+	// out as deferred rather than left for a reader to assume was included: who
+	// may revoke a given credential is named by that credential (R6-01), so it is
+	// unknowable until a request carries one.
 	if len(statuses) == 0 {
 		fmt.Fprintln(w, "  status lists     none configured")
 	} else {
-		fmt.Fprintf(w, "  status lists     OK  %d loaded and signature-checked\n", len(statuses))
+		fmt.Fprintf(w, "  status lists     OK  %d parsed, sized and self-signature checked\n", len(statuses))
+		fmt.Fprintln(w, "                       (revocation AUTHORITY is per-credential, checked at request time)")
 	}
 
 	if sockPath != "" {

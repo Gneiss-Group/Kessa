@@ -100,7 +100,25 @@ func buildProxy(policyPath, didsDir string, ep signer.Signer, statuses statusFla
 		fmt.Fprintf(stderr, "kessa-proxy: %v\n", err)
 		return nil, false
 	}
-	statusResolver, err := statuses.resolver()
+	// The DID directory is the TRUST ROOT: every signature this proxy checks is
+	// checked against a key read from here, so a verdict is only ever as good as
+	// this directory. FileResolver opens files lazily, per DID, which means an
+	// unreadable or absent root announces itself on the first request rather than
+	// at startup, and --check-config would have reported it loaded without ever
+	// having opened it.
+	if fi, err := os.Stat(didsDir); err != nil {
+		fmt.Fprintf(stderr, "kessa-proxy: --dids %q, the trust root every signature is checked against: %v\n", didsDir, err)
+		return nil, false
+	} else if !fi.IsDir() {
+		fmt.Fprintf(stderr, "kessa-proxy: --dids %q is not a directory\n", didsDir)
+		return nil, false
+	}
+	// One resolver, used for both the status lists' startup check and the proxy's
+	// own lookups. The status check has to resolve keys the way the running proxy
+	// will, or it would be answering a different question from the one that
+	// matters, which is the failure mode a config check exists to avoid.
+	dids := did.FileResolver{Root: didsDir}
+	statusResolver, err := statuses.resolver(dids)
 	if err != nil {
 		fmt.Fprintf(stderr, "kessa-proxy: %v\n", err)
 		return nil, false
@@ -108,7 +126,7 @@ func buildProxy(policyPath, didsDir string, ep signer.Signer, statuses statusFla
 	px, err := enforce.NewProxy(enforce.Config{
 		EnforcementPoint: ep,
 		Policy:           pol,
-		DIDs:             did.FileResolver{Root: didsDir},
+		DIDs:             dids,
 		Status:           statusResolver,
 		Now:              now,
 		Sink:             sink,
@@ -553,7 +571,7 @@ func cmdServe(args []string, stdout, stderr io.Writer) int {
 		if _, ok := buildProxy(*policyPath, *didsDir, ep, statuses, now, nil, nil, stderr); !ok {
 			return exitUsage
 		}
-		reportConfigCheck(stdout, *cfgPath, *sockPath, listenAddrs, statuses)
+		reportConfigCheck(stdout, *cfgPath, *didsDir, *sockPath, listenAddrs, statuses)
 		return exitOK
 	}
 
@@ -839,7 +857,30 @@ func (s *statusFlag) Set(v string) error {
 	return nil
 }
 
-func (s *statusFlag) resolver() (export.StatusResolver, error) {
+// resolver builds the status source and checks each list as far as a startup can.
+//
+// WHAT CAN BE CHECKED HERE, AND WHAT CANNOT. A list's signature is checked
+// against the key of the party ENTITLED TO REVOKE, and that party is named by a
+// credential's status reference (R6-01), not by the list. At startup there is no
+// credential, so there is no authority to check against and the real question
+// cannot be asked yet.
+//
+// What can be asked is whether the list is internally consistent: big enough for
+// the herd-privacy floor, signed at all, and signed by the DID it names for
+// itself. Verify answers all three when it is handed the list's own issuer,
+// because its first act is to refuse a list whose issuer is not the authority it
+// was given, which is trivially satisfied here and is exactly the check that has
+// no force at startup.
+//
+// That is a real check and it is NOT an authority check, so the report says so.
+// A list nominating its own verifier is precisely what R6-01 closed at request
+// time, and a config check claiming more than this would put the words "signature
+// checked" in front of an operator for a property nobody had established.
+//
+// Resolving keys the way the running proxy will is the point of taking dids
+// rather than building a resolver here: a check that resolved differently would
+// pass against a deployment that then failed on its first consequential request.
+func (s *statusFlag) resolver(dids did.Resolver) (export.StatusResolver, error) {
 	if len(*s) == 0 {
 		return nil, nil
 	}
@@ -849,8 +890,16 @@ func (s *statusFlag) resolver() (export.StatusResolver, error) {
 		if !ok {
 			return nil, fmt.Errorf("--status %q must be url=file", spec)
 		}
-		if _, err := status.Load(path); err != nil { // validate once at startup
+		list, err := status.Load(path)
+		if err != nil { // validate once at startup
 			return nil, fmt.Errorf("load status %q: %w", path, err)
+		}
+		key, err := did.ResolveKey(dids, list.Issuer)
+		if err != nil {
+			return nil, fmt.Errorf("status %q names issuer %q, whose key does not resolve: %w", path, list.Issuer, err)
+		}
+		if err := list.Verify(list.Issuer, key); err != nil {
+			return nil, fmt.Errorf("status %q: %w", path, err)
 		}
 		fs[url] = path
 	}
