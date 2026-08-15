@@ -50,18 +50,30 @@ func compileModule(p *policy.Policy) (string, error) {
 	//
 	// The mirror is now exact on infinities, and it was not always. to_number has
 	// always refused "Inf", while scalar.Parse took it from strconv.ParseFloat
-	// and let it order below every finite bound, so this backend failed closed on
-	// an input the classifier let through a routine rule. The differential test
-	// is what surfaced that; scalar.Parse refuses infinities now, and the
-	// conformance suite states the rule for both. Worth recording because the
-	// agreement here is by construction on both sides rather than the coincidence
-	// it briefly was.
+	// and let it order below every finite bound. The differential test is what
+	// surfaced that; scalar.Parse refuses infinities now, and the conformance
+	// suite states the rule for both.
 	//
-	// Undefined is how "not comparable" is spelled in Rego, and it is the right
-	// spelling here: a builtin that errors (parsing "lots" as a number) leaves the
-	// expression undefined under OPA's default error handling, the enclosing rule
-	// body fails, and the rule does not match. That lands on the classifier's
-	// fail-closed behavior without needing to special-case it.
+	// KNOW WHAT THAT AGREEMENT IS WORTH. This helper is a transcription of
+	// internal/scalar.Parse, so the two agreeing about it is a fact about one
+	// author writing the same thing twice, not evidence from two implementations.
+	// Where a divergence did surface it came from to_number, a builtin written by
+	// someone else against a different specification, and that is the only part of
+	// this row that was ever independent. The same caution applies to the `in`
+	// branch further down, which says so itself.
+	//
+	// Undefined is how Rego spells "not comparable", and it used to be the whole
+	// story here: a builtin that errors (parsing "lots" as a number) leaves the
+	// expression undefined, the enclosing rule body fails, and the rule does not
+	// match.
+	//
+	// That is no longer sufficient, because Rego spells TWO different situations
+	// the same way. A rule that does not apply and a rule that cannot be evaluated
+	// both arrive as undefined, and they are not the same claim: the first is an
+	// answer, the second is the absence of one. `comparable` and `uncomparable`
+	// below exist to separate them, and everything they add was written from the
+	// stated semantics rather than transcribed from the Go, which is the point of
+	// having a second implementation at all.
 	b.WriteString("scalar(s) := v if {\n\tv := time.parse_rfc3339_ns(s)\n} else := v if {\n\tv := to_number(s)\n}\n\n")
 
 	// The default block. Written as Rego's `default` rule, which fires precisely
@@ -81,11 +93,64 @@ func compileModule(p *policy.Policy) (string, error) {
 		return b.String(), nil
 	}
 
+	// comparable answers the question the ordering operators actually ask before
+	// they compare: can this string be read as a value at all?
+	//
+	// It exists because "the rule does not apply" and "the rule cannot be
+	// evaluated" are different answers and Rego spells both of them `undefined`.
+	// An ordering comparison against an uncoercible operand is undefined, and so is
+	// a comparison against a field the action never carried, so the two arrive at
+	// the rule body looking identical. Asking about coercibility separately is what
+	// tells them apart.
+	//
+	// is_number rather than a bare call, so that a builtin returning a falsy value
+	// cannot be mistaken for a builtin that failed.
+	b.WriteString("comparable(s) if {\n\tis_number(time.parse_rfc3339_ns(s))\n}\n\n")
+	b.WriteString("comparable(s) if {\n\tis_number(to_number(s))\n}\n\n")
+
+	// ordering_fields records, per rule, the fields that rule compares with an
+	// ordering operator, in the order the rule declares them. Declaration order is
+	// load-bearing: the reason string names the offending fields and an audit entry
+	// carrying it is re-derived byte for byte, so the order cannot come from
+	// iterating a set.
+	b.WriteString(orderingFields(p.Rules))
+
+	// uncomparable maps a rule index to the fields that stopped it being evaluable:
+	// present in the action, and not coercible. A rule with no such field is absent
+	// from the object entirely, which is how "this rule is evaluable" is spelled.
+	b.WriteString("uncomparable[i] := fs if {\n" +
+		"\tsome i, flds in ordering_fields\n" +
+		"\tfs := [f | some f in flds; input.ctx[f]; not comparable(input.ctx[f])]\n" +
+		"\tcount(fs) > 0\n}\n\n")
+
+	// A rule is CONSIDERED if it matched or if it could not be evaluated, and the
+	// lowest such index decides. That is what carries first-match-wins across both
+	// outcomes with one expression: an unevaluable rule earlier in the policy is
+	// answered before a matching rule later in it, exactly as an ordered classifier
+	// reading top to bottom would.
+	//
+	// The two sets are disjoint by construction, since a rule cannot match while
+	// one of its comparisons is undefined, but the branches below are written to be
+	// exclusive anyway rather than relying on that.
+	b.WriteString("considered := matches | {i | some i, _ in uncomparable}\n\n")
+
 	// min over an empty set is undefined, which is what hands control to the
 	// `default` rule above when nothing matched. So the no-match path is the same
 	// expression as the match path rather than a separate branch that could
 	// disagree with it.
-	b.WriteString("decision := d if {\n\td := decisions[min(matches)]\n}\n\n")
+	b.WriteString("decision := d if {\n\ti := min(considered)\n\tnot uncomparable[i]\n\td := decisions[i]\n}\n\n")
+
+	// An unevaluable rule denies. It reuses that rule's own entry in `decisions`
+	// for the name and version rather than a second table keyed the same way, so
+	// there is nowhere for the two to drift apart.
+	b.WriteString("decision := d if {\n" +
+		"\ti := min(considered)\n" +
+		"\tfs := uncomparable[i]\n" +
+		"\td := object.union(decisions[i], {\n" +
+		"\t\t\"allowed\": false,\n" +
+		"\t\t\"consequential\": true,\n" +
+		"\t\t\"reason\": sprintf(\"rule %q could not be evaluated: %s is not comparable\", [decisions[i].ruleFired, concat(\", \", fs)]),\n" +
+		"\t})\n}\n\n")
 
 	for i, r := range p.Rules {
 		conds, err := conditions(r.When)
@@ -106,6 +171,39 @@ func compileModule(p *policy.Policy) (string, error) {
 	b.WriteString("}\n")
 
 	return b.String(), nil
+}
+
+// orderingFields renders the ordering_fields object: rule index to the fields
+// that rule compares with an ordering operator, in declaration order.
+//
+// Only ordering operators appear. Equality, inequality and membership compare
+// strings, and every string compares, so there is no such thing as an operand
+// they cannot evaluate. Enumerating the ordering operators here rather than
+// excluding the others means an operator added later is absent until someone
+// decides what it does with an uncoercible operand, which is the direction that
+// fails safe.
+func orderingFields(rules []policy.Rule) string {
+	var b strings.Builder
+	b.WriteString("ordering_fields := {\n")
+	for i, r := range rules {
+		var fields []string
+		for _, c := range r.When {
+			switch c.Op {
+			case policy.OpLe, policy.OpLt, policy.OpGe, policy.OpGt:
+				q, err := regoString(c.Field)
+				if err != nil {
+					continue
+				}
+				fields = append(fields, q)
+			}
+		}
+		if len(fields) == 0 {
+			continue
+		}
+		fmt.Fprintf(&b, "\t%d: [%s],\n", i, strings.Join(fields, ", "))
+	}
+	b.WriteString("}\n\n")
+	return b.String()
 }
 
 // decisionLiteral renders a Rego object whose keys are types.Decision's JSON

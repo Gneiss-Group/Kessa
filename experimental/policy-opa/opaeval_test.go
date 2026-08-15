@@ -197,7 +197,13 @@ func TestGeneratedSourceIsReadable(t *testing.T) {
 		"package kessa.policy",
 		"default decision :=",
 		"matches contains 0 if",
-		"decisions[min(matches)]",
+		"considered := matches | {i | some i, _ in uncomparable}",
+		"i := min(considered)",
+		// The ordering field census a reader needs in order to check the
+		// uncomparable set by eye, which is the half of the module that is not
+		// simply a transcription of the policy file.
+		`ordering_fields := {`,
+		`0: ["amount"],`,
 		"# high-value",
 	} {
 		if !strings.Contains(src, want) {

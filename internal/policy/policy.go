@@ -240,7 +240,29 @@ func (p *Policy) Version() string { return p.Ver }
 func (p *Policy) Evaluate(a types.Action) (types.Decision, error) {
 	ctx := a.Context()
 	for _, r := range p.Rules {
-		if r.matches(ctx) {
+		matched, indeterminate := r.eval(ctx)
+		// A rule that could not be evaluated DENIES, and it does so before any later
+		// rule or the default gets a chance to answer. An action carrying a value
+		// this rule cannot compare has not been classified, and the two ways of
+		// pretending otherwise are both wrong: treating it as a match invents an
+		// answer, and treating it as a non-match hands it to whatever comes next,
+		// which under a routine default is the permissive outcome.
+		//
+		// Denying is the only answer that is right whichever way the policy is
+		// written, which is what makes it safe to give here, where the posture is
+		// not in view. It is also the answer the independent verifier re-derives,
+		// since it runs this same function over the recorded action.
+		if indeterminate {
+			return types.Decision{
+				Allowed:       false,
+				Consequential: true,
+				RuleFired:     r.Name,
+				PolicyVersion: p.Ver,
+				Reason: fmt.Sprintf("rule %q could not be evaluated: %s is not comparable",
+					r.Name, indeterminateFields(r, ctx)),
+			}, nil
+		}
+		if matched {
 			return types.Decision{
 				Allowed:       !r.Deny,
 				Consequential: r.Consequential,
@@ -259,33 +281,87 @@ func (p *Policy) Evaluate(a types.Action) (types.Decision, error) {
 	}, nil
 }
 
-// matches reports whether every condition holds.
-func (r Rule) matches(ctx map[string]string) bool {
+// eval reports whether every condition holds, and whether any of them could not
+// be evaluated at all.
+//
+// It does NOT stop at the first false condition. A rule that contains both a
+// condition that does not hold and a condition that cannot be evaluated is
+// indeterminate, and short-circuiting would make which of those two answers comes
+// back depend on the order the conditions happen to be written in.
+func (r Rule) eval(ctx map[string]string) (matched, indeterminate bool) {
+	matched = true
 	for _, c := range r.When {
-		if !c.matches(ctx) {
-			return false
+		ok, ind := c.eval(ctx)
+		if ind {
+			indeterminate = true
+		}
+		if !ok {
+			matched = false
 		}
 	}
-	return true
+	return matched && !indeterminate, indeterminate
 }
 
-func (c Condition) matches(ctx map[string]string) bool {
-	got, ok := ctx[c.Field]
-	if !ok {
-		return false // absent field never matches (fail closed)
+// indeterminateFields names the fields of r that could not be evaluated against
+// ctx, in the order the rule declares them.
+//
+// It names the FIELD and never the value. The value is attacker-supplied and this
+// string is written into a signed, hash-chained audit entry that the verifier
+// re-derives byte for byte; the action itself is already recorded alongside, so
+// quoting it here would duplicate attacker-controlled text into a second place
+// without adding anything a reader cannot already see. Rule-declaration order
+// keeps the result deterministic, which re-derivation requires.
+func indeterminateFields(r Rule, ctx map[string]string) string {
+	var names []string
+	for _, c := range r.When {
+		if _, ind := c.eval(ctx); ind {
+			names = append(names, c.Field)
+		}
+	}
+	return strings.Join(names, ", ")
+}
+
+// eval reports whether the condition holds, and whether it could not be evaluated.
+//
+// THREE SITUATIONS, NOT TWO. A field the action does not carry, a field that is
+// present and compares false, and a field that is present but cannot be compared
+// at all are three different claims, and the last one needs its own answer.
+//
+// Collapsing the third into "does not hold" is only safe if a rule that does not
+// fire is the cautious outcome, and whether that is true depends on what the
+// surrounding policy uses its rules to say. A policy whose default is routine uses
+// rules to mark things consequential, so a rule that does not fire is the
+// PERMISSIVE outcome there, and an operand nobody can compare would quietly take
+// it. Reporting indeterminate separately lets Evaluate answer that case the same
+// way whichever way the policy is written, instead of inheriting the answer from
+// the posture it happens to be run under.
+//
+// An ABSENT field stays a plain non-match, deliberately. "This rule does not apply
+// to an action that carries no such field" is the whole truth about that case, and
+// policies rely on it: a rule about `amount` should simply not apply to an action
+// that has no amount.
+func (c Condition) eval(ctx map[string]string) (ok, indeterminate bool) {
+	got, present := ctx[c.Field]
+	if !present {
+		return false, false // absent field never matches (fail closed)
 	}
 	switch c.Op {
 	case OpEq:
-		return got == c.Value
+		return got == c.Value, false
 	case OpNe:
-		return got != c.Value
+		return got != c.Value, false
 	case OpLe, OpLt, OpGe, OpGt:
 		gs, ok1 := scalar.Parse(got)
+		// c.Value is already known to parse: Condition.validate refuses an ordering
+		// operator whose own bound is not a scalar, and Parse always calls Validate,
+		// so a policy carrying one never reaches here. Checked anyway rather than
+		// assumed, because the cost is one comparison and the alternative is a
+		// panic-free silent wrong answer if that ever stops being true.
 		vs, ok2 := scalar.Parse(c.Value)
 		if !ok1 || !ok2 {
-			return false
+			return false, true
 		}
-		return gs.Satisfies(scalar.Op(c.Op), vs)
+		return gs.Satisfies(scalar.Op(c.Op), vs), false
 	case OpIn:
 		for _, m := range strings.Split(c.Value, ",") {
 			// A member that trims to nothing is not a member. Dropping it matches
@@ -305,9 +381,9 @@ func (c Condition) matches(ctx map[string]string) bool {
 			// an empty member list is already meaningless. Honouring an empty member
 			// INSIDE a list was the same concept accepted piecemeal.
 			if m = strings.TrimSpace(m); m != "" && got == m {
-				return true
+				return true, false
 			}
 		}
 	}
-	return false
+	return false, false
 }

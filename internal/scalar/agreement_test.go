@@ -96,12 +96,28 @@ func TestPolicyAndMacaroonOrderOneFieldIdentically(t *testing.T) {
 				if err != nil {
 					t.Fatalf("Evaluate: %v", err)
 				}
-				policyHolds := d.RuleFired == "r"
+				// The rule HELD only if it fired and allowed. Naming the rule is no
+				// longer sufficient evidence of that: a rule the classifier could
+				// not evaluate also reports its own name, with Allowed false, so
+				// reading RuleFired alone would score "could not be compared" as
+				// "the comparison held" and this test would assert the opposite of
+				// what it says it does.
+				policyHolds := d.RuleFired == "r" && d.Allowed
+				policyIndeterminate := d.RuleFired == "r" && !d.Allowed
 				macaroonHolds := macaroon.Satisfies(m, macaroon.Context(action.Context())) == nil
 
 				if policyHolds != macaroonHolds {
 					t.Errorf("%q %s %q: policy says %v, macaroon says %v",
 						got, op.policy, bound, policyHolds, macaroonHolds)
+				}
+				// The two packages express an uncomparable operand differently:
+				// policy has an explicit indeterminate outcome, macaroon simply
+				// leaves the caveat unsatisfied. They still have to agree about WHICH
+				// operands those are, or the shared ordering semantics this package
+				// exists to hold has a hole in it that the equality above cannot see.
+				if policyIndeterminate && macaroonHolds {
+					t.Errorf("%q %s %q: policy cannot compare it, macaroon satisfied it anyway",
+						got, op.policy, bound)
 				}
 			}
 		}
