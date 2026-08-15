@@ -216,6 +216,42 @@ func TestConfigRefusesTrailingContent(t *testing.T) {
 // to: a typo'd tag (`flag:"http-adr"`) names a flag that does not exist, so the
 // real flag is never refused and the config is silently overridable. That fails
 // PERMISSIVELY, which is the direction that matters.
+// TestSchemaFlagsAreTheWholeSchema pins the refused set to a list written by
+// reading the struct, which is the one thing the tests around it cannot do.
+//
+// Every other assertion here iterates schemaFlags(), so a tag the derivation
+// FAILS TO SEE is absent from the iteration and every one of them passes
+// vacuously: the missing flag is never checked because it was never listed. That
+// is the enumerated-inclusion shape the house rules name, and it applies to a
+// coverage check as readily as to a policy.
+//
+// The list rots on purpose. A field added to Config makes this fail, and the
+// person adding it has to look at the diff and confirm the flag really should
+// become un-overridable alongside --config. That is a decision worth interrupting
+// someone for, since getting it wrong leaves a launcher script silently
+// overriding the reviewed file.
+func TestSchemaFlagsAreTheWholeSchema(t *testing.T) {
+	want := map[string]bool{
+		"policy": true, "dids": true, "enforcement-point": true,
+		"signer-sock": true, "keystore": true,
+		"http-addr": true, "mcp-addr": true,
+		"allow-unauthenticated-remote": true,
+		"export":                       true, "audit-log": true, "audit-wal": true,
+		"status": true,
+	}
+	got := schemaFlags()
+	for name := range want {
+		if !got[name] {
+			t.Errorf("--%s is in the schema but not in the refused set, so it stays overridable alongside --config", name)
+		}
+	}
+	for name := range got {
+		if !want[name] {
+			t.Errorf("--%s is refused alongside --config but this test did not expect it; if the schema grew, decide deliberately and add it here", name)
+		}
+	}
+}
+
 func TestSchemaFlagsExistOnServe(t *testing.T) {
 	for name := range schemaFlags() {
 		t.Run(name, func(t *testing.T) {

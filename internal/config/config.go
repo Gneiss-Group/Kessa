@@ -122,21 +122,60 @@ func FlagNames(schema any) map[string]bool {
 	if t == nil || t.Kind() != reflect.Struct {
 		return out
 	}
-	collect(t, out)
+	collect(t, out, map[reflect.Type]bool{})
 	return out
 }
 
-func collect(t reflect.Type, out map[string]bool) {
+// collect walks every field of t, and every struct reachable from one, recording
+// the flag each names.
+//
+// REACHABLE, not merely "is a struct". This used to recurse only into fields
+// whose own kind was reflect.Struct, so a field that was a POINTER to a struct or
+// a SLICE of them was a terminal and the tags nested inside it were never seen.
+//
+// The direction of that miss is what made it worth closing rather than noting.
+// FlagNames is the refused set: a flag is rejected alongside --config if and only
+// if the schema covers it. A name missing from this map is a flag that stays
+// usable alongside --config, so a stale launcher script silently overrides the
+// reviewed file for exactly that field, which is the failure this function's own
+// doc comment says a hand-maintained list would have. The derived version had it
+// too, for two shapes.
+//
+// Neither shape is used by the schemas in this repository today, so nothing was
+// slipping through. It would have started the first time someone grouped fields
+// behind a *SubConfig or added a []Listener, which is the natural way to add a
+// second listener, and nothing would have complained.
+func collect(t reflect.Type, out map[string]bool, seen map[reflect.Type]bool) {
+	if seen[t] {
+		return // a self-referential schema is a hang, not a wrong answer, so guard it
+	}
+	seen[t] = true
 	for i := 0; i < t.NumField(); i++ {
 		f := t.Field(i)
 		if name := f.Tag.Get("flag"); name != "" {
 			out[name] = true
 		}
-		// Recurse into nested schema structs, so a tag on a grouped field is found
-		// too. Only structs: json.RawMessage, slices and maps are terminals that
-		// carry their own tag.
-		if f.Type.Kind() == reflect.Struct {
-			collect(f.Type, out)
+		collectFrom(f.Type, out, seen)
+	}
+}
+
+// collectFrom unwraps a field's type until it finds a struct to walk or runs out
+// of things to unwrap.
+//
+// Pointers, slices, arrays and maps are all containers whose ELEMENT may be a
+// schema struct, so each is followed to what it holds. json.RawMessage and
+// map[string]string end at a non-struct kind and stop there, which is the same
+// answer they got before, reached by a rule rather than by omission.
+func collectFrom(t reflect.Type, out map[string]bool, seen map[reflect.Type]bool) {
+	for {
+		switch t.Kind() {
+		case reflect.Pointer, reflect.Slice, reflect.Array, reflect.Map:
+			t = t.Elem()
+		case reflect.Struct:
+			collect(t, out, seen)
+			return
+		default:
+			return
 		}
 	}
 }

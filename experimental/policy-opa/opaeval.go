@@ -33,11 +33,34 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/Gneiss-Group/Kessa/internal/policy"
 	"github.com/Gneiss-Group/Kessa/pkg/types"
 	"github.com/open-policy-agent/opa/v1/rego"
 )
+
+// evalTimeout bounds one evaluation. See Evaluate for why the bound belongs to
+// Kessa even though the work happens inside a dependency.
+//
+// A var rather than a const so a test can shorten it. Nothing else may: this is
+// not a tuning knob, and a deployment that needed it larger would be telling us
+// something about its policies rather than about this number.
+var evalTimeout = 250 * time.Millisecond
+
+// NO SEPARATE INPUT-SIZE CAP, and that is a decision rather than an omission.
+//
+// Both listeners already cap the request body at 1 MiB with http.MaxBytesReader
+// (internal/enforce/http.go, mcp.go), so the action reaching any evaluator is
+// bounded in transport before it gets here. What that does not bound is the COST
+// of evaluating a large-but-legal input, and evalTimeout bounds exactly that, in
+// the unit that actually matters.
+//
+// A third limit would add a number nobody can choose well: this module has no
+// operator to tune it, no evidence about what a reasonable attribute count is,
+// and two bounds that disagree would produce a refusal whose reason depends on
+// which one happened to be tighter. Recorded here so the next reader does not
+// reopen it as an oversight.
 
 // Evaluator evaluates Kessa policies with OPA. It satisfies policy.Evaluator.
 type Evaluator struct {
@@ -116,7 +139,29 @@ func (e *Evaluator) Source() string { return e.source }
 // function, so a backend that flattened actions its own way could produce
 // decisions the verifier would refuse to reproduce.
 func (e *Evaluator) Evaluate(a types.Action) (types.Decision, error) {
-	rs, err := e.query.Eval(context.Background(), rego.EvalInput(map[string]any{"ctx": a.Context()}))
+	// BOUNDED, because an unbounded one is a cost the caller controls. The action
+	// arrives on a proxied request, the agent is the untrusted party, and this
+	// evaluation runs on a path already serialized behind one mutex, so an
+	// evaluation that does not finish holds up every other request behind it.
+	//
+	// Whether OPA is fast is not the question and is not Kessa's to answer. The
+	// BOUND is Kessa's responsibility even when the unbounded work happens inside
+	// a dependency, which is why it is applied here rather than assumed away.
+	//
+	// The interface takes no context.Context and does not need to: this is the
+	// evaluator's own bound, not the caller's cancellation. Cancellation only
+	// becomes an interface question for an evaluator that leaves the process.
+	//
+	// Deliberately generous. It is here to cap pathology, not to tune anything, so
+	// a value that ever fires under normal load means something is wrong rather
+	// than that the timeout needs raising.
+	ctx, cancel := context.WithTimeout(context.Background(), evalTimeout)
+	defer cancel()
+
+	// A deadline that fires surfaces as an error, and internal/enforce turns any
+	// policy error into a denial, so exceeding the bound fails closed with no
+	// further plumbing.
+	rs, err := e.query.Eval(ctx, rego.EvalInput(map[string]any{"ctx": a.Context()}))
 	if err != nil {
 		return types.Decision{}, fmt.Errorf("opaeval: evaluate: %w", err)
 	}
