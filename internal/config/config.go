@@ -64,10 +64,28 @@ func Load(path string, v any) error {
 //
 // NOTE ON MAPS. DisallowUnknownFields governs decoding into STRUCTS. A map type
 // has no unknown fields by construction, so calling this on one is legal and
-// buys nothing. That is not a gap to close: see the keystore, where a "_comment"
-// entry is a legitimate map key and no decoder setting would ever have caught the
-// bug that internal/keystore.Principals exists to fix.
+// buys nothing for NAMES. It still gets the duplicate-key check below, which
+// needs no schema: a repeated key is malformed on the document's own terms. What
+// it does not get is the case check, because a map's keys are arbitrary and two
+// keys differing by case are two different, legitimate keys. See the keystore,
+// where a "_comment" entry is a legitimate map key and no decoder setting would
+// ever have caught the bug that internal/keystore.Principals exists to fix.
+//
+// TWO SHAPES THE DECODER CANNOT SEE are refused by checkKeys before the decode
+// runs: a duplicate key, which resolves last-wins, and a differently-cased key,
+// which encoding/json matches anyway and which is therefore never an unknown
+// field. Both let a file state one value and be read as another, which is the
+// same failure the unknown-field rule exists to prevent, reached by a spelling
+// the decoder does not classify as unknown. See keys.go.
+//
+// It runs FIRST, before the decode, so a file carrying one of these shapes is
+// refused rather than half-applied. The alternative, checking afterwards, would
+// mean the caller had already been handed a populated value by the time it was
+// told the file was ambiguous.
 func DecodeStrict(data []byte, v any) error {
+	if err := checkKeys(data, v); err != nil {
+		return err
+	}
 	dec := json.NewDecoder(bytes.NewReader(data))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(v); err != nil {
