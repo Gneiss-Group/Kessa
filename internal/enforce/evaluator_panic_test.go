@@ -14,11 +14,11 @@ import (
 
 // panickingEvaluator is the thing policy.Evaluator's existence makes possible:
 // an implementation that is not the shipped classifier and does not behave.
-type panickingEvaluator struct{ secret string }
+type panickingEvaluator struct{ marker string }
 
 func (e panickingEvaluator) Version() string { return "panics-v1" }
 func (e panickingEvaluator) Evaluate(types.Action) (types.Decision, error) {
-	panic("evaluator exploded, carrying " + e.secret)
+	panic("evaluator exploded, carrying " + e.marker)
 }
 
 // TestPanickingEvaluatorBecomesARecordedDenial pins a property of the SEAM, not
@@ -33,7 +33,7 @@ func (e panickingEvaluator) Evaluate(types.Action) (types.Decision, error) {
 func TestPanickingEvaluatorBecomesARecordedDenial(t *testing.T) {
 	h := newHarness(t)
 	var logged []string
-	px := h.proxyWith(t, panickingEvaluator{secret: "s3cret-from-the-panic"},
+	px := h.proxyWith(t, panickingEvaluator{marker: "panic-detail-marker-not-a-credential"},
 		func(format string, args ...any) { logged = append(logged, format) })
 
 	tip := px.Tip()
@@ -55,11 +55,11 @@ func TestPanickingEvaluatorBecomesARecordedDenial(t *testing.T) {
 
 	// The panic value must not reach the signed entry. It is attacker-influenceable
 	// and the entry is hash-chained and re-derived byte for byte by the verifier.
-	if strings.Contains(res.Decision.Reason, "s3cret-from-the-panic") {
+	if strings.Contains(res.Decision.Reason, "panic-detail-marker-not-a-credential") {
 		t.Errorf("the panic value was written into a signed audit entry: %q", res.Decision.Reason)
 	}
 	for _, e := range px.Entries() {
-		if strings.Contains(e.Decision.Reason, "s3cret-from-the-panic") {
+		if strings.Contains(e.Decision.Reason, "panic-detail-marker-not-a-credential") {
 			t.Errorf("the panic value reached the log: %q", e.Decision.Reason)
 		}
 	}
