@@ -102,9 +102,15 @@ func (c *DaemonConfig) validate() error {
 // the proxy's live check is BINDING its socket, which is a side effect the check
 // must not perform. Claiming a depth 3 here would be inventing one, so the last
 // line states the limit rather than implying the check proved more than it did.
-func reportDaemonCheck(w io.Writer, cfgPath string, keys []signerd.HeldKey) {
+func reportDaemonCheck(w io.Writer, cfgPath, dirState string, keys []signerd.HeldKey) {
 	fmt.Fprintf(w, "kessa-issuer: checked %s\n", cfgPath)
 	fmt.Fprintln(w, "  schema           OK  parsed, no unknown fields, required fields present")
+	// The socket DIRECTORY is checkable without binding, and it is where the
+	// daemon's only side effect outside its own files used to land unannounced.
+	// Saying whether it will be created or was found already correct is the
+	// difference between a check that predicts the start and one that omits the
+	// part an operator cannot see coming.
+	fmt.Fprintf(w, "  socket dir       OK  %s\n", dirState)
 	fmt.Fprintf(w, "  keys             OK  %d brokerable, hardware policy satisfied\n", len(keys))
 	for _, k := range heldKeysSorted(keys) {
 		fmt.Fprintf(w, "    %-11s %s\n", k.Policy, k.Signer.DID())

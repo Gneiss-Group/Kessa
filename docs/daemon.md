@@ -55,6 +55,14 @@ kessa-issuer daemon --mapping ~/.kessa/enrollment-map.json
 - The daemon creates the socket's parent directory `0700` and the socket `0600`,
   refuses to start if a live daemon already owns the path, and clears a stale
   socket left by a previous run.
+- **Give the socket a directory of its own.** The daemon creates that directory
+  `0700` when it is absent, and when it already exists it *checks* the mode
+  rather than changing it: `0700` is accepted, anything else is refused with the
+  remedy. It will not widen or narrow a directory it did not create, because the
+  socket's parent is frequently a shared path and tightening one reaches well
+  beyond the daemon (`--sock /tmp/kessa.sock` would have meant chmod'ing `/tmp`).
+  Both defaults above already nest under a `kessa` directory for this reason, and
+  `--check-config` reports which of the two cases a given `sock` falls into.
 
 > **Why the policy split (R4-02):** the daemon signs whatever bytes an authorized
 > (same-uid) client sends; it does not yet distinguish a PoP sign from an approval
