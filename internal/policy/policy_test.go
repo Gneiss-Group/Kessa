@@ -389,6 +389,11 @@ func TestPostureChangesClassificationOfTheSameAction(t *testing.T) {
 // was never that one literal was mishandled: it was that infinity could be
 // reached at all, and a fix that caught "-Inf" while missing "-1e400" or
 // "-infinity" would read as fixed while leaving the gate open.
+//
+// What is asserted here is now stronger than it was. An operand the rule cannot
+// compare no longer means "this rule does not apply", it means the rule cannot be
+// evaluated, and a rule that cannot be evaluated denies. So these cases assert a
+// DENIAL rather than a fall-through to the approval-gated default.
 func TestEvaluate_InfinityCannotBypassARoutineRule(t *testing.T) {
 	p := loadPolicy(t, allowlistPath)
 
@@ -398,8 +403,13 @@ func TestEvaluate_InfinityCannotBypassARoutineRule(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if d.RuleFired == "micro-transfer" {
-				t.Errorf("amount=%q matched the routine rule; an infinity satisfied a finite bound", amount)
+			// The rule is now REPORTED rather than skipped: an operand the rule
+			// cannot compare makes the rule indeterminate, and an indeterminate rule
+			// denies. So RuleFired names micro-transfer while Allowed is false, which
+			// is a different statement from micro-transfer having classified this
+			// routine.
+			if d.Allowed {
+				t.Errorf("amount=%q was allowed; an operand no rule can compare must not be: %+v", amount, d)
 			}
 			if !d.Consequential {
 				t.Errorf("amount=%q came back routine, so it skips human approval: %+v", amount, d)
@@ -417,6 +427,59 @@ func TestEvaluate_InfinityCannotBypassARoutineRule(t *testing.T) {
 	}
 	if d.RuleFired != "micro-transfer" || d.Consequential {
 		t.Fatalf("the routine rule no longer fires for a real amount, so the cases above prove nothing: %+v", d)
+	}
+}
+
+// TestEvaluate_UncomparableOperandDoesNotReachTheDefault is the same property as
+// the test above under the OTHER posture, against the shipped policies that have
+// it.
+//
+// Both of these declare a routine default and use one ordering rule to say which
+// actions need a human, so here the rule FIRING is what gates and a rule that does
+// not fire is the permissive outcome. That is the reverse of the allow-list case,
+// and it is why an operand a rule cannot compare must not be answered by falling
+// through: the fall-through lands somewhere different depending on how the policy
+// is written, and an uncomparable operand is not a classification either way.
+//
+// Asserted against the shipped examples rather than a synthetic policy because
+// these are the files an operator starts from, and commerce-security.json in
+// particular is what the example config, the demo and the enforcement tests all
+// load.
+func TestEvaluate_UncomparableOperandDoesNotReachTheDefault(t *testing.T) {
+	for _, tc := range []struct {
+		path, typ, field, gate, ok string
+	}{
+		{commercePath, "payment.transfer", "amount", "high-value-transfer", "1000"},
+		{legalPath, "document.export", "docCount", "bulk-export", "5000"},
+	} {
+		t.Run(tc.gate, func(t *testing.T) {
+			p := loadPolicy(t, tc.path)
+
+			for _, v := range []string{"Inf", "+Inf", "-Inf", "Infinity", "1e400", "abc", "", "0x10"} {
+				d, err := p.Evaluate(action(tc.typ, map[string]string{tc.field: v}))
+				if err != nil {
+					t.Fatal(err)
+				}
+				if d.Allowed {
+					t.Errorf("%s=%q was allowed: %+v", tc.field, v, d)
+				}
+				if d.RuleFired != tc.gate {
+					t.Errorf("%s=%q was answered by %q rather than by the rule that could not evaluate it: %+v",
+						tc.field, v, d.RuleFired, d)
+				}
+			}
+
+			// The control. Everything above passes if the gating rule stopped firing
+			// altogether, so it is shown still classifying a real value that is over
+			// the threshold.
+			d, err := p.Evaluate(action(tc.typ, map[string]string{tc.field: tc.ok}))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if d.RuleFired != tc.gate || !d.Consequential || !d.Allowed {
+				t.Fatalf("the gating rule no longer classifies a real value, so the cases above prove nothing: %+v", d)
+			}
+		})
 	}
 }
 

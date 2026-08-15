@@ -86,21 +86,67 @@ const (
 	allowListDefault = `"default":{"allowed":true,"consequential":true,"reason":"approval-gated by default"}`
 )
 
-// oneRule renders a single-rule policy so an operator can be exercised in
-// isolation. Isolation is the point: with first-match-wins, a policy carrying
+// oneRule renders a single-rule DENY-LIST policy so an operator can be exercised
+// in isolation. Isolation is the point: with first-match-wins, a policy carrying
 // one rule per operator would only ever exercise the first one that matched.
+//
+// Under this posture the default is routine and the rule declares something
+// CONSEQUENTIAL, so the rule firing is the restrictive outcome.
 func oneRule(field, op, value string) string {
 	return fmt.Sprintf(
 		`{"version":"conformance-v1","rules":[{"name":"r","when":[{"field":%q,"op":%q,"value":%q}],"consequential":true,"reason":"rule fired"}],%s}`,
 		field, op, value, denyListDefault)
 }
 
-// matched and unmatched are the two outcomes of every oneRule case: the rule
-// fired, or the deny-list default did.
+// oneRuleAllowList is the same single condition under the OTHER posture: the
+// default is approval-gated and the rule declares something ROUTINE, so the rule
+// firing is the PERMISSIVE outcome.
+//
+// It exists because a case that runs under only one posture cannot state
+// anything about which direction a non-match runs in. "The rule did not fire" is
+// restrictive under one default and permissive under the other, so a suite that
+// asserts match-or-not under a single posture is asserting half a property and
+// reads as though it asserted the whole one. The paired ordering cases below are
+// the reason this matters: an operand that cannot be compared has to reach the
+// same decision under both, and only running both can say so.
+func oneRuleAllowList(field, op, value string) string {
+	return fmt.Sprintf(
+		`{"version":"conformance-v1","rules":[{"name":"r","when":[{"field":%q,"op":%q,"value":%q}],"consequential":false,"reason":"rule fired"}],%s}`,
+		field, op, value, allowListDefault)
+}
+
+// The outcomes of a oneRule case (deny-list): the rule fired, or the default did.
 var (
 	matched   = Want{Allowed: true, Consequential: true, RuleFired: "r", Reason: "rule fired"}
 	unmatched = Want{Allowed: true, Consequential: false, RuleFired: policy.DefaultRule, Reason: "routine by default"}
 )
+
+// The outcomes of a oneRuleAllowList case, with the polarity reversed: firing the
+// rule is what makes an action routine, and falling through is what gates it.
+var (
+	matchedAllowList   = Want{Allowed: true, Consequential: false, RuleFired: "r", Reason: "rule fired"}
+	unmatchedAllowList = Want{Allowed: true, Consequential: true, RuleFired: policy.DefaultRule, Reason: "approval-gated by default"}
+)
+
+// indeterminateOn is the outcome when a rule cannot be evaluated at all, because
+// the action carries a value for field that the rule's operator cannot compare.
+//
+// It is deliberately the SAME expectation under both postures, and that is the
+// whole point of it: a rule that cannot be evaluated has not classified the
+// action, so neither posture's default gets to answer for it. Denying is the only
+// outcome that is correct without knowing which posture is in force.
+//
+// Note what this is not. It is not "the rule did not match", which is what an
+// uncomparable operand used to produce, and which lands on whichever default the
+// policy happens to declare.
+func indeterminateOn(field string) Want {
+	return Want{
+		Allowed:       false,
+		Consequential: true,
+		RuleFired:     "r",
+		Reason:        fmt.Sprintf("rule %q could not be evaluated: %s is not comparable", "r", field),
+	}
+}
 
 // act builds an action carrying the given attributes at fixedTime.
 func act(typ string, attrs map[string]string) types.Action {
@@ -141,26 +187,42 @@ func Cases() []Case {
 		// A field the policy compares numerically but the action supplies as prose
 		// cannot be ordered, and an unorderable comparison must fail closed rather
 		// than sort lexically or coerce to zero.
-		{"ordering against a non-scalar field fails closed", oneRule("amount", ">=", "100"), act("payment.transfer", map[string]string{"amount": "lots"}), unmatched},
-		{"ordering on absent field fails closed", oneRule("amount", ">=", "100"), act("payment.transfer", nil), unmatched},
+		{"ordering on absent field does not apply", oneRule("amount", ">=", "100"), act("payment.transfer", nil), unmatched},
+		{"ordering on absent field does not apply, allow-list", oneRuleAllowList("amount", ">=", "100"), act("payment.transfer", nil), unmatchedAllowList},
 
-		// An infinity must not satisfy a finite bound, in either direction.
+		// ---- ordering, an operand that cannot be compared ----
 		//
-		// This case could not be written until both implementations agreed on it,
-		// which is the useful part of its history. The OPA backend refused these
-		// from the start, because Rego's to_number does; the classifier accepted
-		// them, because strconv.ParseFloat does, and "-Inf" therefore satisfied
-		// every upper bound. Under allow-list posture that matched a ROUTINE rule
-		// and skipped the approval gate. A conformance case has to pass for both
-		// backends, so the divergence had to be fixed before the contract could
-		// state the rule; the differential test is what surfaced it in the first
-		// place.
+		// An operand the operator cannot compare makes the rule INDETERMINATE, and
+		// an indeterminate rule denies. Every case here is stated TWICE, once under
+		// each posture, and both times it expects the same denial.
 		//
-		// Both spellings are covered, the literal and the overflow, since they are
-		// one value reached two ways and were once treated differently.
-		{"an infinity does not satisfy an upper bound", oneRule("amount", "<=", "25"), act("payment.transfer", map[string]string{"amount": "-Inf"}), unmatched},
-		{"an infinity does not satisfy a lower bound", oneRule("amount", ">=", "100"), act("payment.transfer", map[string]string{"amount": "Inf"}), unmatched},
-		{"an overflowing literal is refused the same way", oneRule("amount", "<=", "25"), act("payment.transfer", map[string]string{"amount": "-1e400"}), unmatched},
+		// The pairing is the assertion. A single-posture case can only say "the
+		// rule did not fire", and that sentence means opposite things under the two
+		// defaults: restrictive where a rule declares something consequential,
+		// permissive where a rule declares something routine. An earlier version of
+		// this block ran only under the deny-list default and expected `unmatched`,
+		// which under that default is the permissive outcome, so the contract
+		// asserted the weaker of the two readings while its case names claimed it
+		// was asserting the stronger one. Running both postures is what makes the
+		// property say what it appears to say.
+		//
+		// The corpus covers every route to an uncomparable operand rather than one
+		// literal: the infinity spellings ParseFloat accepts, the overflow route
+		// that reaches the same value, an ordinary non-numeric string, an empty
+		// string, and a base-prefixed literal. They are one situation reached many
+		// ways, and a rule that caught some of them would read as fixed.
+		{"infinity does not satisfy an upper bound", oneRule("amount", "<=", "25"), act("payment.transfer", map[string]string{"amount": "-Inf"}), indeterminateOn("amount")},
+		{"infinity does not satisfy an upper bound, allow-list", oneRuleAllowList("amount", "<=", "25"), act("payment.transfer", map[string]string{"amount": "-Inf"}), indeterminateOn("amount")},
+		{"infinity does not satisfy a lower bound", oneRule("amount", ">=", "100"), act("payment.transfer", map[string]string{"amount": "Inf"}), indeterminateOn("amount")},
+		{"infinity does not satisfy a lower bound, allow-list", oneRuleAllowList("amount", ">=", "100"), act("payment.transfer", map[string]string{"amount": "Inf"}), indeterminateOn("amount")},
+		{"a spelled-out infinity is the same value", oneRule("amount", ">=", "100"), act("payment.transfer", map[string]string{"amount": "Infinity"}), indeterminateOn("amount")},
+		{"an overflowing literal reaches it too", oneRule("amount", "<=", "25"), act("payment.transfer", map[string]string{"amount": "-1e400"}), indeterminateOn("amount")},
+		{"an overflowing literal reaches it too, allow-list", oneRuleAllowList("amount", "<=", "25"), act("payment.transfer", map[string]string{"amount": "-1e400"}), indeterminateOn("amount")},
+		{"a non-numeric string cannot be ordered", oneRule("amount", ">=", "100"), act("payment.transfer", map[string]string{"amount": "lots"}), indeterminateOn("amount")},
+		{"a non-numeric string cannot be ordered, allow-list", oneRuleAllowList("amount", ">=", "100"), act("payment.transfer", map[string]string{"amount": "lots"}), indeterminateOn("amount")},
+		{"an empty string is present but not comparable", oneRule("amount", ">=", "100"), act("payment.transfer", map[string]string{"amount": ""}), indeterminateOn("amount")},
+		{"an empty string is present but not comparable, allow-list", oneRuleAllowList("amount", ">=", "100"), act("payment.transfer", map[string]string{"amount": ""}), indeterminateOn("amount")},
+		{"a base-prefixed literal is not a decimal scalar", oneRule("amount", ">=", "100"), act("payment.transfer", map[string]string{"amount": "0x10"}), indeterminateOn("amount")},
 
 		// ---- ordering, timestamps ----
 		// asScalar parses RFC3339 as Unix nanoseconds, so the ordering operators
