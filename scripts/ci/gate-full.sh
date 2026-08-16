@@ -3,7 +3,7 @@
 # SPDX-FileCopyrightText: 2026 Gneiss Group Inc.
 # SPDX-License-Identifier: Apache-2.0
 #
-# gate-full.sh: the core gate, plus everything that lives in a nested module.
+# gate-full.sh: the core gate, plus every other check a laptop can run.
 #
 # WHY THERE ARE TWO GATES
 #
@@ -39,6 +39,20 @@
 # the offline gate because experimental/ is not in the release artifact; a release
 # is not the place to discover that an unshipped experiment stopped compiling.
 #
+# WHAT THIS IS STILL NOT, WHICH IS WORTH STATING PLAINLY
+#
+# This is not "everything CI runs", and describing it that way is how a
+# contributor comes to believe a green run here means a green run there. CI has
+# two further jobs, both kept separate because each needs something a laptop may
+# not have:
+#
+#   CodeQL                a GitHub code-scanning service, not a local tool
+#   container smoke       needs a Docker daemon
+#
+# Everything else CI runs is here. The secret scan was the exception that did not
+# belong: it needs only the Go toolchain, so it is now run below rather than left
+# as a check a contributor could only fail remotely.
+#
 # Usage:  scripts/ci/gate-full.sh
 
 set -euo pipefail
@@ -61,6 +75,35 @@ bash scripts/ci/gate.sh
 # a check. `--also` is what makes the nested module visible at all: it has its own
 # go.mod, so `go list ./...` at the root cannot enumerate it, and every check in
 # license-check.sh would otherwise pass while classifying nothing in it.
+# Run BEFORE the nested-module walk, not after. A committed credential is the
+# most serious thing this script can find, and the nested module's first run
+# downloads roughly a hundred OPA dependencies, so ordering it last would mean
+# waiting on a download to be told about a secret that was already in the tree.
+#
+# WHY THIS IS HERE AT ALL, since it was not until now. The scan has always been
+# its own CI job, deliberately, so that it is an INDEPENDENT required status
+# check: a green build must never be able to carry a committed secret, and that
+# property comes from the job being separate. Adding it here does not weaken it,
+# because the CI job stays exactly where it is.
+#
+# What was missing is the other half. The reason the container smoke is kept out
+# of scripts/ci/gate.sh is that it needs a Docker daemon and gate.sh is
+# deliberately Go-only, so a laptop and the Codeberg mirror can both run it. That
+# reason was quietly read as covering the secret scan too, and it never did: the
+# scan needs only the Go toolchain and the version-controlled .gitleaks.toml,
+# which is precisely the property gate.sh is Go-only FOR. It only stayed out
+# because gate-full.sh did not exist when the CI jobs were laid out, and nothing
+# revisited it when this file was added.
+#
+# The cost of that was small and real: a contributor who ran the documented
+# pre-PR gate could still be told about a secret by CI instead of by their own
+# machine.
+#
+# The FIRST local run builds gitleaks from source at a pinned version, which
+# takes a while and looks like a hang if nobody says so. Hence the note.
+step "committed credentials (first run builds gitleaks from source, which is slow)"
+bash scripts/ci/secret-scan.sh
+
 step "licence boundary, including nested modules"
 also_args=""
 for m in $NESTED_MODULES; do
