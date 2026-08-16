@@ -84,6 +84,42 @@ For what the system does today, and for the limits of a clean verdict, the
   future backend is that translating the reference implementation's behaviour is
   exactly the way to build a second implementation that cannot find anything.
 
+  **That limit was understated, and R7 is what showed it.** Catching the infinity
+  divergence was not the end of the story. It was resolved by converging both
+  backends onto the answer `to_number` gives, refusing an infinity, and freezing
+  that as a conformance case. Refusing is correct where a rule declares something
+  ROUTINE, and it is the PERMISSIVE outcome where a rule declares something
+  CONSEQUENTIAL, because there a rule that does not fire is the one that lets an
+  action through. So the convergence propagated a posture-specific assumption into
+  both implementations, and the case then asserted it: the contract expected the
+  defective outcome and named it "fails closed" while running the posture in which
+  it was not. See [GHSA-vmr6-pgh2-c33x](https://github.com/Gneiss-Group/Kessa/security/advisories/GHSA-vmr6-pgh2-c33x).
+
+  The stronger corollary, then. A differential does not only fail to find a bug
+  the two implementations share: RESOLVING a real divergence can create one, if
+  the answer both sides converge on is right for the posture in front of you and
+  wrong for the other. What makes that recoverable is asserting the DECISION a
+  policy reaches under a stated posture, rather than whether a rule matched, which
+  is what the contract does now.
+
+- **Nobody has attacked policy authorship, and R7 made it worth more.** Every
+  round so far has attacked what an agent can submit against a policy taken as
+  given. Who may write the policy a proxy loads, replace it between restarts, or
+  supply the path it is read from, has not been examined, and `--config` naming a
+  policy path put that question one file further from the operator's hands.
+
+  R7-03's fix raised the stakes rather than lowering them. A policy rule that
+  cannot be evaluated now DENIES, so policy is no longer only a classifier that
+  says what needs a human: it can refuse outright. That is the right behaviour and
+  it means whoever controls a policy file controls more than they did.
+
+  What already holds: a policy is content-addressed, pinned per audit entry, and
+  carried in the export, so the verifier re-derives every allowed entry against
+  the policy that actually decided it and a substituted policy fails
+  (`export.PolicyID`). That covers substitution AFTER the fact. It says nothing
+  about who was entitled to author the policy in the first place, which is the
+  open question and is a round of its own rather than a fix.
+
 - **Policy hot-reload is an export-format change, not a loader feature.** A proxy
   loads one policy at startup, and every audit entry pins that policy's
   content-address, so one export carries exactly one policy and the verifier
