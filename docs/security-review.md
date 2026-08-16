@@ -26,6 +26,14 @@ rather than because they were designed in advance: most notably *validate before
 the side effect*, which was escalated to a standing rule after recurring across
 rounds.
 
+**What a round cannot do, learned in R7.** A test suite is not a witness. R7-03
+was not merely missed by the conformance contract that covers that code, it was
+asserted BY it as correct behaviour, under a name that claimed the opposite. A
+green suite says the code still does what someone once decided it should, and
+whether that decision was right is a separate question no amount of green
+answers. So a round is now expected to read what a check CLAIMS and test that
+claim, rather than treating a passing check as a surface already covered.
+
 ## Rounds
 
 | Round | When | Scope | Outcome |
@@ -37,6 +45,7 @@ rounds.
 | *(spec alignment)* | 2026-08-03 | Not a review round: see below. Conformance work bringing the MCP listener to revision 2026-07-28 | Surfaced one security-relevant defect (SA-01) as a by-product |
 | **R5** | 2026-08-03 | The ingress surface of both listeners, reviewed because it had just changed | Six findings. Five closed (R5-01 to R5-05, no critical or high). **R5-06 was High** and is closed *as to the attack* (possession became an attribution gate, so the harm is unreachable) while the property it rests on is unchanged by design. No false-ALLOW path in any of them |
 | **R6** | 2026-08-06 | Pre-publication pass over the whole product surface: end-to-end workflow logic, availability, the cryptographic primitives, and general application-security posture. Excluded the surrounding tooling (CI, licensing, REUSE) | Six findings. **R6-01 was High**: revocation lists were not bound to the party entitled to revoke, defeating revocation at both the proxy and the verifier. Closed, by a signed-format change, after the first fix attempted was wrong. Three more closed (R6-02, R6-04, R6-05), one deferred (R6-03), one informational (R6-06). No other false-ALLOW path was found in the verifier |
+| **R7** | 2026-08-14 to 2026-08-15 | The delta since R6, narrowed to three surfaces: configuration-file support, the policy evaluator and its OPA seam, and brokered enforcement-point key custody. Excluded the rest of the delta by name | Seven findings, all closed in **0.2.0**. The one **High** is disclosed as [GHSA-vmr6-pgh2-c33x](https://github.com/Gneiss-Group/Kessa/security/advisories/GHSA-vmr6-pgh2-c33x) rather than described here, since it affected a released version. Three Medium: a `--check-config` report claiming checks it had not performed, config keys that resolved differently from how the file reads, and **the conformance contract that had certified the High as correct**. Three Low. First round whose findings all landed post-release, so it is also the first to run the fix-release-then-disclose order end to end |
 
 **R1 and R2 predate this repository's first commit** (2026-07-23). Their fixes are
 contained in the initial publication, so no released or published version of Kessa
@@ -380,6 +389,54 @@ Five regression tests cover both trust paths, including a genuine revocation sti
 denying, without which a proxy that denied everything would satisfy the rest. All
 were confirmed to fail with the binding removed.
 
+### R7: configuration, the evaluator seam, and key custody (2026-08-14 to 2026-08-15)
+
+Scoped to the delta since R6 and narrowed to three surfaces that had just changed:
+configuration-file support, the policy evaluator and its OPA seam, and brokered
+enforcement-point key custody. The rest of the delta was excluded by name rather
+than left unmentioned, which is the same enumerate-and-exclude rule the coverage
+checks in the codebase are held to.
+
+**This is the first round whose findings all landed against a released version**,
+so it is the first to run the order this page commits to: fix, release, then
+disclose against a version a reader can install.
+
+| ID | Sev | Area | Status |
+|---|---|---|---|
+| R7-03 | **High** | An attacker-supplied action attribute could classify a consequential action as routine | Closed in 0.2.0. Disclosed as [GHSA-vmr6-pgh2-c33x](https://github.com/Gneiss-Group/Kessa/security/advisories/GHSA-vmr6-pgh2-c33x), not described here |
+| R7-04 | Medium | The conformance contract asserted R7-03's outcome as correct and named it "fails closed" | Closed in 0.2.0; see below |
+| R7-01 | Medium | `--check-config` reported status lists as signature-checked when it had only parsed them, and reported the DID trust root as loaded without opening it | Closed in 0.2.0 |
+| R7-02 | Medium | A duplicate or differently-cased JSON key resolved silently, so a config file's reviewed content and its effective content could differ | Closed in 0.2.0 |
+| R7-05 | Low | The signing daemon tightened the permissions of whatever directory its socket path named, reaching outside its own footprint | Closed in 0.2.0 |
+| R7-06 | Low | The derived set of flags refused alongside `--config` missed pointer- and slice-nested tags, failing permissively. Latent: no schema used those shapes | Closed in 0.2.0 |
+| R7-07 | Low | No timeout, size cap or recursion bound on policy evaluation, and no defence at the evaluator boundary against an implementation that panics | Closed in 0.2.0 |
+
+**R7-04 is the finding worth carrying forward, and it is not a defect in the
+product.** The shared conformance contract, which exists so that two independent
+policy backends can be held to one meaning, asserted the very outcome R7-03
+produces and labelled it "fails closed" while running under the posture in which
+it is the permissive one. So the differential could not have found R7-03: both
+implementations agreed, because the contract required them to.
+
+That is a sharper version of a limit this project already knew about. A second
+implementation only finds a defect where its author's assumptions genuinely
+diverged from the first author's, and both defects this seam has produced live in
+the operators whose Rego was transcribed from the Go rather than written from the
+specification. Worse, the one real divergence the differential did surface was
+resolved by converging both sides onto the same answer and freezing it as a case,
+which propagated an assumption into both backends and then made it untestable.
+
+The fix was therefore not only to the classifier. Every ordering case in the
+contract now runs under both postures and asserts the resulting decision rather
+than whether one rule matched, and the new Rego was written from the stated
+semantics, with a mutation check in both directions confirming each side's guard
+is load-bearing.
+
+**R7-01 and R7-02 are the same shape as each other**: a report or a file that a
+reader would take one way and the system took another. Neither can produce a false
+ALLOW. Both matter because the artifact they undermine is the one an operator uses
+to decide whether a deployment is correct.
+
 ## Published advisories
 
 Findings raised after a tagged release are disclosed through GitHub's security
@@ -390,6 +447,7 @@ This section is the index; the advisory is the account.
 | Advisory | Sev | Affected | Fixed in | What it covers |
 |---|---|---|---|---|
 | [GHSA-mw7q-jp9f-576r](https://github.com/Gneiss-Group/Kessa/security/advisories/GHSA-mw7q-jp9f-576r) | High | `<= 0.0.1` | **0.0.2** | did:web resolution could be steered to unintended hosts when `--fetch-dids` is enabled |
+| [GHSA-vmr6-pgh2-c33x](https://github.com/Gneiss-Group/Kessa/security/advisories/GHSA-vmr6-pgh2-c33x) | High | `<= 0.1.0` | **0.2.0** | an attacker-supplied action attribute could classify a consequential action as routine, skipping the human approval gate |
 
 Two things about that advisory are worth recording here, because they are
 decisions rather than facts about the defect.
@@ -411,6 +469,22 @@ page, and either would change the answer.
 What remains after the fix is stated in [Known
 limits](../README.md#known-limits) rather than left implied: `--fetch-dids`
 reaches only hosts the operator names, at paths the DID chooses.
+
+**GHSA-vmr6-pgh2-c33x is one advisory covering three defects for the same
+reason**, and in its case the three are not merely related: fixing the first
+extended the third. An infinity was made unparseable, which is correct where a
+rule declares something routine and, until the third defect was closed, was the
+permissive answer where a rule declares something consequential. Disclosing them
+separately would have described a sequence of partial states none of which was
+ever released.
+
+Its own account records two things this page will not repeat, and they are the
+part worth reading: two of the three had been publicly described in commit
+messages before the advisory existed, and the third had been **certified as
+correct by this project's own conformance suite**, which asserted the defective
+outcome and called it "fails closed" while running the posture in which it was
+the permissive one. That is why the differential test between the two policy
+backends could not have found it. Both implementations agreed, by contract.
 
 ## Deferred, and why
 
