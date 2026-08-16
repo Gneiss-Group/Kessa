@@ -74,6 +74,66 @@ changes are in the [security review record](docs/security-review.md).
 
 <!-- releases below; newest first -->
 
+## v0.2.0: 2026-08-16
+
+_Changes since v0.1.0._
+
+### Breaking changes
+
+- `kessa-issuer daemon` now refuses to start when the socket's parent directory already exists with a mode other than 0700, where it previously chmod'd that directory to 0700 and continued. A deployment whose socket sits in a shared or general-purpose directory will need one of its own; the error names the directory and the remedy. Deployments on the default paths, or on any path a previous run created, are unaffected, since those are already 0700.
+- a config, spec or keystore file containing a duplicate key, or a key differing from a schema field only by case, is now rejected at load with a non-zero exit. Files that loaded before and relied on either shape resolving silently will need the intended key kept and the other removed. The error names the offending key by path.
+- an action carrying a non-scalar value in a field a policy rule compares with <=, <, >= or > is now denied, rather than being classified by the rules that did not match it. Non-numeric strings, an empty string and infinities are all affected. Policies, the audit entry shape and the export format are unchanged, so no export needs regenerating.
+
+### Features
+
+- prove the Evaluator seam with a second backend, and fix the defect it found (#70)
+
+### Fixes
+
+- reach every nested flag tag, and bound the evaluator seam (#78)
+- settle the socket directory without modifying one it did not create (#77)
+- --check-config claims only what it has actually checked (#76)
+- count the BREAKING CHANGE footers instead of racing git log (#75)
+- a duplicate or differently-cased key is an error, not a silent override (#74)
+- an operand that is not a scalar is indeterminate, not a non-match (#73)
+- a member that trims to nothing is not a member (#72)
+- refuse an infinity however it is spelled, closing an approval bypass (#71)
+
+### Documentation
+
+- reattach a test's doc comment to the test it describes (#79)
+- a test may only assert what the component promises (#69)
+- a version is written two ways, and one of them cannot change (#68)
+
+### Other changes
+
+- run the secret scan in gate-full, and stop calling it the gate CI runs (#80)
+
+### Verifying what you downloaded
+
+Each archive is listed in `SHA256SUMS`, every binary answers `--version`
+without running anything, and every artifact carries signed build provenance
+binding it to this repository's release pipeline:
+
+```sh
+sha256sum -c SHA256SUMS
+gh attestation verify kessa_*_linux_amd64.tar.gz --repo Gneiss-Group/Kessa
+./kessa --version
+```
+
+The verifier bundle (`kessa_*`) is Apache-2.0; the server bundle
+(`kessa-server_*`) is AGPL-3.0-only. See `LICENSING.md`.
+
+### Container images
+
+Multi-arch (linux/amd64 + arm64), distroless, signed with build provenance:
+
+```sh
+docker pull ghcr.io/gneiss-group/kessa:0.2.0          # verifier (Apache-2.0)
+docker pull ghcr.io/gneiss-group/kessa-proxy:0.2.0    # enforcement proxy (AGPL-3.0-only)
+gh attestation verify oci://ghcr.io/gneiss-group/kessa:0.2.0 --repo Gneiss-Group/Kessa
+```
+
 ## v0.1.0: 2026-08-14
 
 _Changes since v0.0.2._

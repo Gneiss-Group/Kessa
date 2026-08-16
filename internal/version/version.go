@@ -37,7 +37,7 @@ import (
 //
 // Do not edit by hand outside a release: `make release-version V=x.y.z` and the
 // release workflow own this line.
-const Version = "0.1.0"
+const Version = "0.2.0"
 
 // Build is the identity of a compiled binary: the source's version plus what the
 // toolchain stamped about the tree it was built from.
