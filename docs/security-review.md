@@ -418,19 +418,11 @@ produces and labelled it "fails closed" while running under the posture in which
 it is the permissive one. So the differential could not have found R7-03: both
 implementations agreed, because the contract required them to.
 
-That is a sharper version of a limit this project already knew about. A second
-implementation only finds a defect where its author's assumptions genuinely
-diverged from the first author's, and both defects this seam has produced live in
-the operators whose Rego was transcribed from the Go rather than written from the
-specification. Worse, the one real divergence the differential did surface was
-resolved by converging both sides onto the same answer and freezing it as a case,
-which propagated an assumption into both backends and then made it untestable.
-
 The fix was therefore not only to the classifier. Every ordering case in the
 contract now runs under both postures and asserts the resulting decision rather
 than whether one rule matched, and the new Rego was written from the stated
-semantics, with a mutation check in both directions confirming each side's guard
-is load-bearing.
+semantics rather than transcribed from the Go, with a mutation check in both
+directions confirming each side's guard is load-bearing.
 
 **R7-01 and R7-02 are the same shape as each other**: a report or a file that a
 reader would take one way and the system took another. Neither can produce a false
